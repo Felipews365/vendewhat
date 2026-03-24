@@ -1,17 +1,27 @@
 import { notFound } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getProductImageUrls } from "@/lib/productImages";
+import { optionArrayFromDb } from "@/lib/productOptions";
+import { colorHexesFromDb } from "@/lib/productColorHexes";
+import { variantStockFromDb } from "@/lib/productVariants";
+import { normalizeStoreSlug } from "@/lib/storeSlug";
+import { storefrontFromDb } from "@/lib/storefront";
 import { LojaClient, type CatalogProduct } from "./LojaClient";
 
 type Props = { params: { slug: string } };
 
+/** Sempre dados frescos; evita página da loja “vazia” em cache. */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function generateMetadata({ params }: Props) {
-  const { slug } = params;
+  const slug = normalizeStoreSlug(params.slug);
   const supabase = await createServerSupabase();
   const { data: store } = await supabase
     .from("stores")
     .select("name, description")
     .eq("slug", slug)
-    .single();
+    .maybeSingle();
 
   if (!store) {
     return { title: "Loja não encontrada | VendeWhat" };
@@ -26,43 +36,103 @@ export async function generateMetadata({ params }: Props) {
 }
 
 export default async function LojaPublicaPage({ params }: Props) {
-  const { slug } = params;
+  const slug = normalizeStoreSlug(params.slug);
   const supabase = await createServerSupabase();
 
-  const { data: store, error: storeError } = await supabase
+  /* Tenta buscar com storefront; se a coluna não existir, faz fallback sem ela */
+  let store: Record<string, unknown> | null = null;
+  let storeError: { message: string; code?: string } | null = null;
+
+  const fullResult = await supabase
     .from("stores")
-    .select("id, name, slug, description, logo, phone")
+    .select("id, name, slug, description, logo, phone, storefront")
     .eq("slug", slug)
     .single();
+
+  if (
+    fullResult.error &&
+    fullResult.error.message?.includes("storefront")
+  ) {
+    const fallback = await supabase
+      .from("stores")
+      .select("id, name, slug, description, logo, phone")
+      .eq("slug", slug)
+      .single();
+    store = fallback.data as Record<string, unknown> | null;
+    storeError = fallback.error;
+  } else {
+    store = fullResult.data as Record<string, unknown> | null;
+    storeError = fullResult.error;
+  }
+
+  if (storeError) {
+    console.error(
+      "[loja] Loja não encontrada ou sem permissão de leitura:",
+      slug,
+      storeError.message,
+      storeError
+    );
+  }
 
   if (storeError || !store) {
     notFound();
   }
 
-  const { data: products } = await supabase
+  // `select("*")` evita erro se ainda não existirem colunas opcionais (images, colors, sizes)
+  const { data: products, error: productsError } = await supabase
     .from("products")
-    .select("id, name, description, price, image, stock")
+    .select("*")
     .eq("store_id", store.id)
-    .eq("active", true)
+    /* true ou null (legado sem coluna default) */
+    .or("active.eq.true,active.is.null")
     .order("created_at", { ascending: false });
 
-  const list: CatalogProduct[] = (products ?? []).map((p) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    price: Number(p.price),
-    image: p.image,
-    stock: p.stock,
-  }));
+  if (productsError) {
+    console.error("[loja] Erro ao buscar produtos:", productsError.message, productsError);
+  }
+
+  const list: CatalogProduct[] = (products ?? []).map((p) => {
+    const images = getProductImageUrls({
+      image: p.image,
+      images: p.images,
+    });
+    return {
+      id: p.id,
+      name: p.name,
+      productReference: (() => {
+        const r = (p as { product_reference?: string | null }).product_reference;
+        const t = typeof r === "string" ? r.trim() : "";
+        return t || null;
+      })(),
+      description: p.description,
+      price: Number(p.price),
+      image: images[0] ?? null,
+      images,
+      colors: optionArrayFromDb(p.colors),
+      colorHexes: colorHexesFromDb(
+        (p as { color_hexes?: unknown }).color_hexes
+      ),
+      sizes: optionArrayFromDb(p.sizes),
+      variantStock: variantStockFromDb(p.variant_stock),
+      stock: Number(p.stock),
+      createdAt: String(p.created_at ?? ""),
+      isPromotion: Boolean((p as { is_promotion?: boolean }).is_promotion),
+      compareAtPrice:
+        (p as { compare_at_price?: number | null }).compare_at_price != null
+          ? Number((p as { compare_at_price: number }).compare_at_price)
+          : null,
+    };
+  });
 
   return (
     <LojaClient
       store={{
-        name: store.name,
-        description: store.description,
-        logo: store.logo,
-        phone: store.phone,
+        name: String(store.name ?? ""),
+        description: store.description ? String(store.description) : null,
+        logo: store.logo ? String(store.logo) : null,
+        phone: store.phone ? String(store.phone) : null,
       }}
+      storefront={storefrontFromDb(store.storefront)}
       products={list}
     />
   );

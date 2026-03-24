@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import {
+  getProductImageUrls,
+  storagePathsFromProductUrls,
+} from "@/lib/productImages";
+import { displayTotalStock } from "@/lib/productVariants";
 
 interface Product {
   id: string;
@@ -11,8 +16,12 @@ interface Product {
   description: string | null;
   price: number;
   image: string | null;
+  images?: unknown;
+  variant_stock?: unknown;
   stock: number;
   active: boolean;
+  is_promotion?: boolean;
+  compare_at_price?: number | null;
   created_at: string;
 }
 
@@ -20,6 +29,7 @@ export default function ProdutosPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [storeId, setStoreId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,16 +51,26 @@ export default function ProdutosPage() {
       .eq("user_id", user.id)
       .single();
 
-    if (!store) return;
+    if (!store) {
+      setLoading(false);
+      return;
+    }
     setStoreId(store.id);
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("products")
       .select("*")
       .eq("store_id", store.id)
       .order("created_at", { ascending: false });
 
-    setProducts(data || []);
+    if (error) {
+      console.error("[produtos] lista:", error);
+      setLoadError(error.message || "Não foi possível carregar os produtos.");
+      setProducts([]);
+    } else {
+      setLoadError("");
+      setProducts(data || []);
+    }
     setLoading(false);
   }
 
@@ -72,10 +92,10 @@ export default function ProdutosPage() {
     const supabase = createClient();
 
     const product = products.find((p) => p.id === id);
-    if (product?.image) {
-      const path = product.image.split("/product-images/")[1];
-      if (path) {
-        await supabase.storage.from("product-images").remove([path]);
+    if (product) {
+      const paths = storagePathsFromProductUrls(getProductImageUrls(product));
+      if (paths.length > 0) {
+        await supabase.storage.from("product-images").remove(paths);
       }
     }
 
@@ -108,16 +128,38 @@ export default function ProdutosPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+        {loadError && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-950 rounded-lg text-sm whitespace-pre-wrap">
+            <p className="font-semibold">Não foi possível carregar a lista de produtos.</p>
+            <p className="mt-1 opacity-90">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                loadProducts();
+              }}
+              className="mt-3 text-sm font-medium text-amber-900 underline hover:no-underline"
+            >
+              Tentar de novo
+            </button>
+          </div>
+        )}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-slate-800">Produtos</h1>
             <p className="text-slate-500 mt-1">
               {products.length} {products.length === 1 ? "produto cadastrado" : "produtos cadastrados"}
             </p>
+            <Link
+              href="/dashboard/configuracoes"
+              className="text-sm text-whatsapp font-medium hover:underline mt-2 inline-block"
+            >
+              Aparência da loja (banner, cores, textos) →
+            </Link>
           </div>
           <Link
             href="/dashboard/produtos/novo"
-            className="bg-whatsapp text-white px-5 py-2.5 rounded-lg font-medium hover:bg-whatsapp-dark transition-colors"
+            className="bg-whatsapp text-white px-5 py-2.5 rounded-lg font-medium hover:bg-whatsapp-dark transition-colors text-center"
           >
             + Novo produto
           </Link>
@@ -141,7 +183,9 @@ export default function ProdutosPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {products.map((product) => (
+            {products.map((product) => {
+              const thumb = getProductImageUrls(product)[0];
+              return (
               <div
                 key={product.id}
                 className={`bg-white rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md ${
@@ -149,9 +193,10 @@ export default function ProdutosPage() {
                 }`}
               >
                 <div className="aspect-square bg-slate-100 relative">
-                  {product.image ? (
+                  {thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={product.image}
+                      src={thumb}
                       alt={product.name}
                       className="w-full h-full object-cover"
                     />
@@ -165,7 +210,12 @@ export default function ProdutosPage() {
                       Inativo
                     </span>
                   )}
-                  {product.stock === 0 && product.active && (
+                  {product.active && product.is_promotion && (
+                    <span className="absolute top-2 right-2 bg-amber-600 text-white text-xs px-2 py-1 rounded font-medium">
+                      Promoção
+                    </span>
+                  )}
+                  {displayTotalStock(product) === 0 && product.active && (
                     <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
                       Esgotado
                     </span>
@@ -176,11 +226,20 @@ export default function ProdutosPage() {
                   <h3 className="font-semibold text-slate-800 truncate">
                     {product.name}
                   </h3>
-                  <p className="text-whatsapp font-bold text-lg mt-1">
-                    R$ {product.price.toFixed(2)}
-                  </p>
+                  <div className="mt-1 space-y-0.5">
+                    {product.is_promotion &&
+                      product.compare_at_price != null &&
+                      product.compare_at_price > product.price && (
+                        <p className="text-sm text-slate-400 line-through">
+                          R$ {Number(product.compare_at_price).toFixed(2)}
+                        </p>
+                      )}
+                    <p className="text-whatsapp font-bold text-lg">
+                      R$ {product.price.toFixed(2)}
+                    </p>
+                  </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    Estoque: {product.stock} unidades
+                    Estoque: {displayTotalStock(product)} unidades
                   </p>
 
                   <div className="flex items-center gap-2 mt-4">
@@ -209,7 +268,8 @@ export default function ProdutosPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </main>

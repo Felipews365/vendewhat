@@ -9,6 +9,7 @@ create table public.stores (
   description text,
   logo text,
   phone text,
+  storefront jsonb default '{}'::jsonb,
   created_at timestamptz default now() not null,
   updated_at timestamptz default now() not null
 );
@@ -21,8 +22,14 @@ create table public.products (
   description text,
   price decimal(10,2) not null,
   image text,
+  images jsonb default '[]'::jsonb,
+  colors jsonb default '[]'::jsonb,
+  sizes jsonb default '[]'::jsonb,
+  variant_stock jsonb default '[]'::jsonb,
   stock int default 0 not null,
   active boolean default true not null,
+  is_promotion boolean default false not null,
+  compare_at_price decimal(10,2),
   created_at timestamptz default now() not null,
   updated_at timestamptz default now() not null
 );

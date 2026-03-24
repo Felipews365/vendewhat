@@ -8,8 +8,15 @@ export default function LojaNotFound() {
         Loja não encontrada
       </h1>
       <p className="text-slate-500 text-center mt-2 max-w-md">
-        Esse link não existe ou a loja foi removida. Confira o endereço ou volte
-        para a página inicial.
+        O endereço pode estar errado ou a loja ainda não está liberada para visitantes.
+      </p>
+      <p className="text-sm text-slate-600 mt-6 max-w-lg text-center">
+        <strong>Dono da loja:</strong> copie o link no painel (Catálogo → Copiar). Se
+        ainda assim não abrir, no Supabase rode o script{" "}
+        <code className="text-xs bg-slate-200 px-1 rounded">
+          supabase-fix-rls-public-catalog.sql
+        </code>{" "}
+        e confira as variáveis do Vercel.
       </p>
       <Link
         href="/"

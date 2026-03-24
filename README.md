@@ -24,9 +24,23 @@ Plataforma de e-commerce para quem vende pelo WhatsApp. Catálogo digital, pedid
 ## Scripts
 
 - `npm run dev` - Servidor de desenvolvimento
+- `npm run clean` - Apaga a pasta `.next`
+- `npm run dev` - Desenvolvimento com **Turbopack** (`--turbo`), costuma evitar erros de `readlink` com OneDrive
+- `npm run dev:webpack` - Mesmo que o antigo `next dev` (Webpack), se precisar comparar
+- `npm run dev:fresh` - Limpa `.next` e inicia o dev
 - `npm run build` - Build para produção
 - `npm run start` - Servidor de produção (após o build)
 - `npm run lint` - Verificar código com ESLint
+
+### Erros no Windows / OneDrive (`Cannot find module './276.js'`, `EINVAL readlink`, `.next\package.json`)
+
+Com o projeto dentro de **OneDrive**, a pasta `.next` sincronizada quebra symlinks e o Next/Webpack falha.
+
+1. **`npm run dev`** já usa **Turbopack** (`--turbo`), que na prática evita muitos desses erros no dev.
+2. Pare o servidor (Ctrl+C), rode **`npm run dev:fresh`** e tente de novo.
+3. No OneDrive: **pausar sincronização** só enquanto codifica, ou **excluir a pasta `.next`** da sincronização, se a opção existir na sua conta.
+4. Melhor a longo prazo: **mova o repositório** para fora do OneDrive (ex.: `C:\dev\vendewhat`).
+5. O `next.config.mjs` usa **cache Webpack em memória** quando você roda `npm run dev:webpack`.
 
 ## Tecnologias
 
