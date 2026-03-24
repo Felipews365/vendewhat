@@ -2,6 +2,15 @@
  * Configurações visuais da loja pública (coluna `stores.storefront` JSONB).
  */
 
+/** Bolinha “Categorias” abaixo do banner (estilo stories). */
+export type StorefrontCategoryItem = {
+  label: string;
+  /** URL da foto; vazio = placeholder cinza */
+  imageUrl: string;
+  /** Nome de outra categoria desta lista (opcional; para hierarquia / organização). */
+  parentLabel?: string;
+};
+
 export type StorefrontSettings = {
   heroSubtitle: string;
   /** Título grande do banner; vazio = usa o nome da loja */
@@ -24,6 +33,20 @@ export type StorefrontSettings = {
   instagramUrl: string;
   facebookUrl: string;
   tiktokUrl: string;
+  youtubeUrl: string;
+  /** Até 8 categorias na faixa abaixo do banner; vazio na loja usa fallback visual */
+  categories: StorefrontCategoryItem[];
+  /** Bloco comercial abaixo do catálogo (frete, contato, pagamentos, redes). */
+  footerShippingLine: string;
+  footerReturnsLine: string;
+  /** URL das políticas de devolução (https… ou domínio). */
+  footerPolicyUrl: string;
+  footerPhone: string;
+  footerEmail: string;
+  footerWebsite: string;
+  footerHours: string;
+  footerShowPix: boolean;
+  footerShowCash: boolean;
 };
 
 export const DEFAULT_STOREFRONT: StorefrontSettings = {
@@ -40,6 +63,17 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   instagramUrl: "",
   facebookUrl: "",
   tiktokUrl: "",
+  youtubeUrl: "",
+  categories: [],
+  footerShippingLine: "",
+  footerReturnsLine: "",
+  footerPolicyUrl: "",
+  footerPhone: "",
+  footerEmail: "",
+  footerWebsite: "",
+  footerHours: "",
+  footerShowPix: false,
+  footerShowCash: false,
 };
 
 function str(v: unknown, fallback: string): string {
@@ -50,6 +84,30 @@ function strOrEmpty(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
+function boolFromDb(v: unknown, fallback: boolean): boolean {
+  if (typeof v === "boolean") return v;
+  return fallback;
+}
+
+/** Exibe o rodapé comercial na loja pública quando houver algo configurado. */
+export function storefrontRichFooterVisible(sf: StorefrontSettings): boolean {
+  const text =
+    sf.footerShippingLine.trim() ||
+    sf.footerReturnsLine.trim() ||
+    sf.footerPolicyUrl.trim() ||
+    sf.footerPhone.trim() ||
+    sf.footerEmail.trim() ||
+    sf.footerWebsite.trim() ||
+    sf.footerHours.trim();
+  const pay = sf.footerShowPix || sf.footerShowCash;
+  const social =
+    sf.instagramUrl.trim() ||
+    sf.facebookUrl.trim() ||
+    sf.tiktokUrl.trim() ||
+    sf.youtubeUrl.trim();
+  return Boolean(text || pay || social);
+}
+
 function bulletsFromDb(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   return v
@@ -57,6 +115,30 @@ function bulletsFromDb(v: unknown): string[] {
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 8);
+}
+
+function categoriesFromDb(v: unknown): StorefrontCategoryItem[] {
+  if (!Array.isArray(v)) return [];
+  const out: StorefrontCategoryItem[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== "object") continue;
+    const o = raw as Record<string, unknown>;
+    const label =
+      typeof o.label === "string" ? o.label.trim() : "";
+    if (!label) continue;
+    const imageUrl =
+      typeof o.imageUrl === "string" ? o.imageUrl.trim() : "";
+    const parentRaw =
+      typeof o.parentLabel === "string" ? o.parentLabel.trim() : "";
+    const parentLabel =
+      parentRaw &&
+      parentRaw.localeCompare(label, "pt", { sensitivity: "base" }) !== 0
+        ? parentRaw
+        : undefined;
+    out.push({ label, imageUrl, parentLabel });
+    if (out.length >= 8) break;
+  }
+  return out;
 }
 
 /** Lê heroImages[] ou migra heroImage legado (uma foto). */
@@ -122,6 +204,20 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     instagramUrl: strOrEmpty(o.instagramUrl),
     facebookUrl: strOrEmpty(o.facebookUrl),
     tiktokUrl: strOrEmpty(o.tiktokUrl),
+    youtubeUrl: strOrEmpty(o.youtubeUrl),
+    categories: categoriesFromDb(o.categories),
+    footerShippingLine: strOrEmpty(o.footerShippingLine),
+    footerReturnsLine: strOrEmpty(o.footerReturnsLine),
+    footerPolicyUrl: strOrEmpty(o.footerPolicyUrl),
+    footerPhone: strOrEmpty(o.footerPhone),
+    footerEmail: strOrEmpty(o.footerEmail),
+    footerWebsite: strOrEmpty(o.footerWebsite),
+    footerHours: strOrEmpty(o.footerHours),
+    footerShowPix: boolFromDb(o.footerShowPix, DEFAULT_STOREFRONT.footerShowPix),
+    footerShowCash: boolFromDb(
+      o.footerShowCash,
+      DEFAULT_STOREFRONT.footerShowCash
+    ),
   };
 }
 
@@ -143,5 +239,28 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     instagramUrl: s.instagramUrl.trim(),
     facebookUrl: s.facebookUrl.trim(),
     tiktokUrl: s.tiktokUrl.trim(),
+    youtubeUrl: s.youtubeUrl.trim(),
+    footerShippingLine: s.footerShippingLine.trim(),
+    footerReturnsLine: s.footerReturnsLine.trim(),
+    footerPolicyUrl: s.footerPolicyUrl.trim(),
+    footerPhone: s.footerPhone.trim(),
+    footerEmail: s.footerEmail.trim(),
+    footerWebsite: s.footerWebsite.trim(),
+    footerHours: s.footerHours.trim(),
+    footerShowPix: s.footerShowPix,
+    footerShowCash: s.footerShowCash,
+    categories: s.categories
+      .map((c) => {
+        const label = c.label.trim();
+        const imageUrl = c.imageUrl.trim();
+        const p = c.parentLabel?.trim();
+        const parentLabel =
+          p && p.localeCompare(label, "pt", { sensitivity: "base" }) !== 0
+            ? p
+            : undefined;
+        return { label, imageUrl, parentLabel };
+      })
+      .filter((c) => c.label)
+      .slice(0, 8),
   };
 }

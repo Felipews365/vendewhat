@@ -9,7 +9,12 @@ import {
   getStockForVariant,
   sumVariantStockRows,
 } from "@/lib/productVariants";
-import { type StorefrontSettings } from "@/lib/storefront";
+import {
+  type StorefrontCategoryItem,
+  type StorefrontSettings,
+  storefrontRichFooterVisible,
+} from "@/lib/storefront";
+import { StorefrontRichFooter } from "@/components/storefront/StorefrontRichFooter";
 import { swatchNeedsStrongBorder } from "@/lib/colorSwatch";
 import { resolveSwatchFill } from "@/lib/productColorHexes";
 import { isCustomerPhoneValid } from "@/lib/customerPhone";
@@ -24,6 +29,8 @@ export type CatalogProduct = {
   name: string;
   /** Código/referência opcional (ex.: SKU). */
   productReference: string | null;
+  /** Categoria do produto (painel); a faixa na loja só aparece se houver pelo menos uma. */
+  category: string | null;
   description: string | null;
   price: number;
   image: string | null;
@@ -59,13 +66,59 @@ function InstagramIcon({ className }: { className?: string }) {
   );
 }
 
-/** Banner lateral: uma imagem fixa ou carrossel se houver várias. */
-function HeroImageCarousel({
+/** Slides do banner (sem indicadores — estes ficam abaixo do banner). */
+function HeroSlideshowLayer({
+  images,
+  activeIndex,
+}: {
+  images: string[];
+  activeIndex: number;
+}) {
+  const len = images.length;
+  const safeIdx = len > 0 ? Math.min(activeIndex, len - 1) : 0;
+
+  if (len === 0) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-stone-200 via-stone-100 to-stone-300 text-6xl opacity-40">
+        ✦
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute inset-0 z-0">
+      {images.map((url, i) => (
+        <div
+          key={`${url}-${i}`}
+          className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+            i === safeIdx
+              ? "opacity-100 z-[1]"
+              : "opacity-0 z-0 pointer-events-none"
+          }`}
+        >
+          <Image
+            src={url}
+            alt=""
+            fill
+            className="object-cover object-center"
+            sizes="100vw"
+            priority={i === 0}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Banner + setas sobre a foto; bolinhas do carrossel fora do banner (não cobrem o texto). */
+function HeroBannerBlock({
   images,
   themePrimary,
+  children,
 }: {
   images: string[];
   themePrimary: string;
+  children: React.ReactNode;
 }) {
   const [idx, setIdx] = useState(0);
   const len = images.length;
@@ -84,73 +137,54 @@ function HeroImageCarousel({
     return () => clearInterval(t);
   }, [len]);
 
-  if (len === 0) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-stone-200 via-stone-100 to-stone-300 text-6xl opacity-40">
-        ✦
-      </div>
-    );
-  }
-
   return (
     <>
-      <div className="absolute inset-0 z-0">
-        {images.map((url, i) => (
-          <div
-            key={`${url}-${i}`}
-            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-              i === safeIdx
-                ? "opacity-100 z-[1]"
-                : "opacity-0 z-0 pointer-events-none"
-            }`}
-          >
-            <Image
-              src={url}
-              alt=""
-              fill
-              className="object-cover object-center"
-              sizes="100vw"
-              priority={i === 0}
-            />
-          </div>
-        ))}
-      </div>
+      <section className="relative w-full aspect-[16/9] sm:aspect-[2/1] md:aspect-[21/9] lg:aspect-[1920/600] overflow-hidden">
+        <HeroSlideshowLayer images={images} activeIndex={safeIdx} />
+        {len > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setIdx((i) => (i - 1 + len) % len)}
+              className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/35 text-white text-xl font-light hover:bg-black/50 backdrop-blur-sm"
+              aria-label="Foto anterior"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => setIdx((i) => (i + 1) % len)}
+              className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/35 text-white text-xl font-light hover:bg-black/50 backdrop-blur-sm"
+              aria-label="Próxima foto"
+            >
+              ›
+            </button>
+          </>
+        )}
+        {children}
+      </section>
       {len > 1 && (
-        <>
-          <button
-            type="button"
-            onClick={() => setIdx((i) => (i - 1 + len) % len)}
-            className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/35 text-white text-xl font-light hover:bg-black/50 backdrop-blur-sm"
-            aria-label="Foto anterior"
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            onClick={() => setIdx((i) => (i + 1) % len)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/35 text-white text-xl font-light hover:bg-black/50 backdrop-blur-sm"
-            aria-label="Próxima foto"
-          >
-            ›
-          </button>
-          <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-20 px-4">
-            {images.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setIdx(i)}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  i === safeIdx ? "w-7 shadow-sm" : "w-2 opacity-60"
-                }`}
-                style={{
-                  backgroundColor:
-                    i === safeIdx ? themePrimary : "rgba(255,255,255,0.85)",
-                }}
-                aria-label={`Ir para foto ${i + 1}`}
-              />
-            ))}
-          </div>
-        </>
+        <nav
+          className="w-full flex justify-center items-center gap-2 py-2.5 sm:py-3 bg-white border-b border-stone-200/90"
+          aria-label="Fotos do banner"
+        >
+          {images.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setIdx(i)}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                i === safeIdx ? "w-7 shadow-sm" : "w-2 opacity-80"
+              }`}
+              style={{
+                backgroundColor:
+                  i === safeIdx ? themePrimary : "rgb(163 163 163)",
+              }}
+              aria-label={`Ir para foto ${i + 1}`}
+              aria-current={i === safeIdx ? "true" : undefined}
+            />
+          ))}
+        </nav>
       )}
     </>
   );
@@ -346,6 +380,11 @@ function ProductCatalogCard({
         <h3 className="font-serif italic text-stone-800 line-clamp-2 text-sm md:text-base leading-snug">
           {product.name}
         </h3>
+        {product.category?.trim() && (
+          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+            {product.category.trim()}
+          </p>
+        )}
         <p className="font-bold text-stone-900 text-lg md:text-xl leading-tight mt-1">
           R${formatPrice(product.price)}
         </p>
@@ -673,6 +712,12 @@ function ProductDetailModal({
               {product.name}
             </h2>
 
+            {product.category?.trim() && (
+              <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                {product.category.trim()}
+              </p>
+            )}
+
             {product.productReference?.trim() && (
               <p className="mt-2 text-sm text-stone-500">
                 <span className="font-medium text-stone-600">Ref.</span>{" "}
@@ -939,6 +984,129 @@ type StoreInfo = {
   phone: string | null;
 };
 
+function scrollToCatalogo() {
+  document.getElementById("catalogo")?.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
+}
+
+function StorefrontCategoriesStrip({
+  items,
+  selectedLabel,
+  onSelectCategory,
+}: {
+  items: StorefrontCategoryItem[];
+  /** null = mostrar todos os produtos */
+  selectedLabel: string | null;
+  onSelectCategory: (label: string | null) => void;
+}) {
+  /** Só na bolinha (rounded-full). origin-top + padding no row: ring/scale não sobem por cima do texto. */
+  const ringActive =
+    "ring-2 ring-offset-2 ring-stone-600/90 ring-offset-white scale-[1.02] origin-top";
+  const stripBtnClass =
+    "flex flex-col items-center shrink-0 w-[4.75rem] sm:w-[5.25rem] snap-start group cursor-pointer border-0 bg-transparent p-0 shadow-none outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-300/80 focus-visible:rounded-2xl";
+
+  return (
+    <section
+      id="faixa-categorias"
+      className="w-full bg-white/90 border-b border-stone-200/70 pt-3 pb-2 sm:pt-4 sm:pb-2.5 scroll-mt-28"
+      aria-label="Categorias"
+    >
+      <div className="max-w-6xl mx-auto px-4">
+        <h2 className="text-base sm:text-lg font-semibold text-stone-800 tracking-tight mb-1">
+          Categorias
+        </h2>
+        <p className="text-[11px] sm:text-xs leading-snug text-stone-500 mb-1 max-w-md">
+          Toque para filtrar. <span className="whitespace-nowrap">«Todas»</span> mostra o
+          catálogo completo.
+        </p>
+        <div
+          className="flex gap-5 sm:gap-7 overflow-x-auto pt-3 sm:pt-3.5 pb-1 -mx-1 px-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory"
+          role="list"
+        >
+          <button
+            type="button"
+            role="listitem"
+            onClick={() => {
+              onSelectCategory(null);
+              scrollToCatalogo();
+            }}
+            className={`${stripBtnClass} text-left`}
+          >
+            <div
+              className={`relative w-[4.25rem] h-[4.25rem] sm:w-[4.75rem] sm:h-[4.75rem] shrink-0 rounded-full ${
+                selectedLabel == null ? ringActive : ""
+              }`}
+            >
+              <div
+                className="absolute inset-0 origin-top rounded-full bg-stone-100 border border-dashed border-stone-300/90 flex flex-col items-center justify-center gap-0.5 transition-transform group-hover:scale-[1.03]"
+                aria-hidden
+              >
+                <span className="text-[1.65rem] sm:text-[1.85rem] leading-none select-none">
+                  🛍️
+                </span>
+                <span className="text-[9px] font-semibold text-stone-500 uppercase tracking-wide">
+                  Todas
+                </span>
+              </div>
+            </div>
+            <span className="mt-1.5 text-center text-xs text-stone-500 font-normal leading-tight max-w-[5.5rem]">
+              Ver tudo
+            </span>
+          </button>
+          {items.map((cat, i) => {
+            const active =
+              selectedLabel != null &&
+              cat.label.localeCompare(selectedLabel, "pt", {
+                sensitivity: "base",
+              }) === 0;
+            return (
+              <button
+                key={`${cat.label}-${i}`}
+                type="button"
+                role="listitem"
+                onClick={() => {
+                  onSelectCategory(cat.label);
+                  scrollToCatalogo();
+                }}
+                className={`${stripBtnClass} text-left`}
+              >
+                <div
+                  className={`relative w-[4.25rem] h-[4.25rem] sm:w-[4.75rem] sm:h-[4.75rem] shrink-0 rounded-full ${
+                    active ? ringActive : ""
+                  }`}
+                >
+                  <div className="absolute inset-0 origin-top rounded-full bg-stone-200 overflow-hidden ring-1 ring-stone-200/80 shadow-sm transition-transform group-hover:scale-[1.03] flex items-center justify-center">
+                    {cat.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={cat.imageUrl}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span
+                        className="text-[1.5rem] sm:text-[1.65rem] leading-none select-none opacity-90"
+                        aria-hidden
+                      >
+                        🏷️
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="mt-1.5 text-center text-xs text-stone-500 font-normal leading-tight max-w-[5.5rem] line-clamp-2">
+                  {cat.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 type SortKey = "new" | "name-asc" | "name-desc" | "price-asc" | "price-desc";
 
 export function LojaClient({
@@ -959,16 +1127,30 @@ export function LojaClient({
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("new");
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
+  /** Filtro da faixa de categorias (null = todos) */
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
   const filteredProducts = useMemo(() => {
+    let list = products;
+    const cf = categoryFilter?.trim();
+    if (cf) {
+      list = list.filter((p) => {
+        const pc = p.category?.trim();
+        if (!pc) return false;
+        return (
+          pc.localeCompare(cf, "pt", { sensitivity: "base" }) === 0
+        );
+      });
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(
+    if (!q) return list;
+    return list.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
-        (p.description?.toLowerCase().includes(q) ?? false)
+        (p.description?.toLowerCase().includes(q) ?? false) ||
+        (p.category?.toLowerCase().includes(q) ?? false)
     );
-  }, [products, search]);
+  }, [products, search, categoryFilter]);
 
   const promoProducts = useMemo(
     () => filteredProducts.filter((p) => p.isPromotion),
@@ -1003,6 +1185,50 @@ export function LojaClient({
 
   const heroDisplayTitle =
     storefront.heroTitle.trim() || store.name;
+
+  /**
+   * Faixa abaixo do banner:
+   * - Se existirem categorias em Aparência da loja (`storefront.categories`), mostramos
+   *   essas bolinhas sempre que houver produtos na loja (o cliente vê o que o vendedor configurou).
+   * - Senão, comportamento antigo: só nomes que aparecem no campo categoria dos produtos.
+   * Imagens vêm da configuração da loja quando o nome coincide.
+   */
+  const categoryStripItems = useMemo(() => {
+    if (products.length === 0) return [];
+
+    const configured = storefront.categories
+      .map((sc) => ({
+        label: sc.label.trim(),
+        imageUrl: sc.imageUrl?.trim() ?? "",
+      }))
+      .filter((c) => c.label);
+
+    if (configured.length > 0) {
+      return [...configured].sort((a, b) =>
+        a.label.localeCompare(b.label, "pt", { sensitivity: "base" })
+      );
+    }
+
+    const fromProducts = new Set<string>();
+    for (const p of products) {
+      const c = p.category?.trim();
+      if (c) fromProducts.add(c);
+    }
+    if (fromProducts.size === 0) return [];
+    const sorted = Array.from(fromProducts).sort((a, b) =>
+      a.localeCompare(b, "pt", { sensitivity: "base" })
+    );
+    return sorted.map((label) => {
+      const match = storefront.categories.find(
+        (sc) =>
+          sc.label.trim().toLowerCase() === label.toLowerCase()
+      );
+      return {
+        label,
+        imageUrl: match?.imageUrl?.trim() ?? "",
+      };
+    });
+  }, [products, storefront.categories]);
 
   const items = useMemo(() => {
     const list: Array<
@@ -1289,11 +1515,12 @@ export function LojaClient({
                     ⌕
                   </span>
                   <input
+                    id="loja-busca"
                     type="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder={storefront.searchPlaceholder}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-full border-2 border-stone-300 bg-white text-sm text-stone-800 placeholder:text-stone-400 shadow-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none transition-shadow"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-full border-2 border-stone-300 bg-white text-sm text-stone-800 placeholder:text-stone-400 shadow-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none transition-shadow scroll-mt-32"
                     aria-label="Buscar produtos"
                   />
                 </div>
@@ -1365,11 +1592,10 @@ export function LojaClient({
 
       {/* Banner só aparece para quem compra se o vendedor enviou ao menos uma foto */}
       {storefront.heroImages.length > 0 && (
-        <section className="relative w-full aspect-[16/9] sm:aspect-[2/1] md:aspect-[21/9] lg:aspect-[1920/600] overflow-hidden">
-          <HeroImageCarousel
-            images={storefront.heroImages}
-            themePrimary={storefront.themePrimary}
-          />
+        <HeroBannerBlock
+          images={storefront.heroImages}
+          themePrimary={storefront.themePrimary}
+        >
           <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/20 to-transparent z-10 pointer-events-none" />
           <div className="absolute inset-0 z-20 flex flex-col justify-end px-6 sm:px-10 md:px-14 pb-6 sm:pb-10 md:pb-12 max-w-3xl">
             {storefront.heroSubtitle && (
@@ -1396,7 +1622,15 @@ export function LojaClient({
               {storefront.heroCtaLabel}
             </a>
           </div>
-        </section>
+        </HeroBannerBlock>
+      )}
+
+      {categoryStripItems.length > 0 && (
+        <StorefrontCategoriesStrip
+          items={categoryStripItems}
+          selectedLabel={categoryFilter}
+          onSelectCategory={setCategoryFilter}
+        />
       )}
 
       <main className="max-w-6xl mx-auto px-4">
@@ -1413,24 +1647,41 @@ export function LojaClient({
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-16 my-8">
             <p className="font-serif text-xl text-boutique-wine">
-              Nenhum produto encontrado
+              {categoryFilter?.trim() && !search.trim()
+                ? `Nenhum produto na categoria «${categoryFilter.trim()}».`
+                : "Nenhum produto encontrado"}
             </p>
             <p className="text-stone-500 text-sm mt-2">
-              Tente outro termo na busca.
+              {categoryFilter?.trim() && !search.trim()
+                ? "Toque em «Todas» na faixa acima ou escolha outra categoria."
+                : "Tente outro termo na busca ou ajuste o filtro de categoria."}
             </p>
-            <button
-              type="button"
-              onClick={() => setSearch("")}
-              className="mt-4 text-sm text-boutique-deeper underline hover:text-boutique-wine"
-            >
-              Limpar busca
-            </button>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
+              {categoryFilter?.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter(null)}
+                  className="text-sm text-boutique-deeper underline hover:text-boutique-wine"
+                >
+                  Ver todas as categorias
+                </button>
+              ) : null}
+              {search.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="text-sm text-boutique-deeper underline hover:text-boutique-wine"
+                >
+                  Limpar busca
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : (
           <div id="catalogo" className="scroll-mt-28">
             {promoProducts.length > 0 && (
-              <section className="py-10 md:py-12">
-                <div className="mb-6 md:mb-8">
+              <section className="pt-3 pb-10 md:pt-4 md:pb-12">
+                <div className="mb-4 md:mb-6">
                   <h3
                     className="font-serif text-2xl md:text-3xl font-semibold tracking-tight"
                     style={{ color: "var(--store-secondary)" }}
@@ -1458,8 +1709,8 @@ export function LojaClient({
               <section
                 className={`pb-16 ${
                   promoProducts.length > 0
-                    ? "pt-8 border-t border-stone-200/80"
-                    : "pt-10"
+                    ? "pt-6 border-t border-stone-200/80"
+                    : "pt-3 md:pt-4"
                 }`}
               >
                 <div className="mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -1506,6 +1757,15 @@ export function LojaClient({
             )}
           </div>
         )}
+
+        {storefrontRichFooterVisible(storefront) && (
+          <StorefrontRichFooter
+            sf={storefront}
+            storeSlug={store.slug}
+            storeName={store.name}
+            whatsappHref={contactHref}
+          />
+        )}
       </main>
 
       <footer className="bg-stone-100/90 border-t border-stone-200/80 mt-4">
@@ -1551,7 +1811,8 @@ export function LojaClient({
             <p className="text-stone-500 text-xs leading-relaxed">
               {storefront.instagramUrl ||
               storefront.facebookUrl ||
-              storefront.tiktokUrl
+              storefront.tiktokUrl ||
+              storefront.youtubeUrl
                 ? "Siga a loja nas redes:"
                 : "Adicione Instagram e outras redes em Aparência da loja."}
             </p>
@@ -1585,6 +1846,16 @@ export function LojaClient({
                   className="text-sm text-stone-600 hover:underline"
                 >
                   TikTok
+                </a>
+              )}
+              {storefront.youtubeUrl && (
+                <a
+                  href={storefront.youtubeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-stone-600 hover:underline"
+                >
+                  YouTube
                 </a>
               )}
               {contactHref ? (

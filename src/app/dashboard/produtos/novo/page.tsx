@@ -20,11 +20,13 @@ import {
   VARIANT_STOCK_MIGRATION_HINT,
   PRODUCTS_RLS_INSERT_HINT,
   PRODUCT_REFERENCE_MIGRATION_HINT,
+  PRODUCT_CATEGORY_MIGRATION_HINT,
   COLOR_HEXES_MIGRATION_HINT,
   isMissingColumnError,
   isMissingOptionsOrVariantStockColumn,
   isRlsPolicyError,
 } from "@/lib/dbColumnErrors";
+import { ProductChooseCategoryModal } from "@/components/ProductChooseCategoryModal";
 import {
   type VariantStockRow,
   buildVariantCombinations,
@@ -33,6 +35,10 @@ import {
   sumVariantStockRows,
 } from "@/lib/productVariants";
 import { normalizeHex } from "@/lib/productColorHexes";
+import {
+  priceMoneyInputHandlers,
+  priceNumberNoSpinnerClass,
+} from "@/lib/priceInputBehavior";
 
 type ProductTab = "produto" | "variacoes" | "estoque";
 
@@ -43,6 +49,7 @@ const INITIAL_FORM = {
   price: "",
   compareAtPrice: "",
   stock: "0",
+  category: "",
 };
 
 function TabButton({
@@ -114,6 +121,7 @@ export default function NovoProdutoPage() {
   );
   const [form, setForm] = useState({ ...INITIAL_FORM });
   const [isPromotion, setIsPromotion] = useState(false);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
 
   const hasVariantOptions = colors.length > 0 || sizes.length > 0;
 
@@ -244,6 +252,7 @@ export default function NovoProdutoPage() {
         variant_stock,
         is_promotion: isPromotion,
         compare_at_price: compareAt,
+        category: form.category.trim() || null,
       };
 
       let insertError = (await supabase.from("products").insert(payload)).error;
@@ -326,6 +335,19 @@ export default function NovoProdutoPage() {
           .error;
       }
 
+      if (
+        insertError &&
+        isMissingColumnError(
+          insertError.message,
+          "category",
+          insertError.code
+        )
+      ) {
+        const { category: _cat, ...withoutCat } = payload;
+        insertError = (await supabase.from("products").insert(withoutCat))
+          .error;
+      }
+
       if (insertError && !isRlsPolicyError(insertError.message, insertError.code)) {
         const minimal: Record<string, unknown> = {
           store_id: store.id,
@@ -374,6 +396,8 @@ export default function NovoProdutoPage() {
           setError(`${PRODUCT_REFERENCE_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
         } else if (isMissingColumnError(msg, "color_hexes", code)) {
           setError(`${COLOR_HEXES_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
+        } else if (isMissingColumnError(msg, "category", code)) {
+          setError(`${PRODUCT_CATEGORY_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
         } else {
           const hint = [insertError.hint, insertError.details]
             .filter(Boolean)
@@ -499,7 +523,12 @@ export default function NovoProdutoPage() {
                         step="0.01"
                         min="0"
                         required
-                        className={`${inputClass} pl-10`}
+                        inputMode="decimal"
+                        {...priceMoneyInputHandlers({
+                          onCommitFormatted: (value) =>
+                            setForm((f) => ({ ...f, price: value })),
+                        })}
+                        className={`${inputClass} pl-10 ${priceNumberNoSpinnerClass}`}
                       />
                     </div>
                   </div>
@@ -520,7 +549,12 @@ export default function NovoProdutoPage() {
                         step="0.01"
                         min="0"
                         disabled={!isPromotion}
-                        className={`${inputClass} pl-10 disabled:opacity-50`}
+                        inputMode="decimal"
+                        {...priceMoneyInputHandlers({
+                          onCommitFormatted: (value) =>
+                            setForm((f) => ({ ...f, compareAtPrice: value })),
+                        })}
+                        className={`${inputClass} pl-10 disabled:opacity-50 ${priceNumberNoSpinnerClass}`}
                       />
                     </div>
                     <label className="flex items-center gap-2 mt-2 text-xs text-slate-600 cursor-pointer">
@@ -553,17 +587,27 @@ export default function NovoProdutoPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Categorias
                   </label>
-                  <div className="flex gap-2">
-                    <div
-                      className={`flex-1 ${inputClass} text-slate-400 cursor-not-allowed flex items-center`}
-                    >
-                      Em breve
-                    </div>
+                  <div className="flex gap-2 items-stretch">
                     <button
                       type="button"
-                      disabled
-                      className="shrink-0 h-[42px] w-[42px] rounded-lg border border-dashed border-slate-200 text-slate-300 cursor-not-allowed"
-                      title="Em breve"
+                      onClick={() => setCategoryModalOpen(true)}
+                      className="flex-1 min-w-0 rounded-full border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm text-left flex items-center justify-between gap-2 hover:bg-slate-200/60 transition-colors"
+                    >
+                      <span
+                        className={
+                          form.category.trim()
+                            ? "text-slate-800 font-medium truncate"
+                            : "text-slate-400 truncate"
+                        }
+                      >
+                        {form.category.trim() || "Escolher categorias"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCategoryModalOpen(true)}
+                      className="shrink-0 h-[42px] w-[42px] rounded-full bg-landing-primary text-white text-xl font-light leading-none shadow-md hover:opacity-90 transition-opacity flex items-center justify-center"
+                      title="Adicionar categoria"
                     >
                       +
                     </button>
@@ -769,6 +813,17 @@ export default function NovoProdutoPage() {
           </div>
         </form>
       </main>
+
+      <ProductChooseCategoryModal
+        open={categoryModalOpen}
+        onClose={() => setCategoryModalOpen(false)}
+        initialName={form.category}
+        onSave={(name) => {
+          setForm((f) => ({ ...f, category: name }));
+          setError("");
+          setSaveOk(false);
+        }}
+      />
     </div>
   );
 }

@@ -55,11 +55,18 @@ export function isRlsPolicyError(message: string, code?: string | null): boolean
 export const PRODUCTS_RLS_INSERT_HINT =
   "Permissão negada ao salvar produto (segurança do banco). No Supabase → SQL Editor, rode o arquivo supabase-fix-products-insert-rls.sql do projeto. Confirme que está logado na loja e que a loja é sua.";
 
+/** `select` sem `product_reference` quando a API ainda não recarregou o schema (PGRST / schema cache). Sem `color_hexes` para não falhar em bases antigas. */
+export const PRODUCTS_SELECT_WITHOUT_PRODUCT_REFERENCE =
+  "id, store_id, name, description, price, image, images, colors, sizes, variant_stock, stock, active, is_promotion, compare_at_price, category, created_at, updated_at";
+
 export const PRODUCT_REFERENCE_MIGRATION_HINT =
-  "Referência do produto: no Supabase → SQL Editor, rode supabase-migration-product-reference.sql e aguarde o reload do schema.";
+  "Referência do produto — checklist: (1) No Supabase, confirme que o URL do projeto é o mesmo de NEXT_PUBLIC_SUPABASE_URL no .env. (2) SQL Editor: cole supabase-migration-product-reference.sql inteiro e Run (mensagem «Success» mesmo sem linhas é normal). (3) Rode: select column_name from information_schema.columns where table_schema='public' and table_name='products' and column_name='product_reference'; — tem de devolver 1 linha. (4) Settings → API → Reload schema (ou reinicie o projeto). (5) Atualize o painel com Ctrl+Shift+R. O erro de schema cache some quando o passo 3 e 4 estiverem OK.";
 
 export const COLOR_HEXES_MIGRATION_HINT =
   "Tom da bolinha por cor: rode supabase-migration-product-color-hexes.sql no SQL Editor e aguarde o reload do schema.";
+
+export const PRODUCT_CATEGORY_MIGRATION_HINT =
+  "Categoria do produto: no Supabase → SQL Editor, rode supabase-migration-product-category.sql e aguarde o reload do schema.";
 
 /** Pedidos: tabela antiga sem order_number / cliente (erro SQL 42703 ou PostgREST equivalente). */
 export function isMissingOrdersColumnError(
@@ -74,4 +81,4 @@ export function isMissingOrdersColumnError(
 }
 
 export const ORDERS_MIGRATION_HINT =
-  "No Supabase → SQL Editor, execute supabase-migration-orders.sql: faz ALTER (order_number, cliente) antes dos índices e corrige o 42703 se orders já existia. Depois: select pg_notify('pgrst', 'reload schema'); e configure SUPABASE_SERVICE_ROLE_KEY. Alternativa mínima: supabase-migration-orders-customer-number.sql e o bloco de índices/RLS do ficheiro principal.";
+  "Pedidos (erro 42703 em order_number ou store_id): a tabela orders já existia sem essas colunas. No SQL Editor execute primeiro supabase-migration-orders-repair.sql, depois o ficheiro supabase-migration-orders.sql completo (do início ao fim, sem saltar o bloco ALTER). Confirme que store_id está na definição da tabela antes de criar índices. Depois: pg_notify / reload schema se necessário e SUPABASE_SERVICE_ROLE_KEY na API.";

@@ -1,16 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import type { StorefrontSettings } from "@/lib/storefront";
+import { CategoryFormModal } from "@/components/CategoryFormModal";
+import type {
+  StorefrontCategoryItem,
+  StorefrontSettings,
+} from "@/lib/storefront";
 
-/** Até 4 itens para a grelha “Produtos” do editor (dados reais da loja). */
+/** Prévia na vitrine: produtos reais da loja + sempre um cartão “novo”. */
 export type CatalogPreviewProduct = {
   id: string;
   name: string;
   price: number;
   imageUrl: string | null;
+  /** Categoria do produto (igual à loja pública). */
+  category: string | null;
 };
 
 function formatBRL(value: number) {
@@ -42,7 +48,9 @@ type EditorPanel =
   | "colors"
   | "socials"
   | "info"
-  | "search";
+  | "search"
+  | "categories"
+  | "footer";
 
 function PlusFab({
   label,
@@ -151,9 +159,12 @@ export function StoreVisualEditor({
   addBullet,
   removeBullet,
   catalogPreview = [],
+  storeId = null,
 }: {
   storeName: string;
   storeSlug: string;
+  /** Upload de imagem de categoria (bucket product-images). */
+  storeId?: string | null;
   storeLogoUrl: string | null;
   logoPreviewObjectUrl: string | null;
   logoRemoved: boolean;
@@ -173,14 +184,57 @@ export function StoreVisualEditor({
   setBullet: (i: number, value: string) => void;
   addBullet: () => void;
   removeBullet: (i: number) => void;
-  /** Produtos reais (máx. 4) para mostrar na prévia; restantes = cartões “novo”. */
+  /** Produtos reais (até ~32 na prévia); no fim aparece sempre um slot “Adicione aqui”. */
   catalogPreview?: CatalogPreviewProduct[];
 }) {
   const [panel, setPanel] = useState<EditorPanel>(null);
+  const [storeCategoryModal, setStoreCategoryModal] = useState<{
+    open: boolean;
+    editIndex: number | null;
+  }>({ open: false, editIndex: null });
 
-  const previewSlots: (CatalogPreviewProduct | null)[] = Array.from(
-    { length: 4 },
-    (_, i) => catalogPreview[i] ?? null
+  const MAX_CATALOG_PREVIEW = 32;
+  const productsInPreview = catalogPreview.slice(0, MAX_CATALOG_PREVIEW);
+  /** Sempre um cartão vazio à direita para cadastrar o próximo produto. */
+  const previewSlots: (CatalogPreviewProduct | null)[] = [
+    ...productsInPreview,
+    null,
+  ];
+
+  const labeledStoreCategories = useMemo(
+    () =>
+      sf.categories
+        .map((c, i) => ({ ...c, i }))
+        .filter((c) => c.label.trim()),
+    [sf.categories]
+  );
+
+  /** Nomes das outras categorias (para “Categoria pai” no modal). */
+  const storeCategoryParentOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const labels: string[] = [];
+    for (const c of sf.categories) {
+      const L = c.label.trim();
+      if (!L) continue;
+      const key = L.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      labels.push(L);
+    }
+    const idx = storeCategoryModal.editIndex;
+    if (idx === null || idx < 0 || idx >= sf.categories.length) {
+      return labels;
+    }
+    const self = sf.categories[idx]?.label.trim();
+    if (!self) return labels;
+    return labels.filter(
+      (l) => l.localeCompare(self, "pt", { sensitivity: "base" }) !== 0
+    );
+  }, [sf.categories, storeCategoryModal.editIndex]);
+
+  const editorCategoryPlaceholders = Math.max(
+    0,
+    4 - Math.min(labeledStoreCategories.length, 4)
   );
 
   const displayLogo =
@@ -442,6 +496,114 @@ export function StoreVisualEditor({
           </div>
         </div>
 
+        {/* Categorias — prévia estilo vitrine; na loja pública só aparece o que existir nos produtos */}
+        <div className="bg-white border-t border-slate-200 flex min-w-0">
+          <div
+            className="w-1 shrink-0 bg-landing-primary rounded-r-sm"
+            aria-hidden
+          />
+          <div className="flex-1 min-w-0 py-4 px-3 sm:px-4">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h3 className="text-sm font-bold text-slate-800 tracking-tight">
+                Categorias
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPanel("categories")}
+                className="text-xs font-semibold text-landing-primary hover:underline shrink-0"
+              >
+                Lista completa
+              </button>
+            </div>
+            <div
+              className="flex gap-4 sm:gap-5 overflow-x-auto pb-1 -mx-0.5 px-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              role="list"
+            >
+              {labeledStoreCategories.map((cat) => (
+                <button
+                  key={cat.i}
+                  type="button"
+                  onClick={() =>
+                    setStoreCategoryModal({ open: true, editIndex: cat.i })
+                  }
+                  role="listitem"
+                  className="flex flex-col items-center shrink-0 w-[4.5rem] sm:w-[5rem] group text-center"
+                >
+                  <div className="relative w-[4rem] h-[4rem] sm:w-[4.5rem] sm:h-[4.5rem]">
+                    <div className="absolute inset-0 rounded-full bg-slate-200 overflow-hidden ring-2 ring-slate-100 shadow-sm transition-transform group-hover:scale-[1.03]">
+                      {cat.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={cat.imageUrl}
+                          alt=""
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                    <span
+                      className="absolute -top-0.5 -right-0.5 z-10 flex h-6 w-6 items-center justify-center rounded-full text-white text-base font-light leading-none shadow-md ring-2 ring-white"
+                      style={{ backgroundColor: sf.themePrimary }}
+                      aria-hidden
+                    >
+                      +
+                    </span>
+                  </div>
+                  <span className="mt-2 text-center text-[11px] text-slate-500 leading-tight max-w-[5rem] line-clamp-2">
+                    {cat.label}
+                  </span>
+                </button>
+              ))}
+              {Array.from({ length: editorCategoryPlaceholders }).map(
+                (_, ei) => (
+                  <button
+                    key={`ph-${ei}`}
+                    type="button"
+                    onClick={() =>
+                      setStoreCategoryModal({ open: true, editIndex: null })
+                    }
+                    className="flex flex-col items-center shrink-0 w-[4.5rem] sm:w-[5rem] group text-center"
+                    title="Adicionar categoria"
+                  >
+                    <div className="relative w-[4rem] h-[4rem] sm:w-[4.5rem] sm:h-[4.5rem]">
+                      <div className="absolute inset-0 rounded-full bg-slate-200 overflow-hidden ring-2 ring-slate-100 shadow-sm transition-transform group-hover:scale-[1.03]" />
+                      <span
+                        className="absolute -top-0.5 -right-0.5 z-10 flex h-6 w-6 items-center justify-center rounded-full text-white text-base font-light leading-none shadow-md ring-2 ring-white"
+                        style={{ backgroundColor: sf.themePrimary }}
+                        aria-hidden
+                      >
+                        +
+                      </span>
+                    </div>
+                    <span className="mt-2 text-center text-[11px] text-slate-400 leading-tight max-w-[5rem]">
+                      Categoria {labeledStoreCategories.length + ei + 1}
+                    </span>
+                  </button>
+                )
+              )}
+              {labeledStoreCategories.length >= 4 &&
+                labeledStoreCategories.length < 8 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setStoreCategoryModal({ open: true, editIndex: null })
+                    }
+                    className="flex flex-col items-center shrink-0 w-[4.5rem] sm:w-[5rem] group text-center"
+                    title="Nova categoria"
+                  >
+                    <div className="relative w-[4rem] h-[4rem] sm:w-[4.5rem] sm:h-[4.5rem]">
+                      <div className="absolute inset-0 rounded-full border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center transition-colors group-hover:border-landing-primary/50 group-hover:bg-teal-50/40">
+                        <span className="text-slate-400 text-lg font-light group-hover:text-landing-primary">
+                          +
+                        </span>
+                      </div>
+                    </div>
+                    <span className="mt-2 text-[11px] text-slate-400">Nova</span>
+                  </button>
+                )}
+            </div>
+          </div>
+        </div>
+
         {/* Produtos */}
         <div className="bg-white px-3 py-4 sm:px-4 border-t border-slate-200">
           <div className="flex items-center justify-between mb-3">
@@ -449,7 +611,7 @@ export function StoreVisualEditor({
             <span className="text-[11px] text-slate-400">Ordenar ▼</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {previewSlots.map((product, i) => {
+            {previewSlots.map((product) => {
               if (product) {
                 const href = `/dashboard/produtos/${product.id}`;
                 return (
@@ -495,7 +657,7 @@ export function StoreVisualEditor({
               }
               return (
                 <Link
-                  key={`novo-${i}`}
+                  key="slot-novo-produto"
                   href="/dashboard/produtos/novo"
                   className="relative rounded-xl border border-slate-200 bg-slate-50 p-2 hover:border-landing-primary/40 transition-colors text-center group"
                 >
@@ -524,8 +686,49 @@ export function StoreVisualEditor({
             })}
           </div>
           <p className="text-[11px] text-slate-500 text-center mt-3">
-            Com produtos cadastrados, a foto e o preço aparecem aqui. Toque no
-            card para editar; nos vazios, cadastre um novo.
+            A foto e o preço vêm dos produtos reais. Toque num card para editar;
+            o último cartão &quot;Adicione aqui&quot; sempre abre o cadastro de um
+            novo — quando salvar, ele entra na lista e aparece outro vazio.
+          </p>
+        </div>
+
+        {/* Rodapé comercial (abaixo dos produtos na loja pública) */}
+        <div className="relative bg-stone-50/95 border-t border-slate-200 px-3 py-3 sm:px-4">
+          <div className="absolute top-2 right-2 z-20">
+            <PlusFab
+              label="Editar rodapé da vitrine"
+              onClick={() => setPanel("footer")}
+            />
+          </div>
+          <p className="text-[10px] font-bold text-slate-800 uppercase tracking-wide pr-12 mb-1.5">
+            Rodapé da vitrine
+          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-[9px] text-slate-600">
+            <span className="flex items-center gap-1 min-w-0">
+              <span aria-hidden>🚚</span>
+              <span className="truncate">
+                {sf.footerShippingLine.trim() || "Frete e envio (configure)"}
+              </span>
+            </span>
+            <span className="hidden sm:inline text-slate-300">|</span>
+            <span className="flex items-center gap-1 min-w-0">
+              <span aria-hidden>🤝</span>
+              <span className="truncate">
+                {sf.footerReturnsLine.trim() || "Trocas e devoluções"}
+              </span>
+            </span>
+          </div>
+          <p className="text-[9px] text-slate-400 mt-1.5 line-clamp-2 pr-2">
+            {[
+              sf.footerPhone,
+              sf.footerEmail,
+              sf.footerWebsite,
+              sf.footerHours,
+            ]
+              .map((s) => s.trim())
+              .filter(Boolean)
+              .join(" · ") ||
+              "Contato, horário, Pix, link de políticas e YouTube — toque no +"}
           </p>
         </div>
 
@@ -570,6 +773,22 @@ export function StoreVisualEditor({
           className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
         >
           Redes sociais
+        </button>
+        <button
+          type="button"
+          id="passo-categorias"
+          onClick={() => setPanel("categories")}
+          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
+        >
+          Categorias
+        </button>
+        <button
+          type="button"
+          id="passo-rodape"
+          onClick={() => setPanel("footer")}
+          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
+        >
+          Rodapé da vitrine
         </button>
       </div>
 
@@ -884,7 +1103,119 @@ export function StoreVisualEditor({
               className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              YouTube (opcional)
+            </label>
+            <input
+              type="text"
+              value={sf.youtubeUrl}
+              onChange={(e) =>
+                setSf((s) => ({ ...s, youtubeUrl: e.target.value }))
+              }
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+              placeholder="https://youtube.com/@…"
+            />
+          </div>
         </div>
+      </EditorSheet>
+
+      <EditorSheet
+        open={panel === "categories"}
+        title="Categorias na loja"
+        onClose={() => setPanel(null)}
+      >
+        <p className="text-xs text-slate-500">
+          Use o <strong>+</strong> ou &quot;Categoria 1…4&quot;. Na loja pública a
+          faixa <strong>aparece abaixo do banner</strong> quando há{" "}
+          <strong>produtos</strong> e você definiu pelo menos um nome aqui. Para{" "}
+          <strong>filtrar</strong> ao tocar, o texto da categoria no{" "}
+          <strong>cadastro do produto</strong> deve ser o mesmo que o nome aqui (
+          <code className="text-[10px]">supabase-migration-product-category.sql</code>{" "}
+          no Supabase se faltar a coluna). Máximo 8 itens.
+        </p>
+        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+          {sf.categories.map((cat, i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-2"
+            >
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-xs font-semibold text-slate-600">
+                  Categoria {i + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSf((s) => ({
+                      ...s,
+                      categories: s.categories.filter((_, j) => j !== i),
+                    }))
+                  }
+                  className="text-xs text-red-600 hover:underline shrink-0"
+                >
+                  Remover
+                </button>
+              </div>
+              <label className="block text-[11px] font-medium text-slate-600">
+                Nome
+              </label>
+              <input
+                type="text"
+                value={cat.label}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSf((s) => {
+                    const next = [...s.categories];
+                    next[i] = { ...next[i]!, label: v };
+                    return { ...s, categories: next };
+                  });
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                placeholder="Ex.: Vestidos"
+              />
+              {cat.parentLabel?.trim() ? (
+                <p className="text-[10px] text-slate-400 -mt-1">
+                  Pai: <span className="font-medium">{cat.parentLabel.trim()}</span>{" "}
+                  (edite no + da prévia para alterar)
+                </p>
+              ) : null}
+              <label className="block text-[11px] font-medium text-slate-600">
+                URL da imagem (opcional)
+              </label>
+              <input
+                type="url"
+                value={cat.imageUrl}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSf((s) => {
+                    const next = [...s.categories];
+                    next[i] = { ...next[i]!, imageUrl: v };
+                    return { ...s, categories: next };
+                  });
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono text-xs"
+                placeholder="https://…"
+              />
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          disabled={sf.categories.length >= 8}
+          onClick={() =>
+            setSf((s) => ({
+              ...s,
+              categories: [
+                ...s.categories,
+                { label: "", imageUrl: "" } satisfies StorefrontCategoryItem,
+              ],
+            }))
+          }
+          className="w-full py-2.5 rounded-xl border-2 border-dashed border-landing-primary/40 text-landing-primary font-semibold text-sm hover:bg-teal-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          + Adicionar categoria
+        </button>
       </EditorSheet>
 
       <EditorSheet
@@ -937,6 +1268,182 @@ export function StoreVisualEditor({
           className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm"
         />
       </EditorSheet>
+
+      <EditorSheet
+        open={panel === "footer"}
+        title="Rodapé da vitrine"
+        onClose={() => setPanel(null)}
+      >
+        <p className="text-xs text-slate-500">
+          Aparece na loja pública <strong>abaixo dos produtos</strong>. O bloco
+          só é exibido ao cliente quando houver pelo menos um campo preenchido,
+          Pix/dinheiro ativo ou alguma rede social.
+        </p>
+        <label className="block text-sm font-medium text-slate-700">
+          Frete / envio (linha superior)
+        </label>
+        <input
+          type="text"
+          value={sf.footerShippingLine}
+          onChange={(e) =>
+            setSf((s) => ({ ...s, footerShippingLine: e.target.value }))
+          }
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          placeholder="Ex.: Frete grátis em pedidos a partir de R$ 199"
+        />
+        <label className="block text-sm font-medium text-slate-700">
+          Trocas / política (linha superior)
+        </label>
+        <input
+          type="text"
+          value={sf.footerReturnsLine}
+          onChange={(e) =>
+            setSf((s) => ({ ...s, footerReturnsLine: e.target.value }))
+          }
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          placeholder="Ex.: Conheça nossa política de trocas e devoluções"
+        />
+        <label className="block text-sm font-medium text-slate-700">
+          URL das políticas de devolução
+        </label>
+        <input
+          type="url"
+          value={sf.footerPolicyUrl}
+          onChange={(e) =>
+            setSf((s) => ({ ...s, footerPolicyUrl: e.target.value }))
+          }
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono text-xs"
+          placeholder="https://…"
+        />
+        <label className="block text-sm font-medium text-slate-700">
+          Telefone de atendimento
+        </label>
+        <input
+          type="text"
+          value={sf.footerPhone}
+          onChange={(e) =>
+            setSf((s) => ({ ...s, footerPhone: e.target.value }))
+          }
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          placeholder="(00) 00000-0000"
+        />
+        <label className="block text-sm font-medium text-slate-700">E-mail</label>
+        <input
+          type="email"
+          value={sf.footerEmail}
+          onChange={(e) =>
+            setSf((s) => ({ ...s, footerEmail: e.target.value }))
+          }
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          placeholder="contato@sualoja.com"
+        />
+        <label className="block text-sm font-medium text-slate-700">Site</label>
+        <input
+          type="text"
+          value={sf.footerWebsite}
+          onChange={(e) =>
+            setSf((s) => ({ ...s, footerWebsite: e.target.value }))
+          }
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          placeholder="www.sualoja.com.br"
+        />
+        <label className="block text-sm font-medium text-slate-700">
+          Horário de atendimento
+        </label>
+        <input
+          type="text"
+          value={sf.footerHours}
+          onChange={(e) =>
+            setSf((s) => ({ ...s, footerHours: e.target.value }))
+          }
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          placeholder="Seg–Sex 9h–18h"
+        />
+        <div className="flex flex-wrap gap-4 pt-1">
+          <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sf.footerShowPix}
+              onChange={(e) =>
+                setSf((s) => ({ ...s, footerShowPix: e.target.checked }))
+              }
+              className="rounded border-slate-300"
+            />
+            Mostrar Pix
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sf.footerShowCash}
+              onChange={(e) =>
+                setSf((s) => ({ ...s, footerShowCash: e.target.checked }))
+              }
+              className="rounded border-slate-300"
+            />
+            Mostrar dinheiro
+          </label>
+        </div>
+        <p className="text-[11px] text-slate-500">
+          Instagram, Facebook, TikTok e YouTube ficam em{" "}
+          <button
+            type="button"
+            className="text-landing-primary font-semibold hover:underline"
+            onClick={() => setPanel("socials")}
+          >
+            Redes sociais
+          </button>
+          .
+        </p>
+      </EditorSheet>
+
+      <CategoryFormModal
+        variant="store"
+        storeId={storeId}
+        open={storeCategoryModal.open}
+        onClose={() => setStoreCategoryModal({ open: false, editIndex: null })}
+        title={
+          storeCategoryModal.editIndex !== null
+            ? "Editar categoria"
+            : "Adicionar Categoria"
+        }
+        initialName={
+          storeCategoryModal.editIndex !== null
+            ? (sf.categories[storeCategoryModal.editIndex]?.label ?? "")
+            : ""
+        }
+        initialImageUrl={
+          storeCategoryModal.editIndex !== null
+            ? (sf.categories[storeCategoryModal.editIndex]?.imageUrl ?? "")
+            : ""
+        }
+        initialParentLabel={
+          storeCategoryModal.editIndex !== null
+            ? (sf.categories[storeCategoryModal.editIndex]?.parentLabel ?? "")
+            : ""
+        }
+        parentCategoryOptions={storeCategoryParentOptions}
+        onSave={(d) => {
+          const editIdx = storeCategoryModal.editIndex;
+          const item: StorefrontCategoryItem = {
+            label: d.name,
+            imageUrl: d.imageUrl,
+          };
+          const pl = d.parentLabel?.trim();
+          if (pl) item.parentLabel = pl;
+          setSf((s) => {
+            const next = [...s.categories];
+            if (editIdx !== null && editIdx >= 0 && editIdx < next.length) {
+              next[editIdx] = item;
+              return { ...s, categories: next };
+            }
+            if (next.length >= 8) return s;
+            return {
+              ...s,
+              categories: [...next, item],
+            };
+          });
+        }}
+      />
     </div>
   );
 }

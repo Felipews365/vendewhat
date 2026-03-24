@@ -7,6 +7,7 @@ import {
 } from "@/lib/orderLines";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { isCustomerPhoneValid } from "@/lib/customerPhone";
+import { isMissingColumnError } from "@/lib/dbColumnErrors";
 import { isShippingModeId, shippingModeLabel } from "@/lib/shippingModes";
 
 export const runtime = "nodejs";
@@ -96,13 +97,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Carrinho vazio." }, { status: 400 });
   }
 
-  const { data: products, error: prodErr } = await admin
+  const orderProductSelectWithRef =
+    "id, store_id, name, price, colors, sizes, variant_stock, stock, product_reference, active";
+  const orderProductSelectNoRef =
+    "id, store_id, name, price, colors, sizes, variant_stock, stock, active";
+
+  const q1 = await admin
     .from("products")
-    .select(
-      "id, store_id, name, price, colors, sizes, variant_stock, stock, product_reference, active"
-    )
+    .select(orderProductSelectWithRef)
     .eq("store_id", storeId)
     .in("id", Array.from(mergedForIds));
+
+  let products = q1.data as ProductRowForOrder[] | null;
+  let prodErr = q1.error;
+
+  if (
+    prodErr &&
+    isMissingColumnError(prodErr.message, "product_reference", prodErr.code)
+  ) {
+    const q2 = await admin
+      .from("products")
+      .select(orderProductSelectNoRef)
+      .eq("store_id", storeId)
+      .in("id", Array.from(mergedForIds));
+    products = q2.data as ProductRowForOrder[] | null;
+    prodErr = q2.error;
+  }
 
   if (prodErr || !products?.length) {
     return NextResponse.json(

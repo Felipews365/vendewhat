@@ -22,6 +22,8 @@ export type ProductRowForOrder = {
   variant_stock: unknown;
   stock: number;
   product_reference?: string | null;
+  /** Presente nas queries da API de pedidos; usado para filtrar inativos. */
+  active?: boolean | null;
 };
 
 function makeCartKey(productId: string, color: string, size: string): string {

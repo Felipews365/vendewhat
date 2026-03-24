@@ -1,5 +1,11 @@
 -- Pedidos (catálogo → WhatsApp). Execute no Supabase: SQL Editor > New query
 --
+-- Cole e execute TODO este ficheiro de uma vez (não só o bloco dos índices).
+--
+-- Se aparecer 42703 em order_number ou store_id: a tabela orders já existia incompleta.
+-- Pare e execute primeiro: supabase-migration-orders-repair.sql
+-- Depois volte a correr ESTE ficheiro completo.
+--
 -- Importante: se a tabela `orders` já existia SEM order_number / customer_*,
 -- `CREATE TABLE IF NOT EXISTS` não altera nada. Por isso os ALTER abaixo vêm
 -- SEMPRE antes dos índices que usam essas colunas.
@@ -18,6 +24,14 @@ create table if not exists public.orders (
 alter table public.orders add column if not exists order_number integer;
 alter table public.orders add column if not exists customer_name text;
 alter table public.orders add column if not exists customer_phone text;
+
+do $$
+begin
+  if exists (select 1 from public.orders where store_id is null limit 1) then
+    raise exception
+      'orders.store_id não pode ser NULL. Corra supabase-migration-orders-repair.sql ou faça UPDATE com o id correto de public.stores em cada linha.';
+  end if;
+end $$;
 
 -- Preencher número e nome em linhas antigas
 with per_store as (
@@ -80,3 +94,5 @@ create policy "Donos veem pedidos da loja"
 
 comment on table public.orders is 'Pedidos gerados a partir do catálogo público; gravados pela API com service role.';
 comment on column public.orders.payload is 'JSON: lines, subtotal, customerName, customerPhone, orderNumber (espelho dos campos da linha)';
+
+select pg_notify('pgrst', 'reload schema');

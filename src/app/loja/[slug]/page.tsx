@@ -5,6 +5,10 @@ import { optionArrayFromDb } from "@/lib/productOptions";
 import { colorHexesFromDb } from "@/lib/productColorHexes";
 import { variantStockFromDb } from "@/lib/productVariants";
 import { normalizeStoreSlug } from "@/lib/storeSlug";
+import {
+  isMissingColumnError,
+  PRODUCTS_SELECT_WITHOUT_PRODUCT_REFERENCE,
+} from "@/lib/dbColumnErrors";
 import { storefrontFromDb } from "@/lib/storefront";
 import { LojaClient, type CatalogProduct } from "./LojaClient";
 
@@ -78,14 +82,32 @@ export default async function LojaPublicaPage({ params }: Props) {
     notFound();
   }
 
-  // `select("*")` evita erro se ainda não existirem colunas opcionais (images, colors, sizes)
-  const { data: products, error: productsError } = await supabase
+  // `select("*")` inclui colunas novas; se o PostgREST ainda não tiver `product_reference` no cache, repetimos sem esse campo.
+  let productsQuery = await supabase
     .from("products")
     .select("*")
     .eq("store_id", store.id)
     /* true ou null (legado sem coluna default) */
     .or("active.eq.true,active.is.null")
     .order("created_at", { ascending: false });
+
+  if (
+    productsQuery.error &&
+    isMissingColumnError(
+      productsQuery.error.message,
+      "product_reference",
+      productsQuery.error.code
+    )
+  ) {
+    productsQuery = await supabase
+      .from("products")
+      .select(PRODUCTS_SELECT_WITHOUT_PRODUCT_REFERENCE)
+      .eq("store_id", store.id)
+      .or("active.eq.true,active.is.null")
+      .order("created_at", { ascending: false });
+  }
+
+  const { data: products, error: productsError } = productsQuery;
 
   if (productsError) {
     console.error("[loja] Erro ao buscar produtos:", productsError.message, productsError);
@@ -102,6 +124,11 @@ export default async function LojaPublicaPage({ params }: Props) {
       productReference: (() => {
         const r = (p as { product_reference?: string | null }).product_reference;
         const t = typeof r === "string" ? r.trim() : "";
+        return t || null;
+      })(),
+      category: (() => {
+        const c = (p as { category?: string | null }).category;
+        const t = typeof c === "string" ? c.trim() : "";
         return t || null;
       })(),
       description: p.description,

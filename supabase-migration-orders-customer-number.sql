@@ -1,5 +1,6 @@
 -- Incremental: só colunas + backfill + índice único.
--- Preferível: reexecutar supabase-migration-orders.sql completo (já inclui isto antes dos índices).
+-- Preferível: supabase-migration-orders.sql completo (ALTER antes dos índices).
+-- Erro 42703 em order_number: use supabase-migration-orders-repair.sql primeiro.
 
 alter table public.orders add column if not exists customer_name text;
 alter table public.orders add column if not exists customer_phone text;

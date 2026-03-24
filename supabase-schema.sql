@@ -30,6 +30,8 @@ create table public.products (
   active boolean default true not null,
   is_promotion boolean default false not null,
   compare_at_price decimal(10,2),
+  category text,
+  product_reference text,
   created_at timestamptz default now() not null,
   updated_at timestamptz default now() not null
 );

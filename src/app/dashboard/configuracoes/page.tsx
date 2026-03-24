@@ -47,11 +47,11 @@ export default function ConfiguracoesLojaPage() {
     const supabase = createClient();
     const { data } = await supabase
       .from("products")
-      .select("id, name, price, image, images")
+      .select("*")
       .eq("store_id", storeRowId)
       .eq("active", true)
       .order("created_at", { ascending: false })
-      .limit(4);
+      .limit(32);
     const rows = data ?? [];
     setCatalogPreview(
       rows.map((p) => {
@@ -59,6 +59,9 @@ export default function ConfiguracoesLojaPage() {
           typeof p.price === "number"
             ? p.price
             : parseFloat(String(p.price ?? 0)) || 0;
+        const catRaw = (p as { category?: string | null }).category;
+        const category =
+          typeof catRaw === "string" && catRaw.trim() ? catRaw.trim() : null;
         return {
           id: String(p.id),
           name:
@@ -69,6 +72,7 @@ export default function ConfiguracoesLojaPage() {
           imageUrl: getProductImageUrls(
             p as { image?: string | null; images?: unknown }
           )[0] ?? null,
+          category,
         };
       })
     );
@@ -339,6 +343,7 @@ export default function ConfiguracoesLojaPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <StoreVisualEditor
+          storeId={storeId}
           storeName={storeName}
           storeSlug={storeSlug}
           storeLogoUrl={storeLogo}
