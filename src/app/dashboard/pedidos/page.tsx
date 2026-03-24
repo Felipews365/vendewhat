@@ -8,6 +8,7 @@ import {
   isMissingOrdersColumnError,
   ORDERS_MIGRATION_HINT,
 } from "@/lib/dbColumnErrors";
+import { shippingModeLabel } from "@/lib/shippingModes";
 
 type PayloadLine = {
   productId: string;
@@ -35,6 +36,8 @@ type OrderRow = {
     customerName?: string;
     customerPhone?: string;
     orderNumber?: number;
+    shippingMode?: string;
+    shippingModeLabel?: string;
   } | null;
 };
 
@@ -187,6 +190,10 @@ export default function PedidosPage() {
               o.customer_phone?.trim() ||
               o.payload?.customerPhone?.trim() ||
               null;
+            const shipping =
+              o.payload?.shippingModeLabel?.trim() ||
+              shippingModeLabel(o.payload?.shippingMode) ||
+              null;
             return (
               <li
                 key={o.id}
@@ -209,6 +216,14 @@ export default function PedidosPage() {
                       <p className="text-sm text-slate-600 mt-0.5">
                         <span className="font-medium text-slate-700">Telefone:</span>{" "}
                         {phone}
+                      </p>
+                    ) : null}
+                    {shipping ? (
+                      <p className="text-sm text-slate-600 mt-0.5">
+                        <span className="font-medium text-slate-700">
+                          Forma de envio:
+                        </span>{" "}
+                        {shipping}
                       </p>
                     ) : null}
                     <p className="text-sm text-slate-500 mt-2">

@@ -6,6 +6,8 @@ import {
   validateOrderAgainstProducts,
 } from "@/lib/orderLines";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import { isCustomerPhoneValid } from "@/lib/customerPhone";
+import { isShippingModeId, shippingModeLabel } from "@/lib/shippingModes";
 
 export const runtime = "nodejs";
 
@@ -14,6 +16,8 @@ type Body = {
   notes?: string;
   customerName?: string;
   customerPhone?: string;
+  /** excursao | correios | retirada */
+  shippingMode?: string;
   lines?: OrderLineInput[];
 };
 
@@ -49,6 +53,17 @@ export async function POST(req: Request) {
   const customerPhone = String(body.customerPhone ?? "")
     .trim()
     .slice(0, 40);
+
+  if (!isCustomerPhoneValid(customerPhone)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Informe um telefone / WhatsApp válido com DDD (10 a 15 dígitos).",
+      },
+      { status: 400 }
+    );
+  }
 
   const rawLines = Array.isArray(body.lines) ? body.lines : [];
   const lines: OrderLineInput[] = rawLines
@@ -108,6 +123,20 @@ export async function POST(req: Request) {
   const notes =
     typeof body.notes === "string" ? body.notes.trim().slice(0, 2000) : "";
 
+  const rawMode = String(body.shippingMode ?? "").trim();
+  const shippingMode = isShippingModeId(rawMode) ? rawMode : "";
+  if (!shippingMode) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Escolha a forma de entrega: excursão, Correios ou retirada.",
+      },
+      { status: 400 }
+    );
+  }
+  const shippingModeLabelPt = shippingModeLabel(shippingMode) ?? shippingMode;
+
   const payloadLines = validated.pricedLines.map((l) => ({
     productId: l.productId,
     name: l.name,
@@ -151,6 +180,8 @@ export async function POST(req: Request) {
         customerName,
         customerPhone: customerPhone || undefined,
         orderNumber,
+        shippingMode,
+        shippingModeLabel: shippingModeLabelPt,
       },
     })
     .select("id, order_number")

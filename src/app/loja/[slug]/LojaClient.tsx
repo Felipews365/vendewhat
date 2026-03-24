@@ -12,6 +12,12 @@ import {
 import { type StorefrontSettings } from "@/lib/storefront";
 import { swatchNeedsStrongBorder } from "@/lib/colorSwatch";
 import { resolveSwatchFill } from "@/lib/productColorHexes";
+import { isCustomerPhoneValid } from "@/lib/customerPhone";
+import {
+  SHIPPING_MODES,
+  shippingModeLabel,
+  type ShippingModeId,
+} from "@/lib/shippingModes";
 
 export type CatalogProduct = {
   id: string;
@@ -949,6 +955,7 @@ export function LojaClient({
   const [notes, setNotes] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [shippingMode, setShippingMode] = useState<ShippingModeId | null>(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("new");
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
@@ -1070,9 +1077,11 @@ export function LojaClient({
       `*Pedido — ${store.name}*`,
       "",
       `*Cliente:* ${customerName.trim() || "—"}`,
+      `*Telefone / WhatsApp:* ${customerPhone.trim() || "—"}`,
     ];
-    if (customerPhone.trim()) {
-      lines.push(`*Telefone:* ${customerPhone.trim()}`);
+    if (shippingMode) {
+      const lab = shippingModeLabel(shippingMode);
+      if (lab) lines.push(`*Forma de envio:* ${lab}`);
     }
     lines.push(
       "",
@@ -1100,6 +1109,8 @@ export function LojaClient({
     if (items.length === 0 || !store.slug) return;
     const name = customerName.trim();
     if (name.length < 2) return;
+    if (!isCustomerPhoneValid(customerPhone)) return;
+    if (!shippingMode) return;
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -1108,6 +1119,7 @@ export function LojaClient({
           storeSlug: store.slug,
           customerName: name,
           customerPhone: customerPhone.trim(),
+          shippingMode,
           notes: notes.trim(),
           lines: items.map((i) => ({
             productId: i.id,
@@ -1777,19 +1789,58 @@ export function LojaClient({
                         htmlFor="vw-customer-phone"
                         className="text-sm font-medium text-boutique-wine"
                       >
-                        Telefone / WhatsApp (opcional)
+                        Telefone / WhatsApp <span className="text-red-600">*</span>
                       </label>
                       <input
                         id="vw-customer-phone"
                         type="tel"
                         autoComplete="tel"
                         inputMode="tel"
+                        required
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
-                        placeholder="Ex: 11 99999-9999"
+                        placeholder="DDD + número (ex: 11 99999-9999)"
                         className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
                       />
+                      <p className="mt-1 text-xs text-stone-500">
+                        Obrigatório: pelo menos 10 dígitos (com DDD).
+                      </p>
                     </div>
+                    <fieldset className="space-y-2 min-w-0">
+                      <legend className="text-sm font-medium text-boutique-wine">
+                        Forma de envio <span className="text-red-600">*</span>
+                      </legend>
+                      <p className="text-xs text-stone-500 -mt-0.5 mb-1">
+                        Excursão, Correios ou retirada — selecione uma opção.
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {SHIPPING_MODES.map((m) => {
+                          const sel = shippingMode === m.id;
+                          return (
+                            <label
+                              key={m.id}
+                              className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                                sel
+                                  ? "border-boutique-dark bg-boutique-light/80 ring-2 ring-boutique/30"
+                                  : "border-stone-200 bg-white hover:border-stone-300"
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="vw-shipping-mode"
+                                value={m.id}
+                                checked={sel}
+                                onChange={() => setShippingMode(m.id)}
+                                className="h-4 w-4 shrink-0 accent-boutique-dark"
+                              />
+                              <span className="font-medium text-stone-800">
+                                {m.label}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-boutique-wine">
@@ -1821,7 +1872,11 @@ export function LojaClient({
                     setCartOpen(false);
                     window.open(orderHref, "_blank", "noopener,noreferrer");
                   }}
-                  disabled={customerName.trim().length < 2}
+                  disabled={
+                    customerName.trim().length < 2 ||
+                    !isCustomerPhoneValid(customerPhone) ||
+                    !shippingMode
+                  }
                   className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-whatsapp text-white font-semibold hover:bg-whatsapp-dark transition-colors disabled:opacity-45 disabled:pointer-events-none"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -1832,9 +1887,26 @@ export function LojaClient({
                 <p className="text-xs text-slate-400 text-center mt-2">
                   Registramos o resumo no painel e abrimos o WhatsApp com a mensagem
                 </p>
-                {customerName.trim().length < 2 ? (
+                {customerName.trim().length < 2 ||
+                !isCustomerPhoneValid(customerPhone) ||
+                !shippingMode ? (
                   <p className="text-xs text-amber-700 text-center mt-2">
-                    Preencha <strong>seu nome</strong> acima para enviar o pedido.
+                    {customerName.trim().length < 2 ? (
+                      <>
+                        Preencha <strong>seu nome</strong>, <strong>telefone</strong> e{" "}
+                        <strong>forma de envio</strong>.
+                      </>
+                    ) : !isCustomerPhoneValid(customerPhone) ? (
+                      <>
+                        Informe um <strong>telefone válido</strong> com DDD (10 a 15
+                        dígitos).
+                      </>
+                    ) : (
+                      <>
+                        Selecione a <strong>forma de envio</strong> (excursão,
+                        Correios ou retirada).
+                      </>
+                    )}
                   </p>
                 ) : null}
               </div>

@@ -4,14 +4,116 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import {
+  DASH_NAV_ICONS,
+  type DashNavIconKey,
+} from "@/components/icons/DashboardNavIcons";
 
-function navItemClass(active: boolean) {
-  return [
-    "inline-flex items-center whitespace-nowrap text-base sm:text-lg font-bold tracking-tight transition-colors border-b-[3px] pb-1 -mb-px",
-    active
-      ? "text-landing-primary border-landing-primary"
-      : "text-slate-600 border-transparent hover:text-landing-primary hover:border-teal-200/80",
-  ].join(" ");
+const DASH_NAV: readonly {
+  href: string;
+  /** Texto visível na barra estreita (estilo app roxo) */
+  short: string;
+  /** Acessibilidade / title */
+  label: string;
+  icon: DashNavIconKey;
+}[] = [
+  { href: "/dashboard", short: "Painel", label: "Painel da loja", icon: "painel" },
+  { href: "/dashboard/configuracoes", short: "Loja", label: "Montar sua loja", icon: "loja" },
+  {
+    href: "/dashboard/compartilhar",
+    short: "Compartilhar",
+    label: "Compartilhar sua loja",
+    icon: "compartilhar",
+  },
+  { href: "/dashboard/pedidos", short: "Pedidos", label: "Pedidos", icon: "pedidos" },
+  { href: "/dashboard/conta", short: "Conta", label: "Conta", icon: "conta" },
+];
+
+/** Largura da faixa roxa (ícone + rótulo curto) */
+const RAIL_W = "w-[118px]";
+const RAIL_MR = "lg:mr-[118px]";
+
+function HamburgerIcon({ open }: { open: boolean }) {
+  if (open) {
+    return (
+      <svg
+        className="h-6 w-6"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2.35}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      className="h-6 w-6"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2.35}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
+/** Barra vertical roxa: ícone branco (contorno) + texto branco por baixo; ativo = quadrado roxo mais escuro. */
+function PurpleRailNav({
+  pathname,
+  onNavigate,
+}: {
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <nav
+      className="flex flex-col items-stretch py-2"
+      aria-label="Áreas do painel"
+    >
+      {DASH_NAV.map(({ href, short, label, icon }) => {
+        const active = pathname === href;
+        const Icon = DASH_NAV_ICONS[icon];
+        return (
+          <Link
+            key={href}
+            href={href}
+            title={label}
+            aria-label={label}
+            aria-current={active ? "page" : undefined}
+            onClick={onNavigate}
+            className={[
+              "flex flex-col items-center gap-2 px-2 py-4 transition-colors rounded-xl mx-1",
+              active ? "" : "hover:bg-white/10 active:bg-white/15",
+            ].join(" ")}
+          >
+            <span
+              className={[
+                "flex h-12 w-12 items-center justify-center rounded-xl transition-shadow",
+                active
+                  ? "bg-violet-950 shadow-inner shadow-black/25 ring-1 ring-white/10"
+                  : "bg-transparent",
+              ].join(" ")}
+              aria-hidden
+            >
+              <Icon className="h-[26px] w-[26px] text-white" />
+            </span>
+            <span className="text-center text-[11px] font-bold leading-tight text-white px-0.5 max-w-[5.5rem]">
+              {short}
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
 }
 
 export function DashboardLayoutClient({
@@ -23,6 +125,7 @@ export function DashboardLayoutClient({
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const loadSession = useCallback(async () => {
     const supabase = createClient();
@@ -41,6 +144,29 @@ export function DashboardLayoutClient({
     loadSession();
   }, [loadSession]);
 
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (menuOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [menuOpen]);
+
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -55,61 +181,98 @@ export function DashboardLayoutClient({
     );
   }
 
-  const isPainel = pathname === "/dashboard";
-  const isCompartilhar = pathname === "/dashboard/compartilhar";
-  const isMontar = pathname === "/dashboard/configuracoes";
-  const isPedidos = pathname === "/dashboard/pedidos";
-  const isConta = pathname === "/dashboard/conta";
+  const railSurfaceClass =
+    "bg-[#6d28d9] shadow-[-10px_0_40px_-8px_rgba(76,29,149,0.55)]";
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 pt-4 pb-0">
-          <div className="flex items-center justify-between gap-4 pb-3">
-            <Link href="/dashboard" className="text-xl font-bold text-slate-800 shrink-0">
+      {menuOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[2px] lg:hidden"
+          aria-label="Fechar menu"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+
+      <div className={`min-h-screen flex flex-col ${RAIL_MR}`}>
+        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-sm shadow-slate-200/40">
+          <div className="max-w-6xl mx-auto px-4 py-3.5 flex flex-nowrap items-center justify-between gap-3">
+            <Link
+              href="/dashboard"
+              className="text-xl font-bold text-slate-800 shrink-0 min-w-0 truncate tracking-tight"
+            >
               VendeWhat
             </Link>
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <span className="text-sm text-slate-600 hidden sm:block truncate">
-                Olá, <strong>{userName.split(" ")[0]}</strong>
+            <div className="flex flex-none items-center gap-2 sm:gap-4">
+              <span className="text-sm text-slate-600 hidden sm:block truncate max-w-[160px]">
+                Olá, <strong className="text-slate-800">{userName.split(" ")[0]}</strong>
               </span>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="text-sm text-slate-500 hover:text-red-600 transition-colors shrink-0"
+                className="text-sm font-medium text-slate-500 hover:text-red-600 transition-colors whitespace-nowrap"
               >
                 Sair
               </button>
+              <button
+                type="button"
+                className="lg:hidden inline-flex items-center gap-2 rounded-xl bg-[#6d28d9] px-3 py-2.5 text-white shadow-md shadow-violet-900/30 hover:bg-[#5b21b7] transition-colors"
+                aria-expanded={menuOpen}
+                aria-controls="dashboard-nav-drawer"
+                onClick={() => setMenuOpen((o) => !o)}
+              >
+                <span className="sr-only">
+                  {menuOpen ? "Fechar menu" : "Abrir menu"}
+                </span>
+                <HamburgerIcon open={menuOpen} />
+                <span className="text-sm font-bold tracking-tight">Menu</span>
+              </button>
             </div>
           </div>
+        </header>
 
-          <nav
-            className="flex flex-wrap gap-x-4 gap-y-2 sm:gap-x-7 border-t border-slate-100 pt-3 pb-3 -mb-px overflow-x-auto"
-            aria-label="Áreas do painel"
-          >
-            <Link href="/dashboard" className={navItemClass(isPainel)}>
-              Painel da loja
-            </Link>
-            <Link href="/dashboard/configuracoes" className={navItemClass(isMontar)}>
-              Montar sua loja
-            </Link>
-            <Link
-              href="/dashboard/compartilhar"
-              className={navItemClass(isCompartilhar)}
-            >
-              Compartilhar sua loja
-            </Link>
-            <Link href="/dashboard/pedidos" className={navItemClass(isPedidos)}>
-              Pedidos
-            </Link>
-            <Link href="/dashboard/conta" className={navItemClass(isConta)}>
-              Conta
-            </Link>
-          </nav>
+        <div className="flex-1">{children}</div>
+      </div>
+
+      {/* Faixa roxa fixa à direita — desktop (cantos arredondados para o conteúdo = à esquerda da barra) */}
+      <aside
+        className={`hidden lg:flex fixed top-0 right-0 z-20 h-svh ${RAIL_W} flex-col rounded-l-[28px] overflow-hidden ${railSurfaceClass}`}
+        aria-label="Navegação do painel"
+      >
+        <div className="flex flex-1 flex-col items-center pt-8 pb-6 min-h-0 overflow-y-auto overflow-x-hidden">
+          <PurpleRailNav pathname={pathname} />
         </div>
-      </header>
+      </aside>
 
-      {children}
+      {/* Drawer mobile — mesma faixa roxa, desliza da direita */}
+      <div
+        id="dashboard-nav-drawer"
+        className={[
+          `fixed top-0 right-0 z-50 h-svh ${RAIL_W} max-w-[100vw] flex flex-col rounded-l-[28px] overflow-hidden lg:hidden`,
+          railSurfaceClass,
+          "transition-transform duration-300 ease-out",
+          menuOpen ? "translate-x-0" : "translate-x-full pointer-events-none",
+        ].join(" ")}
+        aria-hidden={!menuOpen}
+      >
+        <div className="flex justify-end px-2 pt-3 pb-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(false)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-white/90 hover:bg-white/15 transition-colors text-2xl leading-none font-light"
+            aria-label="Fechar menu"
+          >
+            ×
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto pb-6 -mt-1">
+          <PurpleRailNav
+            pathname={pathname}
+            onNavigate={() => setMenuOpen(false)}
+          />
+        </div>
+      </div>
     </div>
   );
 }
