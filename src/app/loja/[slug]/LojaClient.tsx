@@ -1389,7 +1389,7 @@ export function LojaClient({
     >
       {/* Topo — logo, bullets, busca (estilo vitrine) */}
       <header
-        className="sticky top-0 z-40 backdrop-blur-md border-b border-stone-200/80 shadow-[0_1px_0_rgba(92,46,54,0.04)]"
+        className="z-40 border-b border-stone-200/80 shadow-[0_1px_0_rgba(92,46,54,0.04)] backdrop-blur-md md:sticky md:top-0"
         style={{ backgroundColor: storefront.headerBackground }}
       >
         <div className="max-w-6xl mx-auto px-4 py-3 md:py-4">
@@ -2141,7 +2141,22 @@ export function LojaClient({
                   onClick={async () => {
                     await persistOrderSnapshot();
                     setCartOpen(false);
-                    window.open(orderHref, "_blank", "noopener,noreferrer");
+                    /**
+                     * Depois do `await`, o browser já não trata o clique como “gesto direto”:
+                     * em mobile o `window.open` costuma ser bloqueado. Navegar na mesma aba
+                     * abre o WhatsApp de forma fiável; no desktop mantemos novo separador.
+                     */
+                    const narrow =
+                      typeof window !== "undefined" &&
+                      window.matchMedia("(max-width: 767px)").matches;
+                    const touchPrimary =
+                      typeof window !== "undefined" &&
+                      window.matchMedia("(pointer: coarse)").matches;
+                    if (narrow || touchPrimary) {
+                      window.location.assign(orderHref);
+                    } else {
+                      window.open(orderHref, "_blank", "noopener,noreferrer");
+                    }
                   }}
                   disabled={
                     customerName.trim().length < 2 ||
