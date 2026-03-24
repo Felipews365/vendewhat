@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import {
+  isMissingOrdersColumnError,
+  ORDERS_MIGRATION_HINT,
+} from "@/lib/dbColumnErrors";
 
 type PayloadLine = {
   productId: string;
@@ -92,10 +96,12 @@ export default function PedidosPage() {
       .limit(100);
 
     if (error) {
+      const msg = error.message ?? "";
       if (
-        error.message?.includes("orders") ||
+        msg.includes("orders") ||
         error.code === "42P01" ||
-        error.message?.toLowerCase().includes("relation")
+        msg.toLowerCase().includes("relation") ||
+        isMissingOrdersColumnError(msg, error.code)
       ) {
         setConfigHint(true);
         setOrders([]);
@@ -135,18 +141,8 @@ export default function PedidosPage() {
 
       {configHint && (
         <div className="mt-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
-          <p className="font-semibold">Tabela de pedidos ainda não criada</p>
-          <p className="mt-1">
-            Execute{" "}
-            <code className="bg-amber-100/80 px-1 rounded">supabase-migration-orders.sql</code>
-            . Se a tabela já existia antes, execute também{" "}
-            <code className="bg-amber-100/80 px-1 rounded">
-              supabase-migration-orders-customer-number.sql
-            </code>
-            . Configure{" "}
-            <code className="bg-amber-100/80 px-1 rounded">SUPABASE_SERVICE_ROLE_KEY</code>{" "}
-            no ambiente (Vercel / .env).
-          </p>
+          <p className="font-semibold">Pedidos: migração no Supabase</p>
+          <p className="mt-1">{ORDERS_MIGRATION_HINT}</p>
         </div>
       )}
 

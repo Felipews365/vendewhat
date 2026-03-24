@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { whatsAppLink } from "@/lib/whatsapp";
@@ -381,12 +381,58 @@ function ProductDetailModal({
   contactHref: string | null;
 }) {
   const [imgIdx, setImgIdx] = useState(0);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [color, setColor] = useState(product.colors[0] ?? "");
   const [size, setSize] = useState(product.sizes[0] ?? "");
   const [qtyDraft, setQtyDraft] = useState(1);
 
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const lightboxCarouselRef = useRef<HTMLDivElement>(null);
+  const skipCarouselScrollRef = useRef(false);
+  const skipLightboxScrollRef = useRef(false);
+  const lightboxNeedsInitialScrollRef = useRef(false);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+
   const imgs = product.images.length > 0 ? product.images : product.image ? [product.image] : [];
   const safeImgIdx = imgs.length > 0 ? Math.min(imgIdx, imgs.length - 1) : 0;
+
+  const scrollCarouselToIndex = useCallback(
+    (i: number, behavior: "smooth" | "auto" = "smooth") => {
+      const el = carouselRef.current;
+      if (!el || imgs.length <= 1) return;
+      const w = el.clientWidth;
+      if (w <= 0) return;
+      skipCarouselScrollRef.current = true;
+      el.scrollTo({
+        left: Math.min(i, imgs.length - 1) * w,
+        behavior,
+      });
+      window.setTimeout(
+        () => {
+          skipCarouselScrollRef.current = false;
+        },
+        behavior === "auto" ? 50 : 450
+      );
+    },
+    [imgs.length]
+  );
+
+  const onCarouselScroll = useCallback(() => {
+    if (skipCarouselScrollRef.current || imgs.length <= 1) return;
+    const el = carouselRef.current;
+    if (!el) return;
+    const w = el.clientWidth;
+    if (w <= 0) return;
+    const i = Math.round(el.scrollLeft / w);
+    const clamped = Math.max(0, Math.min(i, imgs.length - 1));
+    setImgIdx((prev) => (clamped !== prev ? clamped : prev));
+  }, [imgs.length]);
+
+  useEffect(() => {
+    setImgIdx(0);
+    const t = window.setTimeout(() => scrollCarouselToIndex(0, "auto"), 0);
+    return () => window.clearTimeout(t);
+  }, [product.id, scrollCarouselToIndex]);
 
   const colorForCart = product.colors.length > 0 ? color.trim() : "";
   const sizeForCart = product.sizes.length > 0 ? size.trim() : "";
@@ -417,6 +463,55 @@ function ProductDetailModal({
     if (inCart === 0) setQtyDraft(1);
   }, [inCart]);
 
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxIndex(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxIndex]);
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    if (imgs.length <= 1) {
+      lightboxNeedsInitialScrollRef.current = false;
+      return;
+    }
+    if (!lightboxNeedsInitialScrollRef.current) return;
+    lightboxNeedsInitialScrollRef.current = false;
+    const el = lightboxCarouselRef.current;
+    if (!el) return;
+    const run = () => {
+      const w = el.clientWidth;
+      if (w <= 0) return;
+      const i = Math.max(0, Math.min(lightboxIndex, imgs.length - 1));
+      skipLightboxScrollRef.current = true;
+      el.scrollTo({ left: i * w, behavior: "auto" });
+      window.setTimeout(() => {
+        skipLightboxScrollRef.current = false;
+      }, 80);
+    };
+    const id = requestAnimationFrame(() => requestAnimationFrame(run));
+    return () => cancelAnimationFrame(id);
+  }, [lightboxIndex, imgs.length]);
+
+  const onLightboxScroll = useCallback(() => {
+    if (skipLightboxScrollRef.current || imgs.length <= 1) return;
+    const el = lightboxCarouselRef.current;
+    if (!el) return;
+    const w = el.clientWidth;
+    if (w <= 0) return;
+    const i = Math.round(el.scrollLeft / w);
+    const clamped = Math.max(0, Math.min(i, imgs.length - 1));
+    setLightboxIndex((prev) => (prev !== null && clamped !== prev ? clamped : prev));
+  }, [imgs.length]);
+
+  function openLightboxAt(i: number) {
+    lightboxNeedsInitialScrollRef.current = true;
+    setLightboxIndex(i);
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-10 sm:px-6 sm:py-14 md:px-10 md:py-20"
@@ -441,13 +536,16 @@ function ProductDetailModal({
           {/* Galeria: miniaturas à esquerda + foto grande */}
           <div className="md:w-[55%] flex flex-col-reverse sm:flex-row bg-stone-50 md:pl-2 md:pr-1 max-md:pt-0">
             {imgs.length > 1 && (
-              <div className="flex sm:flex-col gap-2 p-3 sm:w-[80px] sm:min-w-[80px] overflow-x-auto sm:overflow-y-auto sm:overflow-x-hidden sm:max-h-[min(28rem,70vh)] [scrollbar-width:thin]">
+              <div className="flex sm:flex-col gap-2 p-3 sm:w-[80px] sm:min-w-[80px] overflow-x-auto sm:overflow-y-auto sm:overflow-x-hidden sm:max-h-[min(28rem,70vh)] [scrollbar-width:thin] snap-x snap-mandatory sm:snap-none max-sm:pb-1">
                 {imgs.map((url, i) => (
                   <button
                     key={`${url}-${i}`}
                     type="button"
-                    onClick={() => setImgIdx(i)}
-                    className={`relative shrink-0 w-16 h-16 sm:w-full sm:h-auto sm:aspect-square rounded-lg overflow-hidden ring-2 transition-all ${
+                    onClick={() => {
+                      setImgIdx(i);
+                      scrollCarouselToIndex(i, "smooth");
+                    }}
+                    className={`relative shrink-0 w-16 h-16 sm:w-full sm:h-auto sm:aspect-square rounded-lg overflow-hidden ring-2 transition-all snap-start ${
                       i === safeImgIdx
                         ? "ring-stone-800 opacity-100 shadow-md"
                         : "ring-transparent opacity-60 hover:opacity-100 hover:ring-stone-300"
@@ -458,31 +556,107 @@ function ProductDetailModal({
                 ))}
               </div>
             )}
-            {/* Foto principal: no mobile encosta no topo do modal (sem faixa branca) */}
+            {/* Galeria principal: deslize horizontal (snap) no mobile; toque sem arrastar abre zoom */}
             <div
-              className={`relative flex-1 w-full min-w-0 aspect-[1/1] overflow-hidden bg-stone-200 shadow-sm max-md:rounded-t-2xl sm:rounded-2xl ${
+              className={`relative flex-1 w-full min-w-0 aspect-[1/1] bg-stone-200 shadow-sm max-md:rounded-t-2xl sm:rounded-2xl touch-pan-x ${
                 imgs.length > 1 ? "max-md:rounded-b-none" : "max-md:rounded-b-2xl"
               }`}
             >
-              {imgs.length > 0 ? (
-                <Image
-                  src={imgs[safeImgIdx]}
-                  alt={product.name}
-                  fill
-                  className="object-cover object-center"
-                  style={{ objectFit: "cover", objectPosition: "center" }}
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  priority
-                />
+              {imgs.length > 1 ? (
+                <div
+                  ref={carouselRef}
+                  onScroll={onCarouselScroll}
+                  className="flex h-full w-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory overscroll-x-contain rounded-[inherit] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
+                  {imgs.map((url, i) => (
+                    <div
+                      key={`${url}-${i}`}
+                      className="relative h-full min-w-full w-full shrink-0 snap-center snap-always bg-stone-200"
+                    >
+                      <Image
+                        src={url}
+                        alt={i === 0 ? product.name : `${product.name} — foto ${i + 1}`}
+                        fill
+                        className="object-cover object-center select-none pointer-events-none"
+                        draggable={false}
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                        priority={i === 0}
+                      />
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Ampliar foto"
+                        className="absolute inset-0 z-[1] cursor-zoom-in touch-pan-x"
+                        onPointerDown={(e) => {
+                          pointerStartRef.current = { x: e.clientX, y: e.clientY };
+                        }}
+                        onPointerUp={(e) => {
+                          const start = pointerStartRef.current;
+                          pointerStartRef.current = null;
+                          if (!start) return;
+                          const dx = Math.abs(e.clientX - start.x);
+                          const dy = Math.abs(e.clientY - start.y);
+                          if (dx < 12 && dy < 12) openLightboxAt(i);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openLightboxAt(i);
+                          }
+                        }}
+                      />
+                      {soldOut && (
+                        <span className="absolute top-4 right-4 z-10 bg-boutique-wine/95 text-white text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-sm pointer-events-none">
+                          Esgotado
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : imgs.length === 1 ? (
+                <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
+                  <Image
+                    src={imgs[0]}
+                    alt={product.name}
+                    fill
+                    className="object-cover object-center select-none pointer-events-none"
+                    draggable={false}
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                    priority
+                  />
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Ampliar foto"
+                    className="absolute inset-0 z-[1] cursor-zoom-in touch-pan-x"
+                    onPointerDown={(e) => {
+                      pointerStartRef.current = { x: e.clientX, y: e.clientY };
+                    }}
+                    onPointerUp={(e) => {
+                      const start = pointerStartRef.current;
+                      pointerStartRef.current = null;
+                      if (!start) return;
+                      const dx = Math.abs(e.clientX - start.x);
+                      const dy = Math.abs(e.clientY - start.y);
+                      if (dx < 12 && dy < 12) openLightboxAt(0);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openLightboxAt(0);
+                      }
+                    }}
+                  />
+                  {soldOut && (
+                    <span className="absolute top-4 right-4 z-10 bg-boutique-wine/95 text-white text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-sm pointer-events-none">
+                      Esgotado
+                    </span>
+                  )}
+                </div>
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-6xl text-stone-300">
                   📷
                 </div>
-              )}
-              {soldOut && (
-                <span className="absolute top-4 right-4 z-10 bg-boutique-wine/95 text-white text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-sm">
-                  Esgotado
-                </span>
               )}
             </div>
           </div>
@@ -680,6 +854,73 @@ function ProductDetailModal({
           </div>
         </div>
       </div>
+
+      {lightboxIndex !== null && imgs.length > 0 && (
+        <div
+          className="fixed inset-0 z-[70]"
+          onClick={(e) => e.stopPropagation()}
+          role="presentation"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 z-0 bg-black/95 cursor-default"
+            aria-label="Fechar foto ampliada"
+            onClick={() => setLightboxIndex(null)}
+          />
+          <div className="absolute inset-0 z-[10] pointer-events-none flex flex-col">
+            <button
+              type="button"
+              className="pointer-events-auto absolute top-3 right-3 z-20 w-11 h-11 rounded-full bg-white/15 text-white text-2xl leading-none flex items-center justify-center hover:bg-white/25 backdrop-blur-sm border border-white/20"
+              aria-label="Fechar"
+              onClick={() => setLightboxIndex(null)}
+            >
+              ×
+            </button>
+            {imgs.length > 1 ? (
+              <div
+                ref={lightboxCarouselRef}
+                onScroll={onLightboxScroll}
+                className="pointer-events-auto mt-12 mb-8 flex min-h-0 flex-1 w-full overflow-x-auto overflow-y-hidden overscroll-x-contain snap-x snap-mandatory touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {imgs.map((url, i) => (
+                  <div
+                    key={`lb-${url}-${i}`}
+                    className="flex h-full min-w-full w-full shrink-0 snap-center items-center justify-center px-3"
+                  >
+                    <div className="relative h-full w-full max-h-[min(85vh,calc(100vh-7rem))] max-w-[min(100%,1200px)]">
+                      <Image
+                        src={url}
+                        alt={
+                          i === 0
+                            ? product.name
+                            : `${product.name} — foto ${i + 1}`
+                        }
+                        fill
+                        className="object-contain"
+                        sizes="100vw"
+                        priority={i === lightboxIndex}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="pointer-events-none flex flex-1 items-center justify-center p-6 pt-14 min-h-0">
+                <div className="pointer-events-auto relative h-[min(85vh,calc(100vh-7rem))] w-full max-w-[min(100%,1024px)]">
+                  <Image
+                    src={imgs[0]}
+                    alt={product.name}
+                    fill
+                    className="object-contain"
+                    sizes="100vw"
+                    priority
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

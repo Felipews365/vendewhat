@@ -1,4 +1,5 @@
--- Se a tabela `orders` já existia (sem cliente / número), execute no SQL Editor do Supabase.
+-- Incremental: só colunas + backfill + índice único.
+-- Preferível: reexecutar supabase-migration-orders.sql completo (já inclui isto antes dos índices).
 
 alter table public.orders add column if not exists customer_name text;
 alter table public.orders add column if not exists customer_phone text;
@@ -35,6 +36,16 @@ set customer_name = 'Cliente'
 where customer_name is null or trim(customer_name) = '';
 
 alter table public.orders alter column customer_name set not null;
+
+do $$
+begin
+  if exists (
+    select 1 from public.orders where order_number is null limit 1
+  ) then
+    raise exception 'Ainda existem linhas com order_number nulo; verifique a tabela orders.';
+  end if;
+end $$;
+
 alter table public.orders alter column order_number set not null;
 
 create unique index if not exists orders_store_order_number_uidx

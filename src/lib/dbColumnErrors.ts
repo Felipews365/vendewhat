@@ -60,3 +60,18 @@ export const PRODUCT_REFERENCE_MIGRATION_HINT =
 
 export const COLOR_HEXES_MIGRATION_HINT =
   "Tom da bolinha por cor: rode supabase-migration-product-color-hexes.sql no SQL Editor e aguarde o reload do schema.";
+
+/** Pedidos: tabela antiga sem order_number / cliente (erro SQL 42703 ou PostgREST equivalente). */
+export function isMissingOrdersColumnError(
+  message: string,
+  code?: string | null
+): boolean {
+  return (
+    isMissingColumnError(message, "order_number", code) ||
+    isMissingColumnError(message, "customer_name", code) ||
+    isMissingColumnError(message, "customer_phone", code)
+  );
+}
+
+export const ORDERS_MIGRATION_HINT =
+  "No Supabase → SQL Editor, execute supabase-migration-orders.sql: faz ALTER (order_number, cliente) antes dos índices e corrige o 42703 se orders já existia. Depois: select pg_notify('pgrst', 'reload schema'); e configure SUPABASE_SERVICE_ROLE_KEY. Alternativa mínima: supabase-migration-orders-customer-number.sql e o bloco de índices/RLS do ficheiro principal.";
