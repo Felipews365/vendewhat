@@ -113,11 +113,21 @@ const plans = [
 
 export default function Home() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative">
+      {/* Fundo colorido atrás do header (estilo “card” flutuante) — teal + coral */}
+      <div
+        className="fixed inset-x-0 top-0 h-[min(420px,55vh)] -z-10 pointer-events-none"
+        aria-hidden
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-teal-200/90 via-orange-100/80 to-amber-200/70" />
+        <div className="absolute -top-20 -right-16 w-72 h-72 rounded-full bg-orange-300/40 blur-3xl" />
+        <div className="absolute top-10 -left-20 w-80 h-80 rounded-full bg-teal-300/35 blur-3xl" />
+      </div>
+
       <Header />
 
       {/* Hero */}
-      <section className="pt-32 pb-20 px-4 bg-gradient-to-b from-emerald-50 to-white overflow-hidden">
+      <section className="pt-36 md:pt-40 pb-20 px-4 bg-gradient-to-b from-white/40 via-white/80 to-white overflow-hidden">
         <div className="max-w-4xl mx-auto text-center">
           <AnimateOnScroll animation="fade-up">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-800 leading-tight mb-6">
@@ -135,9 +145,9 @@ export default function Home() {
           <AnimateOnScroll animation="scale" delay={300}>
             <Link
               href="#criar-loja"
-              className="inline-block bg-whatsapp text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-whatsapp-dark transition-all hover:scale-105 shadow-lg shadow-whatsapp/25"
+              className="inline-block bg-landing-primary text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-landing-primary-hover transition-all hover:scale-105 shadow-lg shadow-teal-900/15"
             >
-              Criar minha loja virtual
+              Criar minha loja
             </Link>
             <p className="mt-3 text-sm text-slate-500">
               7 dias grátis · Sem compromisso
@@ -163,7 +173,7 @@ export default function Home() {
       </section>
 
       {/* Como funciona */}
-      <section id="como-funciona" className="py-20 px-4 bg-white">
+      <section id="como-funciona" className="py-20 px-4 bg-white scroll-mt-28">
         <div className="max-w-5xl mx-auto">
           <AnimateOnScroll animation="fade-up">
             <h2 className="text-3xl md:text-4xl font-bold text-slate-800 text-center mb-4">
@@ -177,10 +187,10 @@ export default function Home() {
             {steps.map((item, i) => (
               <AnimateOnScroll key={item.step} animation="fade-up" delay={i * 120}>
                 <div className="text-center group">
-                  <span className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-50 text-3xl group-hover:scale-110 transition-transform">
+                  <span className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-teal-50 text-3xl group-hover:scale-110 transition-transform ring-1 ring-teal-100">
                     {item.icon}
                   </span>
-                  <span className="block mt-3 text-xs font-bold text-whatsapp uppercase tracking-wider">
+                  <span className="block mt-3 text-xs font-bold text-landing-primary uppercase tracking-wider">
                     Passo {item.step}
                   </span>
                   <h3 className="mt-2 font-semibold text-slate-800">{item.title}</h3>
@@ -193,7 +203,7 @@ export default function Home() {
       </section>
 
       {/* Recursos */}
-      <section id="recursos" className="py-20 px-4 bg-slate-50">
+      <section id="recursos" className="py-20 px-4 bg-slate-50 scroll-mt-28">
         <div className="max-w-5xl mx-auto">
           <AnimateOnScroll animation="fade-up">
             <h2 className="text-3xl md:text-4xl font-bold text-slate-800 text-center mb-4">
@@ -220,7 +230,7 @@ export default function Home() {
       </section>
 
       {/* Depoimentos */}
-      <section id="depoimentos" className="py-20 px-4 bg-white">
+      <section id="depoimentos" className="py-20 px-4 bg-white scroll-mt-28">
         <div className="max-w-5xl mx-auto">
           <AnimateOnScroll animation="fade-up">
             <h2 className="text-3xl md:text-4xl font-bold text-slate-800 text-center mb-4">
@@ -267,7 +277,7 @@ export default function Home() {
       </section>
 
       {/* Planos */}
-      <section id="planos" className="py-20 px-4 bg-slate-50">
+      <section id="planos" className="py-20 px-4 bg-slate-50 scroll-mt-28">
         <div className="max-w-5xl mx-auto">
           <AnimateOnScroll animation="fade-up">
             <h2 className="text-3xl md:text-4xl font-bold text-slate-800 text-center mb-4">
@@ -368,7 +378,7 @@ export default function Home() {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 px-4 bg-white">
+      <section id="duvidas" className="py-20 px-4 bg-white scroll-mt-28">
         <div className="max-w-3xl mx-auto">
           <AnimateOnScroll animation="fade-up">
             <h2 className="text-3xl md:text-4xl font-bold text-slate-800 text-center mb-12">
@@ -404,7 +414,7 @@ export default function Home() {
       </section>
 
       {/* CTA final */}
-      <section id="criar-loja" className="py-20 px-4 bg-whatsapp relative overflow-hidden">
+      <section id="criar-loja" className="py-20 px-4 bg-landing-primary relative overflow-hidden scroll-mt-28">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-white" />
           <div className="absolute -bottom-24 -left-24 w-96 h-96 rounded-full bg-white" />
@@ -415,14 +425,14 @@ export default function Home() {
               Vende no zap? Vai de VendeWhat
             </h2>
             <p className="text-white/90 mb-8 text-lg">
-              Monte sua loja virtual, compartilhe o link e comece a vender na
-              hora. Simples assim!
+              Monte sua loja, compartilhe o link e comece a vender na hora.
+              Simples assim!
             </p>
             <Link
               href="/criar-loja"
-              className="inline-block bg-white text-whatsapp-dark px-8 py-4 rounded-xl font-semibold text-lg hover:bg-slate-100 transition-all hover:scale-105 shadow-lg"
+              className="inline-block bg-white text-landing-primary px-8 py-4 rounded-xl font-semibold text-lg hover:bg-orange-50 transition-all hover:scale-105 shadow-lg"
             >
-              Criar minha loja virtual
+              Criar minha loja
             </Link>
             <p className="mt-3 text-sm text-white/70">
               7 dias grátis · Sem cartão de crédito

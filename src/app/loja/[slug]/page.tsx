@@ -127,6 +127,7 @@ export default async function LojaPublicaPage({ params }: Props) {
   return (
     <LojaClient
       store={{
+        slug: String(store.slug ?? slug),
         name: String(store.name ?? ""),
         description: store.description ? String(store.description) : null,
         logo: store.logo ? String(store.logo) : null,

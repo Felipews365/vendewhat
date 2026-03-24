@@ -9,6 +9,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        /** Landing / marketing — teal + coral (alternativa ao roxo+ciano do ref.) */
+        landing: {
+          primary: "#0f766e",
+          "primary-hover": "#115e59",
+          "primary-muted": "#0d9488",
+          accent: "#ea580c",
+          "accent-hover": "#c2410c",
+          "accent-soft": "#fff7ed",
+          ink: "#134e4a",
+        },
         whatsapp: {
           DEFAULT: "#25D366",
           dark: "#128C7E",

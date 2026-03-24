@@ -17,6 +17,8 @@ export type StorefrontSettings = {
   themePrimary: string;
   /** Cor escura (hero, botões promoção) — ex. vinho/marrom */
   themeSecondary: string;
+  /** Fundo do topo da loja (logo, busca, ícones) — hex ou rgba */
+  headerBackground: string;
   searchPlaceholder: string;
   /** URL completa do perfil (ex. https://instagram.com/sualoja) */
   instagramUrl: string;
@@ -33,6 +35,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   infoBullets: [],
   themePrimary: "#c9a8ac",
   themeSecondary: "#5c2e36",
+  headerBackground: "#ffffff",
   searchPlaceholder: "Faça sua busca",
   instagramUrl: "",
   facebookUrl: "",
@@ -108,6 +111,10 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     infoBullets: bulletsFromDb(o.infoBullets),
     themePrimary: str(o.themePrimary, DEFAULT_STOREFRONT.themePrimary),
     themeSecondary: str(o.themeSecondary, DEFAULT_STOREFRONT.themeSecondary),
+    headerBackground: str(
+      o.headerBackground,
+      DEFAULT_STOREFRONT.headerBackground
+    ),
     searchPlaceholder: str(
       o.searchPlaceholder,
       DEFAULT_STOREFRONT.searchPlaceholder
@@ -131,6 +138,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     infoBullets: s.infoBullets.map((b) => b.trim()).filter(Boolean),
     themePrimary: s.themePrimary.trim(),
     themeSecondary: s.themeSecondary.trim(),
+    headerBackground: s.headerBackground.trim(),
     searchPlaceholder: s.searchPlaceholder.trim(),
     instagramUrl: s.instagramUrl.trim(),
     facebookUrl: s.facebookUrl.trim(),

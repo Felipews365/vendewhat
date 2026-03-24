@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -34,10 +34,74 @@ import {
 } from "@/lib/productVariants";
 import { normalizeHex } from "@/lib/productColorHexes";
 
+type ProductTab = "produto" | "variacoes" | "estoque";
+
+const INITIAL_FORM = {
+  name: "",
+  productReference: "",
+  description: "",
+  price: "",
+  compareAtPrice: "",
+  stock: "0",
+};
+
+function TabButton({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`pb-3 px-1 text-sm font-semibold border-b-2 transition-colors ${
+        active
+          ? "border-landing-primary text-landing-primary"
+          : "border-transparent text-slate-500 hover:text-slate-700"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SidebarRow({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center justify-between gap-2 py-3 px-3 rounded-xl border border-slate-100 bg-slate-50/80 hover:bg-teal-50/50 hover:border-teal-100 text-left text-sm text-slate-700 transition-colors"
+    >
+      <span className="flex items-center gap-2 min-w-0">
+        <span className="text-lg shrink-0" aria-hidden>
+          {icon}
+        </span>
+        <span className="font-medium truncate">{label}</span>
+      </span>
+      <span className="text-slate-400 shrink-0">›</span>
+    </button>
+  );
+}
+
 export default function NovoProdutoPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [saveOk, setSaveOk] = useState(false);
+  const [tab, setTab] = useState<ProductTab>("produto");
+  const saveNavRef = useRef<"stay" | "list">("list");
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [colorEntries, setColorEntries] = useState<ColorOptionEntry[]>([]);
   const [sizes, setSizes] = useState<string[]>([]);
@@ -48,14 +112,7 @@ export default function NovoProdutoPage() {
   const [variantStockMap, setVariantStockMap] = useState<Record<string, number>>(
     {}
   );
-  const [form, setForm] = useState({
-    name: "",
-    productReference: "",
-    description: "",
-    price: "",
-    compareAtPrice: "",
-    stock: "0",
-  });
+  const [form, setForm] = useState({ ...INITIAL_FORM });
   const [isPromotion, setIsPromotion] = useState(false);
 
   const hasVariantOptions = colors.length > 0 || sizes.length > 0;
@@ -74,16 +131,30 @@ export default function NovoProdutoPage() {
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm({ ...form, [e.target.name]: e.target.value });
     setError("");
+    setSaveOk(false);
+  }
+
+  function resetAll() {
+    setForm({ ...INITIAL_FORM });
+    setPhotos([]);
+    setColorEntries([]);
+    setSizes([]);
+    setVariantStockMap({});
+    setIsPromotion(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const navigateToList = saveNavRef.current === "list";
     setLoading(true);
     setError("");
+    setSaveOk(false);
 
     try {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
       if (!user) {
         router.push("/login");
@@ -186,7 +257,6 @@ export default function NovoProdutoPage() {
           .error;
       }
 
-      /* Sem cor/tamanho no formulário: não envia colunas que o banco ainda não tem */
       if (
         insertError &&
         !hasVariantOptions &&
@@ -256,7 +326,6 @@ export default function NovoProdutoPage() {
           .error;
       }
 
-      /* Último recurso: só colunas básicas (banco antigo / colunas opcionais ausentes) */
       if (insertError && !isRlsPolicyError(insertError.message, insertError.code)) {
         const minimal: Record<string, unknown> = {
           store_id: store.id,
@@ -319,8 +388,14 @@ export default function NovoProdutoPage() {
         return;
       }
 
-      router.push("/dashboard/produtos");
-      router.refresh();
+      if (navigateToList) {
+        router.push("/dashboard/produtos");
+        router.refresh();
+      } else {
+        resetAll();
+        setSaveOk(true);
+        setTab("produto");
+      }
     } catch {
       setError("Erro de conexão. Tente novamente.");
     } finally {
@@ -328,212 +403,369 @@ export default function NovoProdutoPage() {
     }
   }
 
+  const inputClass =
+    "w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-landing-primary/30 focus:border-landing-primary";
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="text-xl font-bold text-slate-800">
+    <div className="min-h-screen bg-[#f4f4f5]">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+          <Link
+            href="/dashboard"
+            className="text-lg font-bold text-landing-primary tracking-tight"
+          >
             VendeWhat
           </Link>
-          <Link
-            href="/dashboard/produtos"
-            className="text-sm text-slate-500 hover:text-slate-800 transition-colors"
-          >
-            ← Voltar aos produtos
-          </Link>
+          <div className="flex items-center gap-3 text-slate-400 text-sm">
+            <span className="hidden sm:inline" title="Ajuda">
+              ❓
+            </span>
+            <span className="hidden sm:inline" title="Lista">
+              ☰
+            </span>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-slate-800 mb-8">
-          Novo produto
-        </h1>
+      <main className="max-w-7xl mx-auto px-4 py-6 pb-24">
+        <Link
+          href="/dashboard/produtos"
+          className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-landing-primary transition-colors"
+        >
+          <span aria-hidden>‹</span> Adicionar produto
+        </Link>
+
+        <div className="flex gap-8 mt-4 border-b border-slate-200">
+          <TabButton active={tab === "produto"} onClick={() => setTab("produto")}>
+            Produto
+          </TabButton>
+          <TabButton
+            active={tab === "variacoes"}
+            onClick={() => setTab("variacoes")}
+          >
+            Variações
+          </TabButton>
+          <TabButton active={tab === "estoque"} onClick={() => setTab("estoque")}>
+            Estoque
+          </TabButton>
+        </div>
 
         {error && (
-          <div className="mb-6 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm whitespace-pre-wrap break-words">
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm whitespace-pre-wrap break-words">
             {error}
           </div>
         )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <ProductPhotosPicker items={photos} onItemsChange={setPhotos} />
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Nome do produto
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              placeholder="Ex: Camiseta Básica"
-              required
-              className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-whatsapp focus:border-transparent"
-            />
+        {saveOk && (
+          <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm">
+            Produto salvo. Pode cadastrar outro.
           </div>
+        )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Referência do produto{" "}
-              <span className="text-slate-400 font-normal">(opcional)</span>
-            </label>
-            <input
-              type="text"
-              name="productReference"
-              value={form.productReference}
-              onChange={handleChange}
-              placeholder="Ex: REF-2024-01 ou código da etiqueta"
-              className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-whatsapp focus:border-transparent"
-            />
-            <p className="text-xs text-slate-500 mt-1">
-              Aparece na loja como &quot;Ref.&quot; e no pedido do WhatsApp.
-            </p>
-          </div>
+        <form onSubmit={handleSubmit} className="mt-6">
+          {tab === "produto" && (
+            <div className="grid lg:grid-cols-3 gap-8 lg:gap-0">
+              {/* Coluna esquerda */}
+              <div className="lg:pr-8 lg:border-r border-slate-200 space-y-5">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    Nome do produto <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={form.name}
+                    onChange={handleChange}
+                    placeholder="Ex: Camiseta básica"
+                    required
+                    className={inputClass}
+                  />
+                </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Descrição <span className="text-slate-400">(opcional)</span>
-            </label>
-            <textarea
-              name="description"
-              value={form.description}
-              onChange={handleChange}
-              placeholder="Descreva o produto..."
-              rows={3}
-              className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-whatsapp focus:border-transparent resize-none"
-            />
-          </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                      Preço <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                        R$
+                      </span>
+                      <input
+                        type="number"
+                        name="price"
+                        value={form.price}
+                        onChange={handleChange}
+                        placeholder="0,00"
+                        step="0.01"
+                        min="0"
+                        required
+                        className={`${inputClass} pl-10`}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                      Promoção
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                        R$
+                      </span>
+                      <input
+                        type="number"
+                        name="compareAtPrice"
+                        value={form.compareAtPrice}
+                        onChange={handleChange}
+                        placeholder="De (opcional)"
+                        step="0.01"
+                        min="0"
+                        disabled={!isPromotion}
+                        className={`${inputClass} pl-10 disabled:opacity-50`}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 mt-2 text-xs text-slate-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isPromotion}
+                        onChange={(e) => setIsPromotion(e.target.checked)}
+                        className="rounded border-slate-300 text-landing-primary focus:ring-landing-primary"
+                      />
+                      Mostrar como promoção na loja
+                    </label>
+                  </div>
+                </div>
 
-          <section className="space-y-4 rounded-xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50/80 p-4">
-            <div>
-              <h2 className="text-base font-bold text-slate-800">
-                Cores e tamanhos deste produto
-              </h2>
-              <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                <strong>Obrigatório se o produto varia:</strong> cadastre cada
-                cor e cada tamanho que você vende (ex.: Preto, Bege / P, M, G).
-                Na loja, o cliente escolhe nas listas antes de comprar. Se não
-                adicionar nada aqui, o produto é vendido sem escolha de cor ou
-                tamanho.
+                <ProductPhotosPicker
+                  items={photos}
+                  onItemsChange={setPhotos}
+                  label="Fotos do produto"
+                  variant="editor"
+                />
+              </div>
+
+              {/* Coluna central */}
+              <div className="lg:px-8 lg:border-r border-slate-200 space-y-5 pt-8 lg:pt-0">
+                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                  Informações opcionais
+                </h2>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Categorias
+                  </label>
+                  <div className="flex gap-2">
+                    <div
+                      className={`flex-1 ${inputClass} text-slate-400 cursor-not-allowed flex items-center`}
+                    >
+                      Em breve
+                    </div>
+                    <button
+                      type="button"
+                      disabled
+                      className="shrink-0 h-[42px] w-[42px] rounded-lg border border-dashed border-slate-200 text-slate-300 cursor-not-allowed"
+                      title="Em breve"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Detalhes
+                  </label>
+                  <div className="rounded-t-lg border border-b-0 border-slate-200 bg-slate-100 px-2 py-1.5 flex gap-1">
+                    <span className="text-xs px-2 py-1 rounded text-slate-500 bg-white border border-slate-200">
+                      B
+                    </span>
+                    <span className="text-xs px-2 py-1 rounded text-slate-500 bg-white border border-slate-200">
+                      I
+                    </span>
+                    <span className="text-xs px-2 py-1 rounded text-slate-500 bg-white border border-slate-200">
+                      •
+                    </span>
+                  </div>
+                  <textarea
+                    name="description"
+                    value={form.description}
+                    onChange={handleChange}
+                    placeholder="Descreva o produto para seus clientes…"
+                    rows={6}
+                    className={`${inputClass} rounded-t-none border-t-0 resize-y min-h-[140px]`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Código / referência
+                  </label>
+                  <input
+                    type="text"
+                    name="productReference"
+                    value={form.productReference}
+                    onChange={handleChange}
+                    placeholder="Ex: REF-2024-01"
+                    className={inputClass}
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Aparece na loja e no pedido do WhatsApp.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Vídeo do produto
+                  </label>
+                  <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 py-8 text-center text-slate-400 text-sm">
+                    <span className="text-2xl block mb-1">🎬</span>
+                    Em breve
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Tags para busca
+                  </label>
+                  <div className={`${inputClass} text-slate-400 cursor-not-allowed`}>
+                    Em breve
+                  </div>
+                </div>
+              </div>
+
+              {/* Coluna direita */}
+              <div className="lg:pl-8 space-y-5 pt-8 lg:pt-0">
+                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                  Detalhes técnicos
+                </h2>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Tipo de unidade
+                  </label>
+                  <div className={inputClass}>Unidade</div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Dimensões da embalagem
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className={`${inputClass} text-slate-400 text-xs py-2`}>
+                      Largura (cm) — em breve
+                    </div>
+                    <div className={`${inputClass} text-slate-400 text-xs py-2`}>
+                      Peso — em breve
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <SidebarRow
+                    icon="✎"
+                    label="Descrição e código"
+                    onClick={() => setTab("produto")}
+                  />
+                  <SidebarRow
+                    icon="👕"
+                    label="Variações (cor e tamanho)"
+                    onClick={() => setTab("variacoes")}
+                  />
+                  <SidebarRow
+                    icon="📦"
+                    label="Estoque"
+                    onClick={() => setTab("estoque")}
+                  />
+                  <SidebarRow
+                    icon="▤"
+                    label="Código de barras (EAN)"
+                    onClick={() => {}}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === "variacoes" && (
+            <div className="max-w-2xl space-y-6">
+              <p className="text-sm text-slate-600">
+                Defina cores e tamanhos se o produto tiver variações. Na loja, o
+                cliente escolhe antes de comprar.
               </p>
+              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4 shadow-sm">
+                <ProductColorsEditor
+                  entries={colorEntries}
+                  onEntriesChange={setColorEntries}
+                />
+                <ProductOptionsEditor
+                  title="Tamanhos disponíveis"
+                  description="Ex.: P, M, G ou 36, 38, 40."
+                  items={sizes}
+                  onItemsChange={setSizes}
+                  placeholder="Tamanho"
+                  addButtonLabel="Adicionar tamanho"
+                />
+              </section>
+              {hasVariantOptions && (
+                <VariantStockEditor
+                  colors={colors}
+                  sizes={sizes}
+                  value={variantStockMap}
+                  onChange={setVariantStockMap}
+                />
+              )}
             </div>
-
-            <ProductColorsEditor
-              entries={colorEntries}
-              onEntriesChange={setColorEntries}
-            />
-
-            <ProductOptionsEditor
-              title="Tamanhos disponíveis"
-              description='Ex.: roupas P, M, G, GG — ou numeração 36, 38, 40 — ou Único.'
-              items={sizes}
-              onItemsChange={setSizes}
-              placeholder="Tamanho"
-              addButtonLabel="Adicionar tamanho"
-            />
-          </section>
-
-          {hasVariantOptions && (
-            <VariantStockEditor
-              colors={colors}
-              sizes={sizes}
-              value={variantStockMap}
-              onChange={setVariantStockMap}
-            />
           )}
 
-          <section className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isPromotion}
-                onChange={(e) => setIsPromotion(e.target.checked)}
-                className="rounded border-slate-300 text-whatsapp focus:ring-whatsapp"
-              />
-              <span className="text-sm font-semibold text-slate-800">
-                Exibir em &quot;Promoções&quot; na loja
-              </span>
-            </label>
-            <p className="text-xs text-slate-500">
-              Na vitrine, promoções ficam numa grade à parte, com botão escuro e
-              preço &quot;De&quot; riscado (opcional).
-            </p>
-            {isPromotion && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Preço &quot;De&quot; (R$) <span className="text-slate-400">opcional</span>
-                </label>
-                <input
-                  type="number"
-                  name="compareAtPrice"
-                  value={form.compareAtPrice}
-                  onChange={handleChange}
-                  placeholder="Ex: 35.00 (aparece riscado)"
-                  step="0.01"
-                  min="0"
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-whatsapp focus:border-transparent"
-                />
-              </div>
-            )}
-          </section>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Preço atual (R$)
-              </label>
-              <input
-                type="number"
-                name="price"
-                value={form.price}
-                onChange={handleChange}
-                placeholder="0.00"
-                step="0.01"
-                min="0"
-                required
-                className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-whatsapp focus:border-transparent"
-              />
+          {tab === "estoque" && (
+            <div className="max-w-lg space-y-4">
+              {hasVariantOptions ? (
+                <p className="text-sm text-slate-600">
+                  Com variações, as quantidades ficam na aba{" "}
+                  <strong>Variações</strong> (grade por cor/tamanho). O total é a
+                  soma automática.
+                </p>
+              ) : (
+                <>
+                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    Quantidade em estoque
+                  </label>
+                  <input
+                    type="number"
+                    name="stock"
+                    value={form.stock}
+                    onChange={handleChange}
+                    min="0"
+                    required
+                    className={inputClass}
+                  />
+                </>
+              )}
             </div>
-            {!hasVariantOptions && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Estoque
-                </label>
-                <input
-                  type="number"
-                  name="stock"
-                  value={form.stock}
-                  onChange={handleChange}
-                  min="0"
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-whatsapp focus:border-transparent"
-                />
-              </div>
-            )}
-          </div>
-
-          {hasVariantOptions && (
-            <p className="text-xs text-slate-500 -mt-2">
-              O campo &quot;Estoque total&quot; é preenchido automaticamente pela soma
-              das quantidades da grade (também usado na listagem de produtos).
-            </p>
           )}
 
-          <div className="flex gap-3 pt-4">
-            <Link
-              href="/dashboard/produtos"
-              className="flex-1 text-center py-3 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 transition-colors"
-            >
-              Cancelar
-            </Link>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 py-3 bg-whatsapp text-white rounded-lg font-semibold hover:bg-whatsapp-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? "Salvando..." : "Salvar produto"}
-            </button>
+          <div className="fixed bottom-0 left-0 right-0 bg-white/95 border-t border-slate-200 backdrop-blur-sm z-40">
+            <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row gap-3 sm:justify-end sm:items-center">
+              <button
+                type="submit"
+                disabled={loading}
+                onMouseDown={() => {
+                  saveNavRef.current = "stay";
+                }}
+                className="px-8 py-3 rounded-xl bg-landing-primary text-white font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 shadow-md"
+              >
+                {loading ? "Salvando…" : "Salvar"}
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                onMouseDown={() => {
+                  saveNavRef.current = "list";
+                }}
+                className="px-6 py-3 rounded-xl border-2 border-landing-primary text-landing-primary font-semibold hover:bg-teal-50 transition-colors disabled:opacity-50"
+              >
+                {loading ? "Salvando…" : "Salvar e visualizar produtos"}
+              </button>
+            </div>
           </div>
         </form>
       </main>

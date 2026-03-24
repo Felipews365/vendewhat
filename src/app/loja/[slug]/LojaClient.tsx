@@ -370,14 +370,12 @@ function ProductCatalogCard({
 function ProductDetailModal({
   product,
   cart,
-  onAdd,
   onSetQty,
   onClose,
   contactHref,
 }: {
   product: CatalogProduct;
   cart: Record<string, number>;
-  onAdd: (product: CatalogProduct, color: string, size: string) => void;
   onSetQty: (cartKey: string, qty: number) => void;
   onClose: () => void;
   contactHref: string | null;
@@ -385,6 +383,7 @@ function ProductDetailModal({
   const [imgIdx, setImgIdx] = useState(0);
   const [color, setColor] = useState(product.colors[0] ?? "");
   const [size, setSize] = useState(product.sizes[0] ?? "");
+  const [qtyDraft, setQtyDraft] = useState(1);
 
   const imgs = product.images.length > 0 ? product.images : product.image ? [product.image] : [];
   const safeImgIdx = imgs.length > 0 ? Math.min(imgIdx, imgs.length - 1) : 0;
@@ -404,29 +403,43 @@ function ProductDetailModal({
     return () => { document.body.style.overflow = ""; };
   }, []);
 
+  useEffect(() => {
+    setQtyDraft(1);
+  }, [product.id, colorForCart, sizeForCart]);
+
+  useEffect(() => {
+    if (lineMax > 0) {
+      setQtyDraft((q) => Math.min(Math.max(1, q), lineMax));
+    }
+  }, [lineMax]);
+
+  useEffect(() => {
+    if (inCart === 0) setQtyDraft(1);
+  }, [inCart]);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-6 md:p-10"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-10 sm:px-6 sm:py-14 md:px-10 md:py-20"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-auto overflow-hidden"
+        className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-auto overflow-hidden ring-1 ring-stone-200/60"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-3 right-3 z-20 w-9 h-9 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 text-xl flex items-center justify-center transition-colors"
+          className="absolute top-2 right-2 sm:top-3 sm:right-3 z-30 w-9 h-9 rounded-full bg-black/45 text-white hover:bg-black/55 backdrop-blur-sm text-xl flex items-center justify-center transition-colors shadow-md md:bg-stone-100 md:text-stone-600 md:hover:bg-stone-200 md:backdrop-blur-none md:shadow-none"
           aria-label="Fechar"
         >
           ×
         </button>
 
-        <div className="flex flex-col md:flex-row">
+        <div className="flex flex-col md:flex-row max-md:pt-0 max-md:pb-3 md:py-5">
           {/* Galeria: miniaturas à esquerda + foto grande */}
-          <div className="md:w-[55%] flex flex-col-reverse sm:flex-row bg-stone-50">
+          <div className="md:w-[55%] flex flex-col-reverse sm:flex-row bg-stone-50 md:pl-2 md:pr-1 max-md:pt-0">
             {imgs.length > 1 && (
               <div className="flex sm:flex-col gap-2 p-3 sm:w-[80px] sm:min-w-[80px] overflow-x-auto sm:overflow-y-auto sm:overflow-x-hidden sm:max-h-[min(28rem,70vh)] [scrollbar-width:thin]">
                 {imgs.map((url, i) => (
@@ -445,8 +458,12 @@ function ProductDetailModal({
                 ))}
               </div>
             )}
-            {/* Foto principal: 1:1, cover, centro — preenche o quadrado sem distorcer */}
-            <div className="relative flex-1 w-full min-w-0 aspect-[1/1] rounded-2xl overflow-hidden bg-stone-200 shadow-sm">
+            {/* Foto principal: no mobile encosta no topo do modal (sem faixa branca) */}
+            <div
+              className={`relative flex-1 w-full min-w-0 aspect-[1/1] overflow-hidden bg-stone-200 shadow-sm max-md:rounded-t-2xl sm:rounded-2xl ${
+                imgs.length > 1 ? "max-md:rounded-b-none" : "max-md:rounded-b-2xl"
+              }`}
+            >
               {imgs.length > 0 ? (
                 <Image
                   src={imgs[safeImgIdx]}
@@ -471,7 +488,7 @@ function ProductDetailModal({
           </div>
 
           {/* Info do produto */}
-          <div className="md:w-[45%] p-6 md:p-8 flex flex-col overflow-y-auto max-h-[80vh] md:max-h-[600px]">
+          <div className="md:w-[45%] p-6 pb-8 md:p-8 md:pb-10 md:pl-9 flex flex-col overflow-y-auto max-h-[80vh] md:max-h-[min(640px,85vh)]">
             <h2 className="text-xl md:text-2xl font-semibold text-stone-900 tracking-tight">
               {product.name}
             </h2>
@@ -520,8 +537,7 @@ function ProductDetailModal({
                         onClick={() => {
                           setColor(c);
                         }}
-                        disabled={inCart > 0}
-                        className={`flex items-center gap-3 w-full sm:w-auto min-w-0 px-3 py-2.5 rounded-xl border text-left transition-all disabled:opacity-50 ${
+                        className={`flex items-center gap-3 w-full sm:w-auto min-w-0 px-3 py-2.5 rounded-xl border text-left transition-all ${
                           selected
                             ? "border-stone-800 bg-stone-50 ring-2 ring-stone-800 ring-offset-1"
                             : "border-stone-200 text-stone-800 hover:border-stone-400 bg-white"
@@ -553,13 +569,14 @@ function ProductDetailModal({
                     <button
                       key={s}
                       type="button"
-                      onClick={() => { setSize(s); }}
-                      disabled={inCart > 0}
+                      onClick={() => {
+                        setSize(s);
+                      }}
                       className={`min-w-[44px] px-3 py-2 rounded-lg text-sm border text-center transition-all ${
                         size === s
                           ? "border-stone-800 bg-stone-800 text-white font-semibold"
                           : "border-stone-300 text-stone-700 hover:border-stone-500"
-                      } disabled:opacity-50`}
+                      }`}
                     >
                       {s}
                     </button>
@@ -586,35 +603,54 @@ function ProductDetailModal({
                 <button type="button" disabled className="w-full py-3.5 rounded-lg bg-stone-100 text-stone-400 font-semibold cursor-not-allowed">
                   Esgotado
                 </button>
-              ) : inCart === 0 ? (
-                <button
-                  type="button"
-                  onClick={() => onAdd(product, colorForCart, sizeForCart)}
-                  disabled={!canAdd}
-                  className="w-full py-3.5 rounded-lg text-white font-semibold tracking-wide transition-opacity hover:opacity-90 disabled:opacity-40 shadow-sm"
-                  style={{ backgroundColor: "var(--store-secondary)" }}
-                >
-                  Selecione
-                </button>
               ) : (
-                <div className="flex items-center justify-between gap-3 bg-stone-50 rounded-lg p-3">
-                  <button
-                    type="button"
-                    onClick={() => onSetQty(lineKey, inCart - 1)}
-                    className="w-10 h-10 rounded-lg bg-stone-200 font-bold text-stone-700 hover:bg-stone-300 transition-colors"
-                  >
-                    −
-                  </button>
-                  <span className="font-semibold text-stone-800">{inCart} un.</span>
-                  <button
-                    type="button"
-                    onClick={() => onAdd(product, colorForCart, sizeForCart)}
-                    disabled={inCart >= lineMax}
-                    className="w-10 h-10 rounded-lg bg-stone-200 font-bold text-stone-700 hover:bg-stone-300 transition-colors disabled:opacity-40"
-                  >
-                    +
-                  </button>
-                </div>
+                <>
+                  <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">
+                    Quantidade
+                  </p>
+                  <div className="flex items-center justify-between gap-3 bg-stone-50 rounded-lg p-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        inCart === 0
+                          ? setQtyDraft((q) => Math.max(1, q - 1))
+                          : onSetQty(lineKey, inCart - 1)
+                      }
+                      disabled={inCart === 0 ? qtyDraft <= 1 : false}
+                      className="w-10 h-10 rounded-lg bg-stone-200 font-bold text-stone-700 hover:bg-stone-300 transition-colors disabled:opacity-40"
+                    >
+                      −
+                    </button>
+                    <span className="font-semibold text-stone-800">
+                      {inCart === 0 ? qtyDraft : inCart} un.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        inCart === 0
+                          ? setQtyDraft((q) => Math.min(lineMax, q + 1))
+                          : onSetQty(lineKey, inCart + 1)
+                      }
+                      disabled={
+                        inCart === 0 ? qtyDraft >= lineMax : inCart >= lineMax
+                      }
+                      className="w-10 h-10 rounded-lg bg-stone-200 font-bold text-stone-700 hover:bg-stone-300 transition-colors disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
+                  {inCart === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onSetQty(lineKey, qtyDraft)}
+                      disabled={!canAdd || qtyDraft < 1}
+                      className="w-full py-3.5 rounded-lg text-white font-semibold tracking-wide transition-opacity hover:opacity-90 disabled:opacity-40 shadow-sm"
+                      style={{ backgroundColor: "var(--store-secondary)" }}
+                    >
+                      Adicionar ao carrinho
+                    </button>
+                  ) : null}
+                </>
               )}
 
               <button
@@ -649,6 +685,7 @@ function ProductDetailModal({
 }
 
 type StoreInfo = {
+  slug: string;
   name: string;
   description: string | null;
   logo: string | null;
@@ -669,6 +706,8 @@ export function LojaClient({
   const [cart, setCart] = useState<Record<string, number>>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [notes, setNotes] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("new");
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
@@ -755,19 +794,6 @@ export function LojaClient({
     [items]
   );
 
-  function addToCart(p: CatalogProduct, color: string, size: string) {
-    if (productSoldOut(p)) return;
-    const c = p.colors.length > 0 ? color.trim() : "";
-    const s = p.sizes.length > 0 ? size.trim() : "";
-    const key = makeCartKey(p.id, c, s);
-    setCart((cart) => {
-      const line = cart[key] ?? 0;
-      const max = maxQtyForCartLine(p, c, s, cart, key);
-      if (line >= max) return cart;
-      return { ...cart, [key]: line + 1 };
-    });
-  }
-
   function setQty(cartKey: string, qty: number) {
     if (qty <= 0) {
       setCart((c) => {
@@ -802,6 +828,13 @@ export function LojaClient({
     const lines = [
       `*Pedido — ${store.name}*`,
       "",
+      `*Cliente:* ${customerName.trim() || "—"}`,
+    ];
+    if (customerPhone.trim()) {
+      lines.push(`*Telefone:* ${customerPhone.trim()}`);
+    }
+    lines.push(
+      "",
       ...items.map((i) => {
         const bits: string[] = [];
         if (i.color) bits.push(`Cor: ${i.color}`);
@@ -812,8 +845,8 @@ export function LojaClient({
         return `${i.quantity}x ${namePart}${opt} — R$ ${i.lineTotal.toFixed(2)} (un. R$ ${i.price.toFixed(2)})`;
       }),
       "",
-      `*Subtotal: R$ ${subtotal.toFixed(2)}*`,
-    ];
+      `*Subtotal: R$ ${subtotal.toFixed(2)}*`
+    );
     if (notes.trim()) {
       lines.push("", `Obs: ${notes.trim()}`);
     }
@@ -821,6 +854,37 @@ export function LojaClient({
   }
 
   const orderHref = whatsAppLink(store.phone, buildOrderMessage());
+
+  async function persistOrderSnapshot() {
+    if (items.length === 0 || !store.slug) return;
+    const name = customerName.trim();
+    if (name.length < 2) return;
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeSlug: store.slug,
+          customerName: name,
+          customerPhone: customerPhone.trim(),
+          notes: notes.trim(),
+          lines: items.map((i) => ({
+            productId: i.id,
+            color: i.color,
+            size: i.size,
+            quantity: i.quantity,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        console.warn("[VendeWhat] Pedido não salvo no painel:", j?.error ?? res.status);
+      }
+    } catch (e) {
+      console.warn("[VendeWhat] Pedido não salvo no painel:", e);
+    }
+  }
+
   const contactHref = whatsAppLink(
     store.phone,
     `Olá! Vim pelo catálogo da ${store.name} no VendeWhat.`
@@ -845,7 +909,10 @@ export function LojaClient({
       style={themeStyle}
     >
       {/* Topo — logo, bullets, busca (estilo vitrine) */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-[0_1px_0_rgba(92,46,54,0.04)]">
+      <header
+        className="sticky top-0 z-40 backdrop-blur-md border-b border-stone-200/80 shadow-[0_1px_0_rgba(92,46,54,0.04)]"
+        style={{ backgroundColor: storefront.headerBackground }}
+      >
         <div className="max-w-6xl mx-auto px-4 py-3 md:py-4">
           <div className="flex flex-col gap-3 lg:gap-4">
             {/* Linha superior: logo | atalhos (mobile) — no desktop: logo | busca + atalhos na mesma linha */}
@@ -973,7 +1040,7 @@ export function LojaClient({
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder={storefront.searchPlaceholder}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-full border border-stone-200 bg-stone-50/80 text-sm text-stone-800 placeholder:text-stone-400 focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none transition-shadow"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-full border-2 border-stone-300 bg-white text-sm text-stone-800 placeholder:text-stone-400 shadow-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none transition-shadow"
                     aria-label="Buscar produtos"
                   />
                 </div>
@@ -1043,46 +1110,41 @@ export function LojaClient({
         </div>
       </header>
 
-      {/* Banner 1920×600 (proporção 16:5) — altura segue a largura da tela */}
-      <section className="relative w-full aspect-[1920/600] overflow-hidden">
-        {storefront.heroImages.length > 0 ? (
+      {/* Banner só aparece para quem compra se o vendedor enviou ao menos uma foto */}
+      {storefront.heroImages.length > 0 && (
+        <section className="relative w-full aspect-[16/9] sm:aspect-[2/1] md:aspect-[21/9] lg:aspect-[1920/600] overflow-hidden">
           <HeroImageCarousel
             images={storefront.heroImages}
             themePrimary={storefront.themePrimary}
           />
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{ backgroundColor: "var(--store-primary)" }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/20 to-transparent z-10 pointer-events-none" />
-        <div className="absolute inset-0 z-20 flex flex-col justify-end px-6 sm:px-10 md:px-14 pb-6 sm:pb-10 md:pb-12 max-w-3xl">
-          {storefront.heroSubtitle && (
-            <p className="text-sm sm:text-base text-white/90 font-medium tracking-widest uppercase">
-              {storefront.heroSubtitle}
-            </p>
-          )}
-          <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-[1.1] mt-2 drop-shadow-lg">
-            {heroDisplayTitle}
-          </h2>
-          {store.description && (
-            <p className="mt-3 text-white/85 text-sm md:text-base max-w-md leading-relaxed drop-shadow">
-              {store.description}
-            </p>
-          )}
-          <a
-            href={storefront.heroCtaHref || "#catalogo"}
-            onClick={(e) =>
-              handleHeroCta(e, storefront.heroCtaHref || "#catalogo")
-            }
-            className="mt-6 inline-flex items-center justify-center px-8 py-3 rounded-md text-white text-sm font-bold uppercase tracking-widest shadow-lg hover:opacity-90 transition-opacity self-start"
-            style={{ backgroundColor: "var(--store-secondary)" }}
-          >
-            {storefront.heroCtaLabel}
-          </a>
-        </div>
-      </section>
+          <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/20 to-transparent z-10 pointer-events-none" />
+          <div className="absolute inset-0 z-20 flex flex-col justify-end px-6 sm:px-10 md:px-14 pb-6 sm:pb-10 md:pb-12 max-w-3xl">
+            {storefront.heroSubtitle && (
+              <p className="text-sm sm:text-base text-white/90 font-medium tracking-widest uppercase">
+                {storefront.heroSubtitle}
+              </p>
+            )}
+            <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-[1.1] mt-2 drop-shadow-lg">
+              {heroDisplayTitle}
+            </h2>
+            {store.description && (
+              <p className="mt-3 text-white/85 text-sm md:text-base max-w-md leading-relaxed drop-shadow">
+                {store.description}
+              </p>
+            )}
+            <a
+              href={storefront.heroCtaHref || "#catalogo"}
+              onClick={(e) =>
+                handleHeroCta(e, storefront.heroCtaHref || "#catalogo")
+              }
+              className="mt-6 inline-flex items-center justify-center px-8 py-3 rounded-md text-white text-sm font-bold uppercase tracking-widest shadow-lg hover:opacity-90 transition-opacity self-start"
+              style={{ backgroundColor: "var(--store-secondary)" }}
+            >
+              {storefront.heroCtaLabel}
+            </a>
+          </div>
+        </section>
+      )}
 
       <main className="max-w-6xl mx-auto px-4">
         {products.length === 0 ? (
@@ -1336,7 +1398,6 @@ export function LojaClient({
         <ProductDetailModal
           product={selectedProduct}
           cart={cart}
-          onAdd={addToCart}
           onSetQty={setQty}
           onClose={() => setSelectedProduct(null)}
           contactHref={contactHref}
@@ -1452,6 +1513,43 @@ export function LojaClient({
               )}
               {items.length > 0 && (
                 <>
+                  <div className="space-y-3">
+                    <div>
+                      <label
+                        htmlFor="vw-customer-name"
+                        className="text-sm font-medium text-boutique-wine"
+                      >
+                        Seu nome <span className="text-red-600">*</span>
+                      </label>
+                      <input
+                        id="vw-customer-name"
+                        type="text"
+                        autoComplete="name"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Nome para o pedido"
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="vw-customer-phone"
+                        className="text-sm font-medium text-boutique-wine"
+                      >
+                        Telefone / WhatsApp (opcional)
+                      </label>
+                      <input
+                        id="vw-customer-phone"
+                        type="tel"
+                        autoComplete="tel"
+                        inputMode="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="Ex: 11 99999-9999"
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
+                      />
+                    </div>
+                  </div>
                   <div>
                     <label className="text-sm font-medium text-boutique-wine">
                       Observações (opcional)
@@ -1475,21 +1573,29 @@ export function LojaClient({
             </div>
             {items.length > 0 && orderHref && (
               <div className="p-4 border-t border-boutique-muted/50 bg-boutique-cream/60">
-                <a
-                  href={orderHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setCartOpen(false)}
-                  className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-whatsapp text-white font-semibold hover:bg-whatsapp-dark transition-colors"
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await persistOrderSnapshot();
+                    setCartOpen(false);
+                    window.open(orderHref, "_blank", "noopener,noreferrer");
+                  }}
+                  disabled={customerName.trim().length < 2}
+                  className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-whatsapp text-white font-semibold hover:bg-whatsapp-dark transition-colors disabled:opacity-45 disabled:pointer-events-none"
                 >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                   </svg>
                   Enviar pedido no WhatsApp
-                </a>
+                </button>
                 <p className="text-xs text-slate-400 text-center mt-2">
-                  Abre o WhatsApp com o pedido já formatado
+                  Registramos o resumo no painel e abrimos o WhatsApp com a mensagem
                 </p>
+                {customerName.trim().length < 2 ? (
+                  <p className="text-xs text-amber-700 text-center mt-2">
+                    Preencha <strong>seu nome</strong> acima para enviar o pedido.
+                  </p>
+                ) : null}
               </div>
             )}
             {items.length > 0 && !orderHref && (

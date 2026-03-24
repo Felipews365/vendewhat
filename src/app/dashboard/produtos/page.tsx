@@ -105,29 +105,14 @@ export default function ProdutosPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin w-8 h-8 border-4 border-whatsapp border-t-transparent rounded-full" />
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-landing-primary border-t-transparent rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="text-xl font-bold text-slate-800">
-            VendeWhat
-          </Link>
-          <Link
-            href="/dashboard"
-            className="text-sm text-slate-500 hover:text-slate-800 transition-colors"
-          >
-            ← Voltar ao painel
-          </Link>
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-4 py-8">
+    <main className="max-w-6xl mx-auto px-4 py-8">
         {loadError && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-950 rounded-lg text-sm whitespace-pre-wrap">
             <p className="font-semibold">Não foi possível carregar a lista de produtos.</p>
@@ -272,7 +257,6 @@ export default function ProdutosPage() {
             })}
           </div>
         )}
-      </main>
-    </div>
+    </main>
   );
 }

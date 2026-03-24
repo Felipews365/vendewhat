@@ -405,29 +405,22 @@ export default function EditarProdutoPage() {
 
   if (pageLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin w-8 h-8 border-4 border-whatsapp border-t-transparent rounded-full" />
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-landing-primary border-t-transparent rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="text-xl font-bold text-slate-800">
-            VendeWhat
-          </Link>
+    <main className="max-w-xl mx-auto px-4 py-8">
+        <div className="mb-6">
           <Link
             href="/dashboard/produtos"
-            className="text-sm text-slate-500 hover:text-slate-800 transition-colors"
+            className="text-sm text-slate-500 hover:text-landing-primary transition-colors"
           >
             ← Voltar aos produtos
           </Link>
         </div>
-      </header>
-
-      <main className="max-w-xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-slate-800 mb-8">
           Editar produto
         </h1>
@@ -610,7 +603,6 @@ export default function EditarProdutoPage() {
             </button>
           </div>
         </form>
-      </main>
-    </div>
+    </main>
   );
 }

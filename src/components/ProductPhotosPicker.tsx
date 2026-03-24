@@ -18,10 +18,13 @@ export function ProductPhotosPicker({
   items,
   onItemsChange,
   label = "Fotos do produto",
+  variant = "default",
 }: {
   items: PhotoItem[];
   onItemsChange: (next: PhotoItem[]) => void;
   label?: string;
+  /** Grelha 2×5 com + em cada vazio (estilo editor visual) */
+  variant?: "default" | "editor";
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const itemsRef = useRef(items);
@@ -107,6 +110,104 @@ export function ProductPhotosPicker({
     const item = items.find((i) => i.id === id);
     if (item?.kind === "local") URL.revokeObjectURL(item.preview);
     onItemsChange(items.filter((i) => i.id !== id));
+  }
+
+  const accentRing =
+    variant === "editor"
+      ? "text-landing-primary focus:ring-landing-primary"
+      : "text-whatsapp focus:ring-whatsapp";
+
+  if (variant === "editor") {
+    return (
+      <div>
+        <label className="block text-sm font-semibold text-slate-800 mb-1">
+          {label}
+        </label>
+        <p className="text-xs text-slate-500 mb-3">
+          Até {MAX_PHOTOS} fotos · máx. 5MB cada. Toque no{" "}
+          <strong className="text-landing-primary">+</strong> para enviar.
+        </p>
+
+        <label className="flex items-center gap-2 mb-3 text-xs text-slate-600 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={skipCrop}
+            onChange={(e) => setSkipCrop(e.target.checked)}
+            className={`rounded border-slate-300 ${accentRing}`}
+          />
+          Adicionar sem recorte (foto inteira)
+        </label>
+
+        <div className="grid grid-cols-2 gap-2">
+          {Array.from({ length: MAX_PHOTOS }).map((_, i) => {
+            const item = items[i];
+            if (item) {
+              return (
+                <div
+                  key={item.id}
+                  className="relative aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.kind === "remote" ? item.url : item.preview}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => remove(item.id)}
+                    className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/60 text-white text-sm font-bold leading-none hover:bg-black/80 shadow-md z-10"
+                    aria-label="Remover foto"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <button
+                key={`slot-${i}`}
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="relative aspect-square rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 hover:border-landing-primary/50 hover:bg-teal-50/30 transition-colors flex flex-col items-center justify-center text-slate-400"
+              >
+                <span className="text-2xl opacity-40 mb-0.5" aria-hidden>
+                  🖼
+                </span>
+                <span className="text-[10px] text-center px-1 text-slate-400">
+                  Adicione aqui
+                </span>
+                <span
+                  className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-landing-primary text-white text-lg font-light leading-none shadow-md ring-2 ring-white"
+                  aria-hidden
+                >
+                  +
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => addFiles(e.target.files)}
+        />
+
+        {cropSession && (
+          <ProductImageCropModal
+            imageSrc={cropSession.src}
+            sourceFileName={cropSession.file.name}
+            originalFile={cropSession.file}
+            onCancel={handleCropCancel}
+            onComplete={handleCropDone}
+          />
+        )}
+      </div>
+    );
   }
 
   return (
