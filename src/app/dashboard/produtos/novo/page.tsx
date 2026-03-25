@@ -21,12 +21,14 @@ import {
   PRODUCTS_RLS_INSERT_HINT,
   PRODUCT_REFERENCE_MIGRATION_HINT,
   PRODUCT_CATEGORY_MIGRATION_HINT,
+  PRODUCT_IMAGE_POSITION_MIGRATION_HINT,
   COLOR_HEXES_MIGRATION_HINT,
   isMissingColumnError,
   isMissingOptionsOrVariantStockColumn,
   isRlsPolicyError,
 } from "@/lib/dbColumnErrors";
 import { ProductChooseCategoryModal } from "@/components/ProductChooseCategoryModal";
+import { CategoryAutocompleteField } from "@/components/dashboard/CategoryAutocompleteField";
 import {
   type VariantStockRow,
   buildVariantCombinations,
@@ -39,6 +41,10 @@ import {
   priceMoneyInputHandlers,
   priceNumberNoSpinnerClass,
 } from "@/lib/priceInputBehavior";
+import {
+  IMAGE_OBJECT_POSITION_PRESETS,
+  normalizeImageObjectPosition,
+} from "@/lib/productImagePosition";
 
 type ProductTab = "produto" | "variacoes" | "estoque";
 
@@ -50,6 +56,7 @@ const INITIAL_FORM = {
   compareAtPrice: "",
   stock: "0",
   category: "",
+  imageObjectPosition: "center",
 };
 
 function TabButton({
@@ -122,6 +129,8 @@ export default function NovoProdutoPage() {
   const [form, setForm] = useState({ ...INITIAL_FORM });
   const [isPromotion, setIsPromotion] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [storeId, setStoreId] = useState<string | null>(null);
+  const [categorySuggestionsRefresh, setCategorySuggestionsRefresh] = useState(0);
 
   const hasVariantOptions = colors.length > 0 || sizes.length > 0;
 
@@ -135,6 +144,26 @@ export default function NovoProdutoPage() {
     }
     setVariantStockMap((prev) => mergeVariantStockMap(prev, colors, sizes));
   }, [colorsKey, sizesKey, hasVariantOptions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      const { data: store } = await supabase
+        .from("stores")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!cancelled && store?.id) setStoreId(store.id as string);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -253,6 +282,9 @@ export default function NovoProdutoPage() {
         is_promotion: isPromotion,
         compare_at_price: compareAt,
         category: form.category.trim() || null,
+        image_object_position: normalizeImageObjectPosition(
+          form.imageObjectPosition
+        ),
       };
 
       let insertError = (await supabase.from("products").insert(payload)).error;
@@ -348,6 +380,19 @@ export default function NovoProdutoPage() {
           .error;
       }
 
+      if (
+        insertError &&
+        isMissingColumnError(
+          insertError.message,
+          "image_object_position",
+          insertError.code
+        )
+      ) {
+        const { image_object_position: _iop, ...withoutPos } = payload;
+        insertError = (await supabase.from("products").insert(withoutPos))
+          .error;
+      }
+
       if (insertError && !isRlsPolicyError(insertError.message, insertError.code)) {
         const minimal: Record<string, unknown> = {
           store_id: store.id,
@@ -357,6 +402,10 @@ export default function NovoProdutoPage() {
           stock: stockNum,
           active: true,
           image: imageUrls[0] ?? null,
+          category: form.category.trim() || null,
+          image_object_position: normalizeImageObjectPosition(
+            form.imageObjectPosition
+          ),
         };
         const retry = await supabase.from("products").insert(minimal);
         if (!retry.error) {
@@ -398,6 +447,8 @@ export default function NovoProdutoPage() {
           setError(`${COLOR_HEXES_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
         } else if (isMissingColumnError(msg, "category", code)) {
           setError(`${PRODUCT_CATEGORY_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
+        } else if (isMissingColumnError(msg, "image_object_position", code)) {
+          setError(`${PRODUCT_IMAGE_POSITION_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
         } else {
           const hint = [insertError.hint, insertError.details]
             .filter(Boolean)
@@ -575,6 +626,37 @@ export default function NovoProdutoPage() {
                   label="Fotos do produto"
                   variant="editor"
                 />
+                <div>
+                  <label
+                    htmlFor="vw-new-image-object-position"
+                    className="block text-sm font-medium text-slate-700 mb-1.5"
+                  >
+                    Enquadramento na loja (1.ª foto)
+                  </label>
+                  <select
+                    id="vw-new-image-object-position"
+                    value={form.imageObjectPosition}
+                    onChange={(e) => {
+                      setForm((f) => ({
+                        ...f,
+                        imageObjectPosition: e.target.value,
+                      }));
+                      setError("");
+                      setSaveOk(false);
+                    }}
+                    className={inputClass}
+                  >
+                    {IMAGE_OBJECT_POSITION_PRESETS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    Só o cartão na grelha da loja usa recorte; ao abrir o produto, todas
+                    as fotos aparecem inteiras.
+                  </p>
+                </div>
               </div>
 
               {/* Coluna central */}
@@ -584,34 +666,29 @@ export default function NovoProdutoPage() {
                 </h2>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label
+                    htmlFor="vw-new-product-category"
+                    className="block text-sm font-medium text-slate-700 mb-1.5"
+                  >
                     Categorias
                   </label>
-                  <div className="flex gap-2 items-stretch">
-                    <button
-                      type="button"
-                      onClick={() => setCategoryModalOpen(true)}
-                      className="flex-1 min-w-0 rounded-full border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm text-left flex items-center justify-between gap-2 hover:bg-slate-200/60 transition-colors"
-                    >
-                      <span
-                        className={
-                          form.category.trim()
-                            ? "text-slate-800 font-medium truncate"
-                            : "text-slate-400 truncate"
-                        }
-                      >
-                        {form.category.trim() || "Escolher categorias"}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCategoryModalOpen(true)}
-                      className="shrink-0 h-[42px] w-[42px] rounded-full bg-landing-primary text-white text-xl font-light leading-none shadow-md hover:opacity-90 transition-opacity flex items-center justify-center"
-                      title="Adicionar categoria"
-                    >
-                      +
-                    </button>
-                  </div>
+                  <CategoryAutocompleteField
+                    id="vw-new-product-category"
+                    value={form.category}
+                    onChange={(v) => {
+                      setForm((f) => ({ ...f, category: v }));
+                      setError("");
+                      setSaveOk(false);
+                    }}
+                    storeId={storeId}
+                    suggestionsRefresh={categorySuggestionsRefresh}
+                    onOpenAdvanced={() => setCategoryModalOpen(true)}
+                    placeholder="Ex.: Bermuda — digite para ver sugestões"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    Sugestões vêm dos outros produtos e das categorias da aparência da loja.
+                    O + abre o editor com foto e categoria pai.
+                  </p>
                 </div>
 
                 <div>
@@ -820,6 +897,7 @@ export default function NovoProdutoPage() {
         initialName={form.category}
         onSave={(name) => {
           setForm((f) => ({ ...f, category: name }));
+          setCategorySuggestionsRefresh((n) => n + 1);
           setError("");
           setSaveOk(false);
         }}

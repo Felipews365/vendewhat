@@ -10,6 +10,7 @@ import {
   PRODUCTS_SELECT_WITHOUT_PRODUCT_REFERENCE,
 } from "@/lib/dbColumnErrors";
 import { storefrontFromDb } from "@/lib/storefront";
+import { normalizeImageObjectPosition } from "@/lib/productImagePosition";
 import { LojaClient, type CatalogProduct } from "./LojaClient";
 
 type Props = { params: { slug: string } };
@@ -148,6 +149,9 @@ export default async function LojaPublicaPage({ params }: Props) {
         (p as { compare_at_price?: number | null }).compare_at_price != null
           ? Number((p as { compare_at_price: number }).compare_at_price)
           : null,
+      imageObjectPosition: normalizeImageObjectPosition(
+        (p as { image_object_position?: string | null }).image_object_position
+      ),
     };
   });
 

@@ -23,6 +23,7 @@ import {
   shippingModeLabel,
   type ShippingModeId,
 } from "@/lib/shippingModes";
+import { catalogCardImageObjectStyle } from "@/lib/productImagePosition";
 
 export type CatalogProduct = {
   id: string;
@@ -45,10 +46,68 @@ export type CatalogProduct = {
   createdAt: string;
   isPromotion: boolean;
   compareAtPrice: number | null;
+  /** Enquadramento da 1.ª foto no card (lista); no detalhe as fotos aparecem inteiras. */
+  imageObjectPosition: string;
 };
 
 function formatPrice(value: number): string {
   return value.toFixed(2).replace(".", ",");
+}
+
+const CATEGORY_SPLIT_RE = /[,;/|]+/;
+
+function normCategoryLabel(s: string): string {
+  return s.trim().toLocaleLowerCase("pt");
+}
+
+/**
+ * Conjunto de rótulos (normalizados) que contam para o filtro: o nome tocado na faixa
+ * mais todas as subcategorias definidas em Aparência (`parentLabel`), em cascata.
+ * Assim, tocar em «Bermuda» mostra só produtos com categoria Bermuda; tocar no pai
+ * (ex.: «Short») pode incluir Bermuda, se estiver ligada como filha na loja.
+ */
+function categoryFilterMatchNorms(
+  filterLabel: string,
+  storefrontCategories: StorefrontCategoryItem[]
+): Set<string> {
+  const items = storefrontCategories
+    .map((c) => ({
+      label: c.label.trim(),
+      parent: c.parentLabel?.trim() ?? "",
+    }))
+    .filter((c) => c.label);
+
+  const out = new Set<string>();
+  out.add(normCategoryLabel(filterLabel));
+
+  let added = true;
+  while (added) {
+    added = false;
+    for (const c of items) {
+      const ln = normCategoryLabel(c.label);
+      if (out.has(ln)) continue;
+      const pn = c.parent ? normCategoryLabel(c.parent) : "";
+      if (pn && out.has(pn)) {
+        out.add(ln);
+        added = true;
+      }
+    }
+  }
+  return out;
+}
+
+function productCategoryMatchesNormSet(
+  productCategory: string,
+  matchNorms: Set<string>
+): boolean {
+  const full = normCategoryLabel(productCategory);
+  if (matchNorms.has(full)) return true;
+  for (const part of productCategory.split(CATEGORY_SPLIT_RE)) {
+    const t = part.trim();
+    if (!t) continue;
+    if (matchNorms.has(normCategoryLabel(t))) return true;
+  }
+  return false;
 }
 
 /** Logo Instagram (marca) — use com currentColor */
@@ -361,7 +420,8 @@ function ProductCatalogCard({
             src={imgSrc}
             alt={product.name}
             fill
-            className="object-cover object-center w-full h-full"
+            className="object-cover w-full h-full"
+            style={catalogCardImageObjectStyle(product.imageObjectPosition)}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
         ) : (
@@ -622,7 +682,7 @@ function ProductDetailModal({
                         src={url}
                         alt={i === 0 ? product.name : `${product.name} — foto ${i + 1}`}
                         fill
-                        className="object-cover object-center select-none pointer-events-none"
+                        className="object-contain object-center select-none pointer-events-none bg-stone-200"
                         draggable={false}
                         sizes="(max-width: 768px) 100vw, 50vw"
                         priority={i === 0}
@@ -664,7 +724,7 @@ function ProductDetailModal({
                     src={imgs[0]}
                     alt={product.name}
                     fill
-                    className="object-cover object-center select-none pointer-events-none"
+                    className="object-contain object-center select-none pointer-events-none bg-stone-200"
                     draggable={false}
                     sizes="(max-width: 768px) 100vw, 50vw"
                     priority
@@ -1001,9 +1061,11 @@ function StorefrontCategoriesStrip({
   selectedLabel: string | null;
   onSelectCategory: (label: string | null) => void;
 }) {
-  /** Só na bolinha (rounded-full). origin-top + padding no row: ring/scale não sobem por cima do texto. */
+  /** Anel no thumbnail (arredondado). origin-top: ring/scale não sobem por cima do texto. */
   const ringActive =
     "ring-2 ring-offset-2 ring-stone-600/90 ring-offset-white scale-[1.02] origin-top";
+  const thumbFrame =
+    "relative w-[4.25rem] h-[4.25rem] sm:w-[4.75rem] sm:h-[4.75rem] shrink-0 rounded-2xl";
   const stripBtnClass =
     "flex flex-col items-center shrink-0 w-[4.75rem] sm:w-[5.25rem] snap-start group cursor-pointer border-0 bg-transparent p-0 shadow-none outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-300/80 focus-visible:rounded-2xl";
 
@@ -1035,12 +1097,12 @@ function StorefrontCategoriesStrip({
             className={`${stripBtnClass} text-left`}
           >
             <div
-              className={`relative w-[4.25rem] h-[4.25rem] sm:w-[4.75rem] sm:h-[4.75rem] shrink-0 rounded-full ${
+              className={`${thumbFrame} ${
                 selectedLabel == null ? ringActive : ""
               }`}
             >
               <div
-                className="absolute inset-0 origin-top rounded-full bg-stone-100 border border-dashed border-stone-300/90 flex flex-col items-center justify-center gap-0.5 transition-transform group-hover:scale-[1.03]"
+                className="absolute inset-0 origin-top rounded-2xl bg-stone-100 border border-dashed border-stone-300/90 flex flex-col items-center justify-center gap-0.5 transition-transform group-hover:scale-[1.03]"
                 aria-hidden
               >
                 <span className="text-[1.65rem] sm:text-[1.85rem] leading-none select-none">
@@ -1072,18 +1134,14 @@ function StorefrontCategoriesStrip({
                 }}
                 className={`${stripBtnClass} text-left`}
               >
-                <div
-                  className={`relative w-[4.25rem] h-[4.25rem] sm:w-[4.75rem] sm:h-[4.75rem] shrink-0 rounded-full ${
-                    active ? ringActive : ""
-                  }`}
-                >
-                  <div className="absolute inset-0 origin-top rounded-full bg-stone-200 overflow-hidden ring-1 ring-stone-200/80 shadow-sm transition-transform group-hover:scale-[1.03] flex items-center justify-center">
+                <div className={`${thumbFrame} ${active ? ringActive : ""}`}>
+                  <div className="absolute inset-0 origin-top rounded-2xl bg-stone-100 overflow-hidden ring-1 ring-stone-200/80 shadow-sm transition-transform group-hover:scale-[1.03] flex items-center justify-center">
                     {cat.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={cat.imageUrl}
                         alt=""
-                        className="absolute inset-0 w-full h-full object-cover"
+                        className="max-h-full max-w-full h-full w-full object-contain object-center"
                       />
                     ) : (
                       <span
@@ -1134,9 +1192,19 @@ export function LojaClient({
     let list = products;
     const cf = categoryFilter?.trim();
     if (cf) {
+      const useTree =
+        storefront.categories.length > 0 &&
+        storefront.categories.some((c) => c.label.trim());
+      const matchNorms = useTree
+        ? categoryFilterMatchNorms(cf, storefront.categories)
+        : null;
+
       list = list.filter((p) => {
         const pc = p.category?.trim();
         if (!pc) return false;
+        if (matchNorms) {
+          return productCategoryMatchesNormSet(pc, matchNorms);
+        }
         return (
           pc.localeCompare(cf, "pt", { sensitivity: "base" }) === 0
         );
@@ -1150,7 +1218,7 @@ export function LojaClient({
         (p.description?.toLowerCase().includes(q) ?? false) ||
         (p.category?.toLowerCase().includes(q) ?? false)
     );
-  }, [products, search, categoryFilter]);
+  }, [products, search, categoryFilter, storefront.categories]);
 
   const promoProducts = useMemo(
     () => filteredProducts.filter((p) => p.isPromotion),
@@ -1298,13 +1366,18 @@ export function LojaClient({
     });
   }
 
-  function buildOrderMessage(): string {
+  function buildOrderMessage(orderCode?: number | null): string {
     const lines = [
       `*Pedido — ${store.name}*`,
       "",
+    ];
+    if (orderCode != null && Number.isFinite(orderCode)) {
+      lines.push(`*Código do pedido:* #${orderCode}`, "");
+    }
+    lines.push(
       `*Cliente:* ${customerName.trim() || "—"}`,
       `*Telefone / WhatsApp:* ${customerPhone.trim() || "—"}`,
-    ];
+    );
     if (shippingMode) {
       const lab = shippingModeLabel(shippingMode);
       if (lab) lines.push(`*Forma de envio:* ${lab}`);
@@ -1329,14 +1402,19 @@ export function LojaClient({
     return lines.join("\n");
   }
 
-  const orderHref = whatsAppLink(store.phone, buildOrderMessage());
+  /** WhatsApp da loja válido para montar o link do pedido (mensagem é montada no clique, com código). */
+  const orderWhatsAppReady = useMemo(
+    () => whatsAppLink(store.phone, ".") !== null,
+    [store.phone]
+  );
 
-  async function persistOrderSnapshot() {
-    if (items.length === 0 || !store.slug) return;
+  /** Devolve o `order_number` gravado no painel, para incluir na mensagem ao vendedor. */
+  async function persistOrderSnapshot(): Promise<number | null> {
+    if (items.length === 0 || !store.slug) return null;
     const name = customerName.trim();
-    if (name.length < 2) return;
-    if (!isCustomerPhoneValid(customerPhone)) return;
-    if (!shippingMode) return;
+    if (name.length < 2) return null;
+    if (!isCustomerPhoneValid(customerPhone)) return null;
+    if (!shippingMode) return null;
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -1355,12 +1433,25 @@ export function LojaClient({
           })),
         }),
       });
+      const j = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        orderNumber?: number;
+        error?: string;
+      };
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        console.warn("[VendeWhat] Pedido não salvo no painel:", j?.error ?? res.status);
+        console.warn(
+          "[VendeWhat] Pedido não salvo no painel:",
+          j?.error ?? res.status
+        );
+        return null;
       }
+      if (typeof j.orderNumber === "number" && Number.isFinite(j.orderNumber)) {
+        return j.orderNumber;
+      }
+      return null;
     } catch (e) {
       console.warn("[VendeWhat] Pedido não salvo no painel:", e);
+      return null;
     }
   }
 
@@ -1973,6 +2064,9 @@ export function LojaClient({
                           alt=""
                           fill
                           className="object-cover"
+                          style={catalogCardImageObjectStyle(
+                            i.imageObjectPosition
+                          )}
                           sizes="64px"
                         />
                       ) : (
@@ -2134,12 +2228,17 @@ export function LojaClient({
                 </>
               )}
             </div>
-            {items.length > 0 && orderHref && (
+            {items.length > 0 && orderWhatsAppReady && (
               <div className="p-4 border-t border-boutique-muted/50 bg-boutique-cream/60">
                 <button
                   type="button"
                   onClick={async () => {
-                    await persistOrderSnapshot();
+                    const orderCode = await persistOrderSnapshot();
+                    const href = whatsAppLink(
+                      store.phone,
+                      buildOrderMessage(orderCode)
+                    );
+                    if (!href) return;
                     setCartOpen(false);
                     /**
                      * Depois do `await`, o browser já não trata o clique como “gesto direto”:
@@ -2153,9 +2252,9 @@ export function LojaClient({
                       typeof window !== "undefined" &&
                       window.matchMedia("(pointer: coarse)").matches;
                     if (narrow || touchPrimary) {
-                      window.location.assign(orderHref);
+                      window.location.assign(href);
                     } else {
-                      window.open(orderHref, "_blank", "noopener,noreferrer");
+                      window.open(href, "_blank", "noopener,noreferrer");
                     }
                   }}
                   disabled={
@@ -2171,7 +2270,8 @@ export function LojaClient({
                   Enviar pedido no WhatsApp
                 </button>
                 <p className="text-xs text-slate-400 text-center mt-2">
-                  Registramos o resumo no painel e abrimos o WhatsApp com a mensagem
+                  Registramos no painel com código do pedido e abrimos o WhatsApp com a
+                  mesma mensagem
                 </p>
                 {customerName.trim().length < 2 ||
                 !isCustomerPhoneValid(customerPhone) ||
@@ -2197,7 +2297,7 @@ export function LojaClient({
                 ) : null}
               </div>
             )}
-            {items.length > 0 && !orderHref && (
+            {items.length > 0 && !orderWhatsAppReady && (
               <div className="p-4 border-t bg-amber-50 text-amber-800 text-sm text-center">
                 A loja ainda não configurou o WhatsApp. Entre em contato por
                 outro canal.

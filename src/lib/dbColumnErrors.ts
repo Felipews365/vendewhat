@@ -57,7 +57,7 @@ export const PRODUCTS_RLS_INSERT_HINT =
 
 /** `select` sem `product_reference` quando a API ainda não recarregou o schema (PGRST / schema cache). Sem `color_hexes` para não falhar em bases antigas. */
 export const PRODUCTS_SELECT_WITHOUT_PRODUCT_REFERENCE =
-  "id, store_id, name, description, price, image, images, colors, sizes, variant_stock, stock, active, is_promotion, compare_at_price, category, created_at, updated_at";
+  "id, store_id, name, description, price, image, images, colors, sizes, variant_stock, stock, active, is_promotion, compare_at_price, category, image_object_position, created_at, updated_at";
 
 export const PRODUCT_REFERENCE_MIGRATION_HINT =
   "Referência do produto — checklist: (1) No Supabase, confirme que o URL do projeto é o mesmo de NEXT_PUBLIC_SUPABASE_URL no .env. (2) SQL Editor: cole supabase-migration-product-reference.sql inteiro e Run (mensagem «Success» mesmo sem linhas é normal). (3) Rode: select column_name from information_schema.columns where table_schema='public' and table_name='products' and column_name='product_reference'; — tem de devolver 1 linha. (4) Settings → API → Reload schema (ou reinicie o projeto). (5) Atualize o painel com Ctrl+Shift+R. O erro de schema cache some quando o passo 3 e 4 estiverem OK.";
@@ -67,6 +67,9 @@ export const COLOR_HEXES_MIGRATION_HINT =
 
 export const PRODUCT_CATEGORY_MIGRATION_HINT =
   "Categoria do produto: no Supabase → SQL Editor, rode supabase-migration-product-category.sql e aguarde o reload do schema.";
+
+export const PRODUCT_IMAGE_POSITION_MIGRATION_HINT =
+  "Enquadramento da foto no catálogo: rode supabase-migration-product-image-position.sql no SQL Editor e recarregue o schema da API.";
 
 /** Pedidos: tabela antiga sem order_number / cliente (erro SQL 42703 ou PostgREST equivalente). */
 export function isMissingOrdersColumnError(
