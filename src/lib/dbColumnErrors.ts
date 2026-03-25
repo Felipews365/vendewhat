@@ -71,6 +71,9 @@ export const PRODUCT_CATEGORY_MIGRATION_HINT =
 export const PRODUCT_IMAGE_POSITION_MIGRATION_HINT =
   "Enquadramento da foto no catálogo: rode supabase-migration-product-image-position.sql no SQL Editor e recarregue o schema da API.";
 
+export const PRODUCT_IMAGE_POSITIONS_ARRAY_MIGRATION_HINT =
+  "Enquadramento por foto (arraste no painel): rode supabase-migration-product-image-positions-array.sql no SQL Editor e recarregue o schema da API.";
+
 /** Pedidos: tabela antiga sem order_number / cliente (erro SQL 42703 ou PostgREST equivalente). */
 export function isMissingOrdersColumnError(
   message: string,

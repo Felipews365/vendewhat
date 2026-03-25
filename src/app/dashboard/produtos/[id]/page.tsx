@@ -20,6 +20,7 @@ import {
   PRODUCT_REFERENCE_MIGRATION_HINT,
   PRODUCT_CATEGORY_MIGRATION_HINT,
   PRODUCT_IMAGE_POSITION_MIGRATION_HINT,
+  PRODUCT_IMAGE_POSITIONS_ARRAY_MIGRATION_HINT,
   COLOR_HEXES_MIGRATION_HINT,
   PRODUCTS_SELECT_WITHOUT_PRODUCT_REFERENCE,
   isMissingColumnError,
@@ -52,6 +53,11 @@ import {
   IMAGE_OBJECT_POSITION_PRESETS,
   normalizeImageObjectPosition,
 } from "@/lib/productImagePosition";
+import {
+  focusFromImageObjectPreset,
+  parseImageObjectPositionsDb,
+  serializeImageObjectPositions,
+} from "@/lib/productImageFocus";
 
 function remotePhotoId(url: string) {
   return `remote-${url}`;
@@ -207,6 +213,7 @@ export default function EditarProdutoPage() {
           color_hexes?: unknown;
           category?: string | null;
           image_object_position?: string | null;
+          image_object_positions?: unknown;
         };
         const sid = (product as { store_id?: string }).store_id;
         setStoreId(typeof sid === "string" && sid ? sid : null);
@@ -251,11 +258,17 @@ export default function EditarProdutoPage() {
 
         const urls = getProductImageUrls(product);
         initialRemoteUrlsRef.current = [...urls];
+        const focusByIndex = parseImageObjectPositionsDb(
+          row.image_object_positions,
+          urls.length,
+          normalizeImageObjectPosition(row.image_object_position)
+        );
         setPhotos(
-          urls.map((url) => ({
+          urls.map((url, i) => ({
             id: remotePhotoId(url),
             kind: "remote" as const,
             url,
+            focus: focusByIndex[i],
           }))
         );
       } finally {
@@ -399,6 +412,7 @@ export default function EditarProdutoPage() {
         image_object_position: normalizeImageObjectPosition(
           form.imageObjectPosition
         ),
+        image_object_positions: serializeImageObjectPositions(photos),
         updated_at: new Date().toISOString(),
       };
 
@@ -539,6 +553,24 @@ export default function EditarProdutoPage() {
         ).error;
       }
 
+      if (
+        updateError &&
+        isMissingColumnError(
+          updateError.message,
+          "image_object_positions",
+          updateError.code
+        )
+      ) {
+        const { image_object_positions: _iopa, ...withoutPosArr } =
+          updatePayload;
+        updateError = (
+          await supabase
+            .from("products")
+            .update(withoutPosArr)
+            .eq("id", productId)
+        ).error;
+      }
+
       if (updateError) {
         const msg = updateError.message || "";
         const code = updateError.code;
@@ -570,6 +602,10 @@ export default function EditarProdutoPage() {
           setError(`${PRODUCT_CATEGORY_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
         } else if (isMissingColumnError(msg, "image_object_position", code)) {
           setError(`${PRODUCT_IMAGE_POSITION_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
+        } else if (isMissingColumnError(msg, "image_object_positions", code)) {
+          setError(
+            `${PRODUCT_IMAGE_POSITIONS_ARRAY_MIGRATION_HINT}\n\nDetalhe: ${msg}`
+          );
         } else {
           setError("Erro ao atualizar produto: " + updateError.message);
         }
@@ -732,10 +768,15 @@ export default function EditarProdutoPage() {
                     id="vw-image-object-position"
                     value={form.imageObjectPosition}
                     onChange={(e) => {
-                      setForm((f) => ({
-                        ...f,
-                        imageObjectPosition: e.target.value,
-                      }));
+                      const v = e.target.value;
+                      setForm((f) => ({ ...f, imageObjectPosition: v }));
+                      setPhotos((prev) =>
+                        prev.map((it, i) =>
+                          i === 0
+                            ? { ...it, focus: focusFromImageObjectPreset(v) }
+                            : it
+                        )
+                      );
                       setError("");
                     }}
                     className={inputClass}
@@ -747,9 +788,9 @@ export default function EditarProdutoPage() {
                     ))}
                   </select>
                   <p className="text-[11px] text-slate-400 mt-1.5">
-                    Na grelha da loja a 1.ª foto aparece em quadrado com recorte; escolhe
-                    onde focar (centro, topo, etc.). Ao abrir o produto ou em Comprar, a
-                    foto mostra-se inteira, em proporção de fotógrafo.
+                    Pode arrastar a 1.ª foto na grelha acima ou usar este menu. Cada foto
+                    tem o seu enquadramento (guardado ao salvar). Na loja, o detalhe do
+                    produto continua a mostrar as imagens completas.
                   </p>
                 </div>
               </div>

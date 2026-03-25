@@ -23,7 +23,7 @@ import {
   shippingModeLabel,
   type ShippingModeId,
 } from "@/lib/shippingModes";
-import { catalogCardImageObjectStyle } from "@/lib/productImagePosition";
+import { coverImageStyleAt, type ImageFocusPoint } from "@/lib/productImageFocus";
 
 export type CatalogProduct = {
   id: string;
@@ -48,6 +48,8 @@ export type CatalogProduct = {
   compareAtPrice: number | null;
   /** Enquadramento da 1.ª foto no card (lista); no detalhe as fotos aparecem inteiras. */
   imageObjectPosition: string;
+  /** Foco por índice de `images` (arraste no painel); mesmo comprimento que `images`. */
+  imageObjectPositions: ImageFocusPoint[];
 };
 
 function formatPrice(value: number): string {
@@ -414,7 +416,7 @@ function ProductCatalogCard({
 
   return (
     <div className="flex flex-col cursor-pointer" onClick={() => onOpen(product)}>
-      {/* 1:1 na grelha + object-cover; foco via imageObjectPosition no painel */}
+      {/* Cartão de produto: quadrado (não confundir com a bolinha só na faixa «Categorias»). */}
       <div className="aspect-square relative overflow-hidden rounded-2xl shadow-sm bg-stone-200">
         {imgSrc ? (
           <Image
@@ -422,7 +424,11 @@ function ProductCatalogCard({
             alt={product.name}
             fill
             className="object-cover w-full h-full"
-            style={catalogCardImageObjectStyle(product.imageObjectPosition)}
+            style={coverImageStyleAt(
+              0,
+              product.imageObjectPositions,
+              product.imageObjectPosition
+            )}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
         ) : (
@@ -501,6 +507,9 @@ function ProductDetailModal({
 
   const imgs = product.images.length > 0 ? product.images : product.image ? [product.image] : [];
   const safeImgIdx = imgs.length > 0 ? Math.min(imgIdx, imgs.length - 1) : 0;
+
+  const imgFocusStyle = (i: number) =>
+    coverImageStyleAt(i, product.imageObjectPositions, product.imageObjectPosition);
 
   const scrollCarouselToIndex = useCallback(
     (i: number, behavior: "smooth" | "auto" = "smooth") => {
@@ -662,6 +671,7 @@ function ProductDetailModal({
                       alt=""
                       fill
                       className="object-contain bg-stone-200"
+                      style={imgFocusStyle(i)}
                       sizes="80px"
                     />
                   </button>
@@ -690,6 +700,7 @@ function ProductDetailModal({
                         alt={i === 0 ? product.name : `${product.name} — foto ${i + 1}`}
                         fill
                         className="object-contain object-center select-none pointer-events-none bg-stone-200"
+                        style={imgFocusStyle(i)}
                         draggable={false}
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 55vw, 480px"
                         priority={i === 0}
@@ -732,6 +743,7 @@ function ProductDetailModal({
                     alt={product.name}
                     fill
                     className="object-contain object-center select-none pointer-events-none bg-stone-200"
+                    style={imgFocusStyle(0)}
                     draggable={false}
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 55vw, 480px"
                     priority
@@ -1015,6 +1027,7 @@ function ProductDetailModal({
                         }
                         fill
                         className="object-contain"
+                        style={imgFocusStyle(i)}
                         sizes="100vw"
                         priority={i === lightboxIndex}
                       />
@@ -1030,6 +1043,7 @@ function ProductDetailModal({
                     alt={product.name}
                     fill
                     className="object-contain"
+                    style={imgFocusStyle(0)}
                     sizes="100vw"
                     priority
                   />
@@ -1068,11 +1082,11 @@ function StorefrontCategoriesStrip({
   selectedLabel: string | null;
   onSelectCategory: (label: string | null) => void;
 }) {
-  /** Bolinha circular. origin-top: ring/scale não sobem por cima do texto. */
+  /** Bolinha circular; foto com object-cover para preencher sem faixas laterais. */
   const ringActive =
     "ring-2 ring-offset-2 ring-stone-600/90 ring-offset-white scale-[1.02] origin-top";
   const thumbFrame =
-    "relative w-[4.25rem] h-[4.25rem] sm:w-[4.75rem] sm:h-[4.75rem] shrink-0 rounded-full";
+    "relative w-[4.25rem] h-[4.25rem] sm:w-[4.75rem] sm:h-[4.75rem] shrink-0 rounded-full overflow-hidden";
   const stripBtnClass =
     "flex flex-col items-center shrink-0 w-[4.75rem] sm:w-[5.25rem] snap-start group cursor-pointer border-0 bg-transparent p-0 shadow-none outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-300/80 focus-visible:rounded-2xl";
 
@@ -1148,7 +1162,7 @@ function StorefrontCategoriesStrip({
                       <img
                         src={cat.imageUrl}
                         alt=""
-                        className="max-h-full max-w-full h-full w-full object-contain object-center"
+                        className="absolute inset-0 h-full w-full object-cover object-center"
                       />
                     ) : (
                       <span
@@ -2071,7 +2085,9 @@ export function LojaClient({
                           alt=""
                           fill
                           className="object-cover"
-                          style={catalogCardImageObjectStyle(
+                          style={coverImageStyleAt(
+                            0,
+                            i.imageObjectPositions,
                             i.imageObjectPosition
                           )}
                           sizes="64px"

@@ -248,7 +248,7 @@ export function CategoryFormModal({
                   <img
                     src={circleImg}
                     alt=""
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-cover object-center"
                   />
                 ) : (
                   <span className="text-xl opacity-60" aria-hidden>

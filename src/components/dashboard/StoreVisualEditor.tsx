@@ -530,13 +530,13 @@ export function StoreVisualEditor({
                   className="flex flex-col items-center shrink-0 w-[4.5rem] sm:w-[5rem] group text-center"
                 >
                   <div className="relative w-[4rem] h-[4rem] sm:w-[4.5rem] sm:h-[4.5rem]">
-                    <div className="absolute inset-0 rounded-full bg-slate-200 overflow-hidden ring-2 ring-slate-100 shadow-sm transition-transform group-hover:scale-[1.03]">
+                    <div className="absolute inset-0 rounded-full bg-slate-200 overflow-hidden ring-2 ring-slate-100 shadow-sm transition-transform group-hover:scale-[1.03] flex items-center justify-center">
                       {cat.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={cat.imageUrl}
                           alt=""
-                          className="absolute inset-0 w-full h-full object-cover"
+                          className="absolute inset-0 h-full w-full object-cover object-center"
                         />
                       ) : null}
                     </div>

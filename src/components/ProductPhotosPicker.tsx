@@ -1,17 +1,127 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { ProductImageCropModal } from "./ProductImageCropModal";
+import {
+  clampFocus,
+  DEFAULT_IMAGE_FOCUS,
+  type ImageFocusPoint,
+} from "@/lib/productImageFocus";
 
 export type PhotoItem =
-  | { id: string; kind: "remote"; url: string }
-  | { id: string; kind: "local"; file: File; preview: string };
+  | { id: string; kind: "remote"; url: string; focus?: ImageFocusPoint }
+  | {
+      id: string;
+      kind: "local";
+      file: File;
+      preview: string;
+      focus?: ImageFocusPoint;
+    };
 
 const MAX_PHOTOS = 10;
 const MAX_BYTES = 5 * 1024 * 1024;
 
 function newId() {
   return crypto.randomUUID();
+}
+
+function photoFocus(p: PhotoItem): ImageFocusPoint {
+  return p.focus ?? DEFAULT_IMAGE_FOCUS;
+}
+
+/** Quadrado com object-cover; arrastar ajusta object-position (dedo ou rato). */
+function DraggablePhotoFraming({
+  src,
+  focus,
+  onFocusChange,
+}: {
+  src: string;
+  focus: ImageFocusPoint;
+  onFocusChange: (next: ImageFocusPoint) => void;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+  const lastRef = useRef({ x: 0, y: 0 });
+  const focusRef = useRef(focus);
+  const onFocusChangeRef = useRef(onFocusChange);
+  focusRef.current = focus;
+  onFocusChangeRef.current = onFocusChange;
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+
+    function onPointerDown(e: PointerEvent) {
+      const node = wrapRef.current;
+      if (!node) return;
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      draggingRef.current = true;
+      lastRef.current = { x: e.clientX, y: e.clientY };
+      try {
+        node.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function onPointerMove(e: PointerEvent) {
+      if (!draggingRef.current || !wrapRef.current) return;
+      const rect = wrapRef.current.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 8) return;
+      const dx = e.clientX - lastRef.current.x;
+      const dy = e.clientY - lastRef.current.y;
+      lastRef.current = { x: e.clientX, y: e.clientY };
+      const cur = focusRef.current;
+      // Arrastar para a direita → mostrar mais à esquerda da foto → diminuir x%
+      const nx = cur.x - (dx / rect.width) * 100;
+      const ny = cur.y - (dy / rect.height) * 100;
+      onFocusChangeRef.current(clampFocus({ x: nx, y: ny }));
+    }
+
+    function endDrag(e: PointerEvent) {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      const node = wrapRef.current;
+      if (!node) return;
+      try {
+        node.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", endDrag);
+    el.addEventListener("pointercancel", endDrag);
+    return () => {
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", endDrag);
+      el.removeEventListener("pointercancel", endDrag);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="absolute inset-0 cursor-grab active:cursor-grabbing touch-none"
+      style={{ touchAction: "none" }}
+      role="presentation"
+      aria-label="Arraste para centralizar o recorte da foto"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        draggable={false}
+        className="h-full w-full object-cover select-none pointer-events-none"
+        style={{
+          objectPosition: `${focus.x}% ${focus.y}%`,
+        }}
+      />
+    </div>
+  );
 }
 
 export function ProductPhotosPicker({
@@ -37,13 +147,31 @@ export function ProductPhotosPicker({
     file: File;
   } | null>(null);
 
+  const setFocusForId = useCallback(
+    (id: string, next: ImageFocusPoint) => {
+      const clamped = clampFocus(next);
+      onItemsChange(
+        itemsRef.current.map((it) =>
+          it.id === id ? { ...it, focus: clamped } : it
+        )
+      );
+    },
+    [onItemsChange]
+  );
+
   function appendLocalFile(file: File) {
     const prev = itemsRef.current;
     if (prev.length >= MAX_PHOTOS) return;
     const preview = URL.createObjectURL(file);
     onItemsChange([
       ...prev,
-      { id: newId(), kind: "local", file, preview },
+      {
+        id: newId(),
+        kind: "local",
+        file,
+        preview,
+        focus: DEFAULT_IMAGE_FOCUS,
+      },
     ]);
   }
 
@@ -77,7 +205,13 @@ export function ProductPhotosPicker({
       for (const file of take) {
         if (next.length >= MAX_PHOTOS) break;
         const preview = URL.createObjectURL(file);
-        next.push({ id: newId(), kind: "local", file, preview });
+        next.push({
+          id: newId(),
+          kind: "local",
+          file,
+          preview,
+          focus: DEFAULT_IMAGE_FOCUS,
+        });
       }
       onItemsChange(next);
       if (fileRef.current) fileRef.current.value = "";
@@ -123,9 +257,14 @@ export function ProductPhotosPicker({
         <label className="block text-sm font-semibold text-slate-800 mb-1">
           {label}
         </label>
-        <p className="text-xs text-slate-500 mb-3">
+        <p className="text-xs text-slate-500 mb-2">
           Até {MAX_PHOTOS} fotos · máx. 5MB cada. Toque no{" "}
           <strong className="text-landing-primary">+</strong> para enviar.
+        </p>
+        <p className="text-xs text-slate-500 mb-3">
+          <strong className="text-slate-600">Enquadramento:</strong> arraste a foto
+          dentro do quadrado (rato ou dedo) para ajustar o que aparece no catálogo
+          com recorte.
         </p>
 
         <label className="flex items-center gap-2 mb-3 text-xs text-slate-600 cursor-pointer select-none">
@@ -142,20 +281,21 @@ export function ProductPhotosPicker({
           {Array.from({ length: MAX_PHOTOS }).map((_, i) => {
             const item = items[i];
             if (item) {
+              const src = item.kind === "remote" ? item.url : item.preview;
               return (
                 <div
                   key={item.id}
                   className="relative aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={item.kind === "remote" ? item.url : item.preview}
-                    alt=""
-                    className="w-full h-full object-cover"
+                  <DraggablePhotoFraming
+                    src={src}
+                    focus={photoFocus(item)}
+                    onFocusChange={(f) => setFocusForId(item.id, f)}
                   />
                   <button
                     type="button"
                     onClick={() => remove(item.id)}
+                    onPointerDown={(e) => e.stopPropagation()}
                     className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/60 text-white text-sm font-bold leading-none hover:bg-black/80 shadow-md z-10"
                     aria-label="Remover foto"
                   >
@@ -219,6 +359,11 @@ export function ProductPhotosPicker({
         </span>
       </label>
 
+      <p className="text-xs text-slate-500 mb-2">
+        Arraste cada foto dentro do quadrado para ajustar o enquadramento no
+        catálogo.
+      </p>
+
       <label className="flex items-center gap-2 mb-3 text-sm text-slate-600 cursor-pointer select-none">
         <input
           type="checkbox"
@@ -230,27 +375,30 @@ export function ProductPhotosPicker({
       </label>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200 group"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={item.kind === "remote" ? item.url : item.preview}
-              alt=""
-              className="w-full h-full object-cover"
-            />
-            <button
-              type="button"
-              onClick={() => remove(item.id)}
-              className="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-500 text-white text-lg font-bold leading-none opacity-90 hover:opacity-100 shadow-md"
-              aria-label="Remover foto"
+        {items.map((item) => {
+          const src = item.kind === "remote" ? item.url : item.preview;
+          return (
+            <div
+              key={item.id}
+              className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200 group"
             >
-              ×
-            </button>
-          </div>
-        ))}
+              <DraggablePhotoFraming
+                src={src}
+                focus={photoFocus(item)}
+                onFocusChange={(f) => setFocusForId(item.id, f)}
+              />
+              <button
+                type="button"
+                onClick={() => remove(item.id)}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-500 text-white text-lg font-bold leading-none opacity-90 hover:opacity-100 shadow-md z-10"
+                aria-label="Remover foto"
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
 
         {items.length < MAX_PHOTOS && (
           <button

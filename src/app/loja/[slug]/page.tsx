@@ -11,6 +11,7 @@ import {
 } from "@/lib/dbColumnErrors";
 import { storefrontFromDb } from "@/lib/storefront";
 import { normalizeImageObjectPosition } from "@/lib/productImagePosition";
+import { parseImageObjectPositionsDb } from "@/lib/productImageFocus";
 import { LojaClient, type CatalogProduct } from "./LojaClient";
 
 type Props = { params: { slug: string } };
@@ -119,6 +120,14 @@ export default async function LojaPublicaPage({ params }: Props) {
       image: p.image,
       images: p.images,
     });
+    const legacyPos = normalizeImageObjectPosition(
+      (p as { image_object_position?: string | null }).image_object_position
+    );
+    const imageObjectPositions = parseImageObjectPositionsDb(
+      (p as { image_object_positions?: unknown }).image_object_positions,
+      images.length,
+      legacyPos
+    );
     return {
       id: p.id,
       name: p.name,
@@ -149,9 +158,8 @@ export default async function LojaPublicaPage({ params }: Props) {
         (p as { compare_at_price?: number | null }).compare_at_price != null
           ? Number((p as { compare_at_price: number }).compare_at_price)
           : null,
-      imageObjectPosition: normalizeImageObjectPosition(
-        (p as { image_object_position?: string | null }).image_object_position
-      ),
+      imageObjectPosition: legacyPos,
+      imageObjectPositions,
     };
   });
 

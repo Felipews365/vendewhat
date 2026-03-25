@@ -22,6 +22,7 @@ import {
   PRODUCT_REFERENCE_MIGRATION_HINT,
   PRODUCT_CATEGORY_MIGRATION_HINT,
   PRODUCT_IMAGE_POSITION_MIGRATION_HINT,
+  PRODUCT_IMAGE_POSITIONS_ARRAY_MIGRATION_HINT,
   COLOR_HEXES_MIGRATION_HINT,
   isMissingColumnError,
   isMissingOptionsOrVariantStockColumn,
@@ -45,6 +46,10 @@ import {
   IMAGE_OBJECT_POSITION_PRESETS,
   normalizeImageObjectPosition,
 } from "@/lib/productImagePosition";
+import {
+  focusFromImageObjectPreset,
+  serializeImageObjectPositions,
+} from "@/lib/productImageFocus";
 
 type ProductTab = "produto" | "variacoes" | "estoque";
 
@@ -285,6 +290,7 @@ export default function NovoProdutoPage() {
         image_object_position: normalizeImageObjectPosition(
           form.imageObjectPosition
         ),
+        image_object_positions: serializeImageObjectPositions(photos),
       };
 
       let insertError = (await supabase.from("products").insert(payload)).error;
@@ -393,6 +399,19 @@ export default function NovoProdutoPage() {
           .error;
       }
 
+      if (
+        insertError &&
+        isMissingColumnError(
+          insertError.message,
+          "image_object_positions",
+          insertError.code
+        )
+      ) {
+        const { image_object_positions: _iopa, ...withoutPosArr } = payload;
+        insertError = (await supabase.from("products").insert(withoutPosArr))
+          .error;
+      }
+
       if (insertError && !isRlsPolicyError(insertError.message, insertError.code)) {
         const minimal: Record<string, unknown> = {
           store_id: store.id,
@@ -449,6 +468,10 @@ export default function NovoProdutoPage() {
           setError(`${PRODUCT_CATEGORY_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
         } else if (isMissingColumnError(msg, "image_object_position", code)) {
           setError(`${PRODUCT_IMAGE_POSITION_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
+        } else if (isMissingColumnError(msg, "image_object_positions", code)) {
+          setError(
+            `${PRODUCT_IMAGE_POSITIONS_ARRAY_MIGRATION_HINT}\n\nDetalhe: ${msg}`
+          );
         } else {
           const hint = [insertError.hint, insertError.details]
             .filter(Boolean)
@@ -637,10 +660,15 @@ export default function NovoProdutoPage() {
                     id="vw-new-image-object-position"
                     value={form.imageObjectPosition}
                     onChange={(e) => {
-                      setForm((f) => ({
-                        ...f,
-                        imageObjectPosition: e.target.value,
-                      }));
+                      const v = e.target.value;
+                      setForm((f) => ({ ...f, imageObjectPosition: v }));
+                      setPhotos((prev) =>
+                        prev.map((it, i) =>
+                          i === 0
+                            ? { ...it, focus: focusFromImageObjectPreset(v) }
+                            : it
+                        )
+                      );
                       setError("");
                       setSaveOk(false);
                     }}
@@ -653,9 +681,9 @@ export default function NovoProdutoPage() {
                     ))}
                   </select>
                   <p className="text-[11px] text-slate-400 mt-1.5">
-                    Na grelha da loja a 1.ª foto aparece em quadrado com recorte; escolhe
-                    onde focar (centro, topo, etc.). Ao abrir o produto ou em Comprar, a
-                    foto mostra-se inteira, em proporção de fotógrafo.
+                    Pode arrastar a 1.ª foto na grelha acima ou usar este menu. Cada foto
+                    tem o seu enquadramento (guardado ao salvar). Na loja, o detalhe do
+                    produto continua a mostrar as imagens completas.
                   </p>
                 </div>
               </div>
