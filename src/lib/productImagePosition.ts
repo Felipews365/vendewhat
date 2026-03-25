@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 
 /**
- * Enquadramento da 1.ª foto no card / listagem (object-fit: cover).
- * No modal da loja as fotos usam object-contain (foto completa).
+ * Enquadramento da 1.ª foto no card da grelha: quadrado 1:1 com object-fit: cover.
+ * No modal da loja as fotos usam object-contain (foto completa, proporção original).
  */
 export const IMAGE_OBJECT_POSITION_PRESETS: { value: string; label: string }[] = [
   { value: "center", label: "Centro (padrão)" },

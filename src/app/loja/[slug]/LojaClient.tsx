@@ -414,6 +414,7 @@ function ProductCatalogCard({
 
   return (
     <div className="flex flex-col cursor-pointer" onClick={() => onOpen(product)}>
+      {/* 1:1 na grelha + object-cover; foco via imageObjectPosition no painel */}
       <div className="aspect-square relative overflow-hidden rounded-2xl shadow-sm bg-stone-200">
         {imgSrc ? (
           <Image
@@ -639,7 +640,7 @@ function ProductDetailModal({
 
         <div className="flex flex-col md:flex-row max-md:pt-0 max-md:pb-3 md:py-5">
           {/* Galeria: miniaturas à esquerda + foto grande */}
-          <div className="md:w-[55%] flex flex-col-reverse sm:flex-row bg-stone-50 md:pl-2 md:pr-1 max-md:pt-0">
+          <div className="w-full md:w-[55%] flex flex-col-reverse sm:flex-row bg-stone-50 md:pl-2 md:pr-1 max-md:pt-0">
             {imgs.length > 1 && (
               <div className="flex sm:flex-col gap-2 p-3 sm:w-[80px] sm:min-w-[80px] overflow-x-auto sm:overflow-y-auto sm:overflow-x-hidden sm:max-h-[min(28rem,70vh)] [scrollbar-width:thin] snap-x snap-mandatory sm:snap-none max-sm:pb-1">
                 {imgs.map((url, i) => (
@@ -650,21 +651,27 @@ function ProductDetailModal({
                       setImgIdx(i);
                       scrollCarouselToIndex(i, "smooth");
                     }}
-                    className={`relative shrink-0 w-16 h-16 sm:w-full sm:h-auto sm:aspect-square rounded-lg overflow-hidden ring-2 transition-all snap-start ${
+                    className={`relative shrink-0 w-14 aspect-[2/3] sm:w-full sm:max-w-[80px] sm:mx-auto rounded-lg overflow-hidden ring-2 transition-all snap-start ${
                       i === safeImgIdx
                         ? "ring-stone-800 opacity-100 shadow-md"
                         : "ring-transparent opacity-60 hover:opacity-100 hover:ring-stone-300"
                     }`}
                   >
-                    <Image src={url} alt="" fill className="object-cover" sizes="80px" />
+                    <Image
+                      src={url}
+                      alt=""
+                      fill
+                      className="object-contain bg-stone-200"
+                      sizes="80px"
+                    />
                   </button>
                 ))}
               </div>
             )}
             {/* Galeria principal: deslize horizontal (snap) no mobile; toque sem arrastar abre zoom */}
             <div
-              className={`relative flex-1 w-full min-w-0 aspect-[1/1] bg-stone-200 shadow-sm max-md:rounded-t-2xl sm:rounded-2xl touch-pan-x ${
-                imgs.length > 1 ? "max-md:rounded-b-none" : "max-md:rounded-b-2xl"
+              className={`relative w-full min-w-0 mx-0 shrink-0 max-sm:flex-none sm:flex-1 sm:min-h-0 aspect-auto min-h-[min(52vw,220px)] h-[min(88vh,36rem)] md:h-[min(72vh,34rem)] bg-stone-200 shadow-sm touch-pan-x max-sm:rounded-t-2xl sm:rounded-2xl ${
+                imgs.length > 1 ? "max-sm:rounded-b-none" : "max-sm:rounded-b-2xl"
               }`}
             >
               {imgs.length > 1 ? (
@@ -684,7 +691,7 @@ function ProductDetailModal({
                         fill
                         className="object-contain object-center select-none pointer-events-none bg-stone-200"
                         draggable={false}
-                        sizes="(max-width: 768px) 100vw, 50vw"
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 55vw, 480px"
                         priority={i === 0}
                       />
                       <div
@@ -726,7 +733,7 @@ function ProductDetailModal({
                     fill
                     className="object-contain object-center select-none pointer-events-none bg-stone-200"
                     draggable={false}
-                    sizes="(max-width: 768px) 100vw, 50vw"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 55vw, 480px"
                     priority
                   />
                   <div
@@ -1061,11 +1068,11 @@ function StorefrontCategoriesStrip({
   selectedLabel: string | null;
   onSelectCategory: (label: string | null) => void;
 }) {
-  /** Anel no thumbnail (arredondado). origin-top: ring/scale não sobem por cima do texto. */
+  /** Bolinha circular. origin-top: ring/scale não sobem por cima do texto. */
   const ringActive =
     "ring-2 ring-offset-2 ring-stone-600/90 ring-offset-white scale-[1.02] origin-top";
   const thumbFrame =
-    "relative w-[4.25rem] h-[4.25rem] sm:w-[4.75rem] sm:h-[4.75rem] shrink-0 rounded-2xl";
+    "relative w-[4.25rem] h-[4.25rem] sm:w-[4.75rem] sm:h-[4.75rem] shrink-0 rounded-full";
   const stripBtnClass =
     "flex flex-col items-center shrink-0 w-[4.75rem] sm:w-[5.25rem] snap-start group cursor-pointer border-0 bg-transparent p-0 shadow-none outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-300/80 focus-visible:rounded-2xl";
 
@@ -1102,7 +1109,7 @@ function StorefrontCategoriesStrip({
               }`}
             >
               <div
-                className="absolute inset-0 origin-top rounded-2xl bg-stone-100 border border-dashed border-stone-300/90 flex flex-col items-center justify-center gap-0.5 transition-transform group-hover:scale-[1.03]"
+                className="absolute inset-0 origin-top rounded-full bg-stone-100 border border-dashed border-stone-300/90 flex flex-col items-center justify-center gap-0.5 transition-transform group-hover:scale-[1.03]"
                 aria-hidden
               >
                 <span className="text-[1.65rem] sm:text-[1.85rem] leading-none select-none">
@@ -1135,7 +1142,7 @@ function StorefrontCategoriesStrip({
                 className={`${stripBtnClass} text-left`}
               >
                 <div className={`${thumbFrame} ${active ? ringActive : ""}`}>
-                  <div className="absolute inset-0 origin-top rounded-2xl bg-stone-100 overflow-hidden ring-1 ring-stone-200/80 shadow-sm transition-transform group-hover:scale-[1.03] flex items-center justify-center">
+                  <div className="absolute inset-0 origin-top rounded-full bg-stone-100 overflow-hidden ring-1 ring-stone-200/80 shadow-sm transition-transform group-hover:scale-[1.03] flex items-center justify-center">
                     {cat.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img

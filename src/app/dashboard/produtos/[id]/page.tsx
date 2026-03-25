@@ -726,7 +726,7 @@ export default function EditarProdutoPage() {
                     htmlFor="vw-image-object-position"
                     className="block text-sm font-medium text-slate-700 mb-1.5"
                   >
-                    Enquadramento na loja (1.ª foto)
+                    Recorte no quadrado da loja (1.ª foto, 1:1)
                   </label>
                   <select
                     id="vw-image-object-position"
@@ -747,8 +747,9 @@ export default function EditarProdutoPage() {
                     ))}
                   </select>
                   <p className="text-[11px] text-slate-400 mt-1.5">
-                    Só o cartão na grelha da loja usa recorte; ao abrir o produto, todas
-                    as fotos aparecem inteiras.
+                    Na grelha da loja a 1.ª foto aparece em quadrado com recorte; escolhe
+                    onde focar (centro, topo, etc.). Ao abrir o produto ou em Comprar, a
+                    foto mostra-se inteira, em proporção de fotógrafo.
                   </p>
                 </div>
               </div>
