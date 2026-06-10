@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 
@@ -89,6 +90,10 @@ export async function PATCH(req: Request) {
       { status: 500 }
     );
   }
+
+  revalidatePath("/admin/planos");
+  revalidatePath("/dashboard/planos");
+  revalidatePath("/");
 
   return NextResponse.json({ ok: true, plan: data });
 }

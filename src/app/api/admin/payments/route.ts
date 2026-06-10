@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 
@@ -88,6 +89,9 @@ export async function POST(req: Request) {
       console.error("[api/admin/payments] extend subscription", subErr);
     }
   }
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/clientes/${storeId}`);
 
   return NextResponse.json({ ok: true, payment });
 }
