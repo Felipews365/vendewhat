@@ -1,6 +1,22 @@
 import Link from "next/link";
 import Header from "@/components/Header";
 import AnimateOnScroll from "@/components/AnimateOnScroll";
+import { loadPlans } from "@/lib/plans.server";
+import type { PlanDefinition } from "@/lib/plans";
+
+export const dynamic = "force-dynamic";
+
+/** Converte o plano do catálogo/banco para o formato exibido na landing. */
+function toLandingPlan(p: PlanDefinition) {
+  return {
+    name: p.title.replace(/^Plano\s+/i, ""),
+    price: String(Math.floor(p.monthly)),
+    period: "/mês",
+    desc: p.description,
+    features: p.features,
+    highlight: Boolean(p.highlight),
+  };
+}
 
 const steps = [
   { step: "1", title: "Monte sua loja", desc: "Cadastre seus produtos com fotos, descrições e variações.", icon: "🏪" },
@@ -63,55 +79,8 @@ const testimonials = [
   },
 ];
 
-const plans = [
-  {
-    name: "Essencial",
-    price: "69",
-    period: "/mês",
-    desc: "Para quem está começando a vender online",
-    features: [
-      "Catálogo ilimitado de produtos",
-      "Pedidos pelo WhatsApp",
-      "Controle de estoque",
-      "Link personalizado",
-      "Cálculo de frete",
-      "Suporte por e-mail",
-    ],
-    highlight: false,
-  },
-  {
-    name: "Profissional",
-    price: "99",
-    period: "/mês",
-    desc: "Para quem quer crescer com mais recursos",
-    features: [
-      "Tudo do Essencial",
-      "Cupons de desconto",
-      "Domínio personalizado",
-      "Recuperação de carrinho",
-      "Pagamento online integrado",
-      "Suporte prioritário",
-    ],
-    highlight: true,
-  },
-  {
-    name: "Empresarial",
-    price: "165",
-    period: "/mês",
-    desc: "Para operações que precisam de escala",
-    features: [
-      "Tudo do Profissional",
-      "API ilimitada",
-      "Múltiplos usuários",
-      "Integrações com ERP",
-      "Relatórios avançados",
-      "Suporte dedicado",
-    ],
-    highlight: false,
-  },
-];
-
-export default function Home() {
+export default async function Home() {
+  const plans = (await loadPlans()).map(toLandingPlan);
   return (
     <div className="min-h-screen relative">
       {/* Fundo colorido atrás do header (estilo “card” flutuante) — teal + coral */}

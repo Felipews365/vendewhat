@@ -36,13 +36,61 @@ Orientações para o Claude Code trabalhar neste repositório.
 ## Supabase
 
 - **Project URL:** `https://dbtoinsifpevufbtwyzu.supabase.co`
-- **Tabelas principais:** `stores`, `products`, `orders`
+- **Tabelas principais:** `stores`, `products`, `orders`, `store_whatsapp`, `whatsapp_messages`,
+  `plans`, `subscriptions`, `payments`
 - **Storage bucket:** `product-images`
 - **Variáveis de ambiente** (`.env` local / Vercel):
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (chave publishable/anon — pública)
-  - `SUPABASE_SERVICE_ROLE_KEY` (opcional, **nunca** expor no frontend)
+  - `SUPABASE_SERVICE_ROLE_KEY` (opcional para pedidos; **obrigatória** para o painel admin; **nunca** expor no frontend)
+  - `ADMIN_EMAILS` (e-mails autorizados em `/admin`, separados por vírgula)
 - O `.env` **não** sobe pro git (está no `.gitignore`).
+
+## Painel do Admin (dono do SaaS)
+
+Área em `/admin` para você (dono) gerenciar os lojistas-clientes: ver todos, seus planos,
+status e **vencimento**, mudar valores/planos e registrar pagamentos manuais. O gateway
+**Mercado Pago** está previsto para a fase 2 (cobrança automática); por enquanto o controle
+de pagamento/vencimento é **manual**.
+
+- **Migration:** rode [supabase-migration-admin.sql](supabase-migration-admin.sql)
+  (cria `plans`, `subscriptions`, `payments`; semeia os 3 planos atuais).
+- **Acesso:** login **próprio e separado** em `/admin/login` (não passa pelo painel da loja),
+  identificado por e-mail via `ADMIN_EMAILS`. As páginas do painel ficam no route group
+  `src/app/admin/(panel)/*` (layout protegido por `requireAdmin`); o middleware
+  ([src/middleware.ts](src/middleware.ts)) protege `/admin/*` (exceto `/admin/login`) e
+  redireciona não-admins para `/admin/login`.
+- **Libs:** [src/lib/admin.ts](src/lib/admin.ts) (`isAdminEmail`, `requireAdmin`),
+  [src/lib/adminData.ts](src/lib/adminData.ts) (leitura cross-tenant via service role),
+  [src/lib/plans.server.ts](src/lib/plans.server.ts) (`loadPlans` com fallback p/ `plans.ts`).
+- **Rotas:** login em `src/app/admin/login/`; painel em `src/app/admin/(panel)/*`; APIs em
+  `src/app/api/admin/{login,subscriptions,payments,plans}/route.ts` (cada uma valida admin
+  e escreve via service role).
+- **Planos editáveis:** os preços/recursos saíram do estático `plans.ts` para a tabela `plans`.
+  A landing (`/`) e `/dashboard/planos` leem do banco via `loadPlans()`; `plans.ts` vira fallback.
+
+## Atendimento por IA no WhatsApp (Evolution API)
+
+Cada loja conecta o próprio WhatsApp via **QR Code** em `/dashboard/whatsapp` (usando a
+**Evolution API**) e uma IA (**OpenAI gpt-4o-mini**) atende os clientes, tira dúvidas
+(catálogo + FAQ que o lojista configura) e envia o link da loja para a compra. Multi-tenant:
+uma instância Evolution e uma config de IA por loja.
+
+- **Migration:** rode [supabase-migration-whatsapp.sql](supabase-migration-whatsapp.sql)
+  (cria `store_whatsapp` e `whatsapp_messages`).
+- **Libs:** [src/lib/evolution.ts](src/lib/evolution.ts) (wrapper REST da Evolution),
+  [src/lib/whatsappConfig.ts](src/lib/whatsappConfig.ts) (config/histórico),
+  [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts) (OpenAI).
+- **Rotas:** `src/app/api/whatsapp/{connect,status,disconnect,config,webhook}/route.ts`.
+  O `webhook` é público e validado por um `token` por loja (query string).
+- **Variáveis de ambiente extras** (`.env` local / Vercel):
+  - `EVOLUTION_API_URL` — base da Evolution (ex.: `https://evo.seudominio.com`)
+  - `EVOLUTION_API_KEY` — apikey global da Evolution
+  - `OPENAI_API_KEY` — chave da OpenAI
+  - `OPENAI_MODEL` — opcional; default `gpt-4o-mini`
+  - `APP_BASE_URL` — URL pública do app (monta o link da loja e a URL do webhook;
+    o webhook roda no servidor, então não dá pra usar `window.location`). Em dev, use
+    um túnel (cloudflared/ngrok) pois a Evolution precisa alcançar o app.
 
 ### Keep-alive (evitar pausa do plano Free)
 
