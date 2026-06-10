@@ -87,12 +87,26 @@ export function NavIconConta(props: NavGlyphProps) {
   );
 }
 
+/** WhatsApp / IA — balão de conversa */
+export function NavIconWhatsapp(props: NavGlyphProps) {
+  return (
+    <Shell {...props}>
+      <path
+        d="M20.5 11.5a8 8 0 0 1-11.8 7L3.5 20l1.6-5A8 8 0 1 1 20.5 11.5z"
+        {...s}
+      />
+      <path d="M9 10c0 3 2 5 5 5" {...s} />
+    </Shell>
+  );
+}
+
 export const DASH_NAV_ICONS = {
   painel: NavIconPainel,
   loja: NavIconLoja,
   compartilhar: NavIconCompartilhar,
   pedidos: NavIconPedidos,
   conta: NavIconConta,
+  whatsapp: NavIconWhatsapp,
 } as const;
 
 export type DashNavIconKey = keyof typeof DASH_NAV_ICONS;

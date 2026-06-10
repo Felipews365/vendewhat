@@ -26,6 +26,12 @@ const DASH_NAV: readonly {
     icon: "compartilhar",
   },
   { href: "/dashboard/pedidos", short: "Pedidos", label: "Pedidos", icon: "pedidos" },
+  {
+    href: "/dashboard/whatsapp",
+    short: "WhatsApp",
+    label: "WhatsApp & IA",
+    icon: "whatsapp",
+  },
   { href: "/dashboard/conta", short: "Conta", label: "Conta", icon: "conta" },
 ];
 
