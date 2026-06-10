@@ -1,0 +1,32 @@
+name: Supabase Keep Alive
+
+# Mantém o projeto Supabase (plano Free) ativo, evitando a pausa
+# automática por inatividade. Faz um SELECT leve na tabela "stores".
+
+on:
+  schedule:
+    # Roda a cada 2 dias, às 12:00 UTC (09:00 no horário de Brasília).
+    - cron: "0 12 */2 * *"
+  workflow_dispatch: # permite rodar manualmente pelo botão "Run workflow"
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          echo "Pingando Supabase..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/stores?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          echo "Status HTTP: $HTTP_CODE"
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
+            echo "Supabase respondeu com sucesso. Projeto mantido ativo."
+          else
+            echo "Falha no ping (HTTP $HTTP_CODE)."
+            exit 1
+          fi
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
