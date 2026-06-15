@@ -18,9 +18,11 @@ import {
   type CatalogPreviewProduct,
 } from "@/components/dashboard/StoreVisualEditor";
 import { getProductImageUrls } from "@/lib/productImages";
+import { useToast } from "@/components/Toast";
 
 export default function ConfiguracoesLojaPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -270,6 +272,7 @@ export default function ConfiguracoesLojaPage() {
       setLogoRemoved(false);
       await loadCatalogPreview(storeId);
       setSuccess(true);
+      showToast(`Loja “${storeName}” salva!`);
       setTimeout(() => setSuccess(false), 4000);
     } catch {
       setError("Erro de conexão. Tente novamente.");

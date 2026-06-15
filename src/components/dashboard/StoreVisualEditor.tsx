@@ -1126,10 +1126,9 @@ export function StoreVisualEditor({
           Use o <strong>+</strong> ou &quot;Categoria 1…4&quot;. Na loja pública a
           faixa <strong>aparece abaixo do banner</strong> quando há{" "}
           <strong>produtos</strong> e você definiu pelo menos um nome aqui. Para{" "}
-          <strong>filtrar</strong> ao tocar, o texto da categoria no{" "}
-          <strong>cadastro do produto</strong> deve ser o mesmo que o nome aqui (
-          <code className="text-[10px]">supabase-migration-product-category.sql</code>{" "}
-          no Supabase se faltar a coluna). Máximo 8 itens.
+          <strong>filtrar</strong> ao tocar, a categoria escolhida no{" "}
+          <strong>cadastro do produto</strong> deve ter o mesmo nome que você
+          definiu aqui. Máximo 8 itens.
         </p>
         <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
           {sf.categories.map((cat, i) => (

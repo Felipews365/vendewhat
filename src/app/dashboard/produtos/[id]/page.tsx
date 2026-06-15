@@ -56,6 +56,7 @@ import {
   priceNumberNoSpinnerClass,
 } from "@/lib/priceInputBehavior";
 import { defaultPickerHex } from "@/lib/colorSwatch";
+import { useToast } from "@/components/Toast";
 import {
   IMAGE_OBJECT_POSITION_PRESETS,
   normalizeImageObjectPosition,
@@ -124,6 +125,7 @@ function SidebarRow({
 
 export default function EditarProdutoPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const params = useParams();
   const productId = params.id as string;
   const initialRemoteUrlsRef = useRef<string[]>([]);
@@ -657,6 +659,7 @@ export default function EditarProdutoPage() {
         return;
       }
 
+      showToast(`Produto “${form.name.trim()}” salvo!`);
       router.refresh();
       router.push("/dashboard/produtos");
     } catch {

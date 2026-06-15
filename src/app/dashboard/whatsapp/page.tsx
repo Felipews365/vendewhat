@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/Toast";
 
 // Constantes locais (client-safe) — não importar de whatsappConfig.ts, que usa `crypto`.
 type AiTone = "simpatico" | "formal" | "descontraido";
@@ -26,6 +27,7 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 
 export default function WhatsAppIaPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [storeId, setStoreId] = useState<string | null>(null);
 
@@ -174,6 +176,7 @@ export default function WhatsAppIaPage() {
         return;
       }
       setSavedOk(true);
+      showToast("Configurações do WhatsApp salvas!");
       setTimeout(() => setSavedOk(false), 2500);
     } catch {
       setError("Falha de rede ao salvar.");

@@ -49,6 +49,16 @@ Orientações para o Claude Code trabalhar neste repositório.
   painel, **sempre adicionar variantes `dark:`** (ex.: `bg-white dark:bg-slate-900`).
 - **Animações:** keyframes/utilitários (`vw-fade-in-up`, `vw-pop-in`, `vw-aurora`) em
   [src/app/globals.css](src/app/globals.css); respeitam `prefers-reduced-motion`.
+- **Avisos flutuantes (toast):** [src/components/Toast.tsx](src/components/Toast.tsx) expõe
+  `ToastProvider` (montado no [layout raiz](src/app/layout.tsx), cobre painel + admin + loja) e o
+  hook `useToast()` → `showToast(mensagem, "success" | "error")`. Ao criar uma nova tela que salva,
+  chame `showToast("... salvo!")` no sucesso para manter o feedback consistente (já usado em
+  categoria, configurações, produtos, WhatsApp e admin).
+- **Imagens prontas de categoria:** [src/lib/categoryPresets.ts](src/lib/categoryPresets.ts) tem
+  `CATEGORY_PRESETS` (emoji + cor) e `emojiCategoryImage()`, que gera um SVG embutido (data URI)
+  usado como `imageUrl` da categoria — sem hospedagem. A galeria fica no
+  [CategoryFormModal.tsx](src/components/CategoryFormModal.tsx) (variant `store`), ao lado do upload
+  e do campo de URL.
 - **Pendente:** os widgets internos compartilhados ainda estão só no tema claro — editor visual
   da loja ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), cuja
   pré-visualização da loja pública deve continuar clara de propósito), seletor de fotos,

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatBRL } from "@/lib/plans";
+import { useToast } from "@/components/Toast";
 import type { PaymentRow, PlanRow, SubscriptionRow } from "@/lib/adminData";
 
 const STATUS_OPTIONS = [
@@ -39,6 +40,7 @@ export default function ClientForm({
   payments: PaymentRow[];
 }) {
   const router = useRouter();
+  const { showToast } = useToast();
 
   const [planId, setPlanId] = useState(subscription?.plan_id ?? "");
   const [status, setStatus] = useState(subscription?.status ?? "trial");
@@ -100,6 +102,7 @@ export default function ClientForm({
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Erro ao salvar.");
       setSubMsg("Assinatura salva.");
+      showToast("Assinatura salva!");
       router.refresh();
     } catch (err) {
       setSubMsg(err instanceof Error ? err.message : "Erro ao salvar.");
@@ -128,6 +131,7 @@ export default function ClientForm({
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Erro ao registrar.");
       setPayMsg("Pagamento registrado e vencimento atualizado.");
+      showToast("Pagamento registrado!");
       setPayAmount("");
       setPayNotes("");
       if (payPeriodEnd) setExpiresAt(payPeriodEnd);

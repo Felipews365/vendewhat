@@ -48,6 +48,7 @@ import {
   priceMoneyInputHandlers,
   priceNumberNoSpinnerClass,
 } from "@/lib/priceInputBehavior";
+import { useToast } from "@/components/Toast";
 import {
   IMAGE_OBJECT_POSITION_PRESETS,
   normalizeImageObjectPosition,
@@ -122,6 +123,7 @@ function SidebarRow({
 
 export default function NovoProdutoPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [saveOk, setSaveOk] = useState(false);
@@ -523,6 +525,7 @@ export default function NovoProdutoPage() {
         return;
       }
 
+      showToast(`Produto “${form.name.trim()}” salvo!`);
       if (navigateToList) {
         router.push("/dashboard/produtos");
         router.refresh();

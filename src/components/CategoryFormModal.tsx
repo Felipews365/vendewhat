@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/Toast";
+import { CATEGORY_PRESETS, emojiCategoryImage } from "@/lib/categoryPresets";
 
 const pillInputClass =
   "w-full rounded-full border-0 bg-slate-100 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-landing-primary/35";
@@ -47,6 +49,7 @@ export function CategoryFormModal({
   onDelete,
 }: CategoryFormModalProps) {
   const titleId = useId();
+  const { showToast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingImageFileRef = useRef<File | null>(null);
   const [name, setName] = useState("");
@@ -164,14 +167,26 @@ export function CategoryFormModal({
     }
 
     onSave({ name: t, imageUrl: url, parentLabel });
+    showToast(`Categoria “${t}” salva!`);
     onClose();
   }
 
   const nameError = touchedSave && !name.trim();
-  const urlLooksLikeHttp = /^https?:\/\//i.test(imageUrl.trim());
+  const urlLooksLikeImage = /^(https?:\/\/|data:image\/)/i.test(imageUrl.trim());
   const circleImg =
     blobPreview ||
-    (variant === "store" && urlLooksLikeHttp ? imageUrl.trim() : null);
+    (variant === "store" && urlLooksLikeImage ? imageUrl.trim() : null);
+
+  function handlePresetPick(presetLabel: string, dataUri: string) {
+    pendingImageFileRef.current = null;
+    setBlobPreview((old) => {
+      if (old?.startsWith("blob:")) URL.revokeObjectURL(old);
+      return null;
+    });
+    setImageUrl(dataUri);
+    setFormError("");
+    if (!name.trim()) setName(presetLabel);
+  }
 
   return (
     <div
@@ -239,10 +254,14 @@ export function CategoryFormModal({
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="shrink-0 h-[52px] w-[52px] rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-200/80 transition-colors overflow-hidden"
+                className={`shrink-0 h-[52px] w-[52px] rounded-full flex flex-col items-center justify-center transition-colors overflow-hidden ${
+                  circleImg
+                    ? "border border-slate-200 bg-slate-100"
+                    : "border-2 border-dashed border-landing-primary/40 bg-violet-50 text-landing-primary hover:bg-violet-100"
+                }`}
                 title={
                   variant === "store"
-                    ? "Escolher imagem — será enviada ao guardar (ou cole a URL abaixo)"
+                    ? "Adicionar foto — será enviada ao salvar (ou cole a URL abaixo)"
                     : "Imagem (opcional, não salva no produto)"
                 }
               >
@@ -254,9 +273,14 @@ export function CategoryFormModal({
                     className="h-full w-full object-cover object-center"
                   />
                 ) : (
-                  <span className="text-xl opacity-60" aria-hidden>
-                    🖼
-                  </span>
+                  <>
+                    <span className="text-lg leading-none" aria-hidden>
+                      📷
+                    </span>
+                    <span className="text-[9px] font-semibold leading-tight mt-0.5">
+                      Foto
+                    </span>
+                  </>
                 )}
               </button>
             </div>
@@ -268,12 +292,45 @@ export function CategoryFormModal({
           {variant === "store" && (
             <div>
               <label className="block text-sm text-slate-500 mb-2 font-medium">
-                URL da imagem da categoria{" "}
+                Imagens prontas{" "}
+                <span className="text-slate-400 font-normal">
+                  (toque para usar)
+                </span>
+              </label>
+              <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
+                {CATEGORY_PRESETS.map((p) => {
+                  const uri = emojiCategoryImage(p.emoji, p.bg);
+                  const selected = imageUrl.trim() === uri;
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => handlePresetPick(p.label, uri)}
+                      title={p.label}
+                      className={`aspect-square rounded-full flex items-center justify-center text-xl transition-transform hover:scale-105 ${
+                        selected
+                          ? "ring-2 ring-landing-primary ring-offset-2"
+                          : "ring-1 ring-slate-200"
+                      }`}
+                      style={{ backgroundColor: p.bg }}
+                    >
+                      <span aria-hidden>{p.emoji}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {variant === "store" && (
+            <div>
+              <label className="block text-sm text-slate-500 mb-2 font-medium">
+                Ou cole o link de uma imagem{" "}
                 <span className="text-slate-400 font-normal">(opcional)</span>
               </label>
               <input
                 type="url"
-                value={imageUrl}
+                value={imageUrl.startsWith("data:") ? "" : imageUrl}
                 onChange={(e) => {
                   setImageUrl(e.target.value);
                   pendingImageFileRef.current = null;
@@ -282,7 +339,7 @@ export function CategoryFormModal({
                     return null;
                   });
                 }}
-                placeholder="https://… (ex.: link do Supabase Storage)"
+                placeholder="https://… (cole o link de uma imagem)"
                 className={pillInputClass}
               />
             </div>
@@ -291,12 +348,12 @@ export function CategoryFormModal({
           {variant === "store" && (
             <div>
               <label className="block text-sm text-slate-500 mb-1 font-medium">
-                Categoria pai
+                Agrupar dentro de outra categoria
               </label>
               <p className="text-[11px] text-slate-400 mb-2 leading-snug">
-                Opcional: escolha uma <strong>categoria que já existe</strong>{" "}
-                nesta loja (as outras entradas da lista). Serve para organizar;
-                na vitrine pública a faixa continua a listar por nome.
+                Opcional: coloque esta categoria <strong>dentro de outra</strong>{" "}
+                que você já criou (ex.: “Camisetas” dentro de “Roupas”). Serve só
+                para organizar; deixe em “Nenhuma” se não quiser agrupar.
               </p>
               <div className="relative">
                 <select
@@ -304,7 +361,7 @@ export function CategoryFormModal({
                   onChange={(e) => setParentKey(e.target.value)}
                   className={`${pillInputClass} appearance-none cursor-pointer pr-10 w-full text-slate-600`}
                 >
-                  <option value="">Nenhuma (categoria raiz)</option>
+                  <option value="">Nenhuma (categoria principal)</option>
                   {parentCategoryOptions.map((opt) => (
                     <option key={opt} value={opt}>
                       {opt}

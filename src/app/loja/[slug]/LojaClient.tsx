@@ -1556,6 +1556,15 @@ export function LojaClient({
     }
   }
 
+  function goToStoreHome() {
+    setSelectedProduct(null);
+    setCategoryFilter(null);
+    setSearch("");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
   const themeStyle = {
     "--store-primary": storefront.themePrimary,
     "--store-secondary": storefront.themeSecondary,
@@ -1577,7 +1586,12 @@ export function LojaClient({
             <div className="flex flex-col gap-3 min-w-0 lg:flex-row lg:items-center lg:gap-6">
               <div className="flex min-w-0 flex-1 flex-col gap-2 lg:max-w-sm xl:max-w-xs shrink-0">
                 <div className="flex items-center justify-between gap-2 min-w-0">
-                  <div className="flex items-center gap-3 min-w-0">
+                  <button
+                    type="button"
+                    onClick={goToStoreHome}
+                    className="flex items-center gap-3 min-w-0 text-left rounded-lg -m-1 p-1 hover:bg-stone-500/5 transition-colors"
+                    aria-label="Ir para a página inicial da loja"
+                  >
                     {store.logo ? (
                       <div className="relative w-11 h-11 md:w-12 md:h-12 rounded-lg overflow-hidden bg-stone-100 flex-shrink-0 ring-1 ring-stone-200/80">
                         <Image
@@ -1607,7 +1621,7 @@ export function LojaClient({
                         Loja online
                       </p>
                     </div>
-                  </div>
+                  </button>
                   {/* Mobile/tablet: ♡ · carrinho · Instagram · WhatsApp — uma linha, sem quebra */}
                   <nav
                     className="flex lg:hidden items-center justify-end gap-0 flex-nowrap shrink-0"

@@ -3,8 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { PlanRow } from "@/lib/adminData";
+import { useToast } from "@/components/Toast";
 
 function PlanCard({ plan, onSaved }: { plan: PlanRow; onSaved: () => void }) {
+  const { showToast } = useToast();
   const [title, setTitle] = useState(plan.title);
   const [description, setDescription] = useState(plan.description ?? "");
   const [monthly, setMonthly] = useState(String(Number(plan.monthly)));
@@ -36,6 +38,7 @@ function PlanCard({ plan, onSaved }: { plan: PlanRow; onSaved: () => void }) {
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Erro ao salvar.");
       setMsg("Plano salvo.");
+      showToast(`Plano “${title}” salvo!`);
       onSaved();
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "Erro ao salvar.");
