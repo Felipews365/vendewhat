@@ -24,6 +24,13 @@ import {
   type ShippingModeId,
 } from "@/lib/shippingModes";
 import { coverImageStyleAt, type ImageFocusPoint } from "@/lib/productImageFocus";
+import {
+  type ProductSale,
+  quantityStep,
+  quantityMin,
+  snapQuantity,
+  quantityLabel,
+} from "@/lib/saleMode";
 
 export type CatalogProduct = {
   id: string;
@@ -50,6 +57,8 @@ export type CatalogProduct = {
   imageObjectPosition: string;
   /** Foco por índice de `images` (arraste no painel); mesmo comprimento que `images`. */
   imageObjectPositions: ImageFocusPoint[];
+  /** Modo de venda (avulso / fardo / mínimo) e exibição de preço. */
+  sale: ProductSale;
 };
 
 function formatPrice(value: number): string {
@@ -453,7 +462,9 @@ function ProductCatalogCard({
           </p>
         )}
         <p className="font-bold text-stone-900 text-lg md:text-xl leading-tight mt-1">
-          R${formatPrice(product.price)}
+          {product.sale.saleMode === "pack" && product.sale.priceDisplay === "pack"
+            ? `R$${formatPrice(product.price * product.sale.packSize)}`
+            : `R$${formatPrice(product.price)}`}
         </p>
         {product.isPromotion &&
           product.compareAtPrice != null &&
@@ -462,6 +473,18 @@ function ProductCatalogCard({
               R${formatPrice(product.compareAtPrice)}
             </p>
           )}
+        {product.sale.saleMode === "pack" && (
+          <p className="text-[11px] text-stone-500 mt-0.5">
+            {product.sale.priceDisplay === "pack"
+              ? `o fardo (${product.sale.packSize} un.)`
+              : `fardo de ${product.sale.packSize} un.`}
+          </p>
+        )}
+        {product.sale.saleMode === "min" && (
+          <p className="text-[11px] text-stone-500 mt-0.5">
+            mínimo {product.sale.minQuantity} un.
+          </p>
+        )}
         <button
           type="button"
           onClick={(e) => {
@@ -556,7 +579,11 @@ function ProductDetailModal({
   const inCart = cart[lineKey] ?? 0;
   const lineMax = maxQtyForCartLine(product, colorForCart, sizeForCart, cart, lineKey);
   const soldOut = productSoldOut(product);
-  const canAdd = !soldOut && lineMax > 0;
+  const saleStep = quantityStep(product.sale);
+  const saleMin = quantityMin(product.sale);
+  /** Maior quantidade válida (múltiplo do passo) que ainda cabe no estoque. */
+  const lineMaxStepped = Math.floor(lineMax / saleStep) * saleStep;
+  const canAdd = !soldOut && lineMaxStepped >= saleMin;
   const hasVariantOptions = product.colors.length > 0 || product.sizes.length > 0;
 
   useEffect(() => {
@@ -565,18 +592,18 @@ function ProductDetailModal({
   }, []);
 
   useEffect(() => {
-    setQtyDraft(1);
-  }, [product.id, colorForCart, sizeForCart]);
+    setQtyDraft(saleMin);
+  }, [product.id, colorForCart, sizeForCart, saleMin]);
 
   useEffect(() => {
-    if (lineMax > 0) {
-      setQtyDraft((q) => Math.min(Math.max(1, q), lineMax));
+    if (lineMaxStepped >= saleMin) {
+      setQtyDraft((q) => Math.min(Math.max(saleMin, q), lineMaxStepped));
     }
-  }, [lineMax]);
+  }, [lineMaxStepped, saleMin]);
 
   useEffect(() => {
-    if (inCart === 0) setQtyDraft(1);
-  }, [inCart]);
+    if (inCart === 0) setQtyDraft(saleMin);
+  }, [inCart, saleMin]);
 
   useEffect(() => {
     if (lightboxIndex === null) return;
@@ -804,7 +831,7 @@ function ProductDetailModal({
               </p>
             )}
 
-            <div className="mt-4 flex items-baseline gap-3">
+            <div className="mt-4 flex items-baseline gap-3 flex-wrap">
               {product.isPromotion &&
                 product.compareAtPrice != null &&
                 product.compareAtPrice > product.price && (
@@ -812,9 +839,30 @@ function ProductDetailModal({
                     R$ {formatPrice(product.compareAtPrice)}
                   </span>
                 )}
-              <span className="text-2xl font-bold text-stone-900">
-                R$ {formatPrice(product.price)}
-              </span>
+              {product.sale.saleMode === "pack" &&
+              product.sale.priceDisplay === "pack" ? (
+                <>
+                  <span className="text-2xl font-bold text-stone-900">
+                    R$ {formatPrice(product.price * product.sale.packSize)}
+                  </span>
+                  <span className="text-sm text-stone-500">
+                    o fardo ({product.sale.packSize}× R$ {formatPrice(product.price)})
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-2xl font-bold text-stone-900">
+                    R$ {formatPrice(product.price)}
+                    <span className="text-sm font-normal text-stone-500"> /un.</span>
+                  </span>
+                  {product.sale.saleMode === "pack" && (
+                    <span className="text-sm text-stone-500">
+                      fardo de {product.sale.packSize} = R${" "}
+                      {formatPrice(product.price * product.sale.packSize)}
+                    </span>
+                  )}
+                </>
+              )}
             </div>
 
             {product.description && (
@@ -911,32 +959,46 @@ function ProductDetailModal({
                 <>
                   <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">
                     Quantidade
+                    {product.sale.saleMode === "pack" && (
+                      <span className="ml-1 normal-case font-normal text-stone-400">
+                        — vendido em fardo de {product.sale.packSize}
+                      </span>
+                    )}
+                    {product.sale.saleMode === "min" && (
+                      <span className="ml-1 normal-case font-normal text-stone-400">
+                        — mínimo {product.sale.minQuantity} un.
+                      </span>
+                    )}
                   </p>
                   <div className="flex items-center justify-between gap-3 bg-stone-50 rounded-lg p-3">
                     <button
                       type="button"
                       onClick={() =>
                         inCart === 0
-                          ? setQtyDraft((q) => Math.max(1, q - 1))
-                          : onSetQty(lineKey, inCart - 1)
+                          ? setQtyDraft((q) => Math.max(saleMin, q - saleStep))
+                          : onSetQty(lineKey, inCart - saleStep)
                       }
-                      disabled={inCart === 0 ? qtyDraft <= 1 : false}
+                      disabled={inCart === 0 ? qtyDraft <= saleMin : false}
                       className="w-10 h-10 rounded-lg bg-stone-200 font-bold text-stone-700 hover:bg-stone-300 transition-colors disabled:opacity-40"
                     >
                       −
                     </button>
                     <span className="font-semibold text-stone-800">
-                      {inCart === 0 ? qtyDraft : inCart} un.
+                      {quantityLabel(product.sale, inCart === 0 ? qtyDraft : inCart)}
                     </span>
                     <button
                       type="button"
                       onClick={() =>
                         inCart === 0
-                          ? setQtyDraft((q) => Math.min(lineMax, q + 1))
-                          : onSetQty(lineKey, inCart + 1)
+                          ? setQtyDraft((q) =>
+                              Math.min(lineMaxStepped, q + saleStep)
+                            )
+                          : onSetQty(lineKey, inCart + saleStep)
                       }
                       disabled={
-                        inCart === 0 ? qtyDraft >= lineMax : inCart >= lineMax
+                        inCart === 0
+                          ? qtyDraft >= lineMaxStepped
+                          : inCart >= lineMaxStepped
                       }
                       className="w-10 h-10 rounded-lg bg-stone-200 font-bold text-stone-700 hover:bg-stone-300 transition-colors disabled:opacity-40"
                     >
@@ -947,7 +1009,7 @@ function ProductDetailModal({
                     <button
                       type="button"
                       onClick={() => onSetQty(lineKey, qtyDraft)}
-                      disabled={!canAdd || qtyDraft < 1}
+                      disabled={!canAdd || qtyDraft < saleMin}
                       className="w-full py-3.5 rounded-lg text-white font-semibold tracking-wide transition-opacity hover:opacity-90 disabled:opacity-40 shadow-sm"
                       style={{ backgroundColor: "var(--store-secondary)" }}
                     >
@@ -1377,7 +1439,8 @@ export function LojaClient({
         c,
         cartKey
       );
-      const nextQty = Math.min(qty, maxAllowed);
+      // Respeita fardo (múltiplos) e quantidade mínima; 0 = remover a linha.
+      const nextQty = snapQuantity(p.sale, qty, maxAllowed);
       if (nextQty <= 0) {
         const n = { ...c };
         delete n[cartKey];
@@ -1412,7 +1475,11 @@ export function LojaClient({
         const opt = bits.length ? ` (${bits.join(", ")})` : "";
         const ref = i.productReference?.trim();
         const namePart = ref ? `${i.name} (Ref. ${ref})` : i.name;
-        return `${i.quantity}x ${namePart}${opt} — R$ ${i.lineTotal.toFixed(2)} (un. R$ ${i.price.toFixed(2)})`;
+        const packPart =
+          i.sale.saleMode === "pack" && i.sale.packSize > 1
+            ? ` [${quantityLabel(i.sale, i.quantity)}]`
+            : "";
+        return `${i.quantity}x ${namePart}${opt}${packPart} — R$ ${i.lineTotal.toFixed(2)} (un. R$ ${i.price.toFixed(2)})`;
       }),
       "",
       `*Subtotal: R$ ${subtotal.toFixed(2)}*`
@@ -2111,12 +2178,21 @@ export function LojaClient({
                       )}
                       <p className="text-sm text-stone-500">
                         R$ {i.price.toFixed(2).replace(".", ",")} × {i.quantity}
+                        {i.sale.saleMode === "pack" && i.sale.packSize > 1
+                          ? ` (${quantityLabel(i.sale, i.quantity).replace(
+                              /^\d+ un\. /,
+                              ""
+                            )})`
+                          : ""}
                       </p>
                       <div className="flex items-center gap-2 mt-2">
                         <button
                           type="button"
                           onClick={() =>
-                            setQty(i.cartKey, i.quantity - 1)
+                            setQty(
+                              i.cartKey,
+                              i.quantity - quantityStep(i.sale)
+                            )
                           }
                           className="w-8 h-8 rounded-md bg-boutique-muted text-sm font-bold text-boutique-wine hover:bg-boutique-dark hover:text-white"
                         >
@@ -2128,10 +2204,13 @@ export function LojaClient({
                         <button
                           type="button"
                           onClick={() =>
-                            setQty(i.cartKey, i.quantity + 1)
+                            setQty(
+                              i.cartKey,
+                              i.quantity + quantityStep(i.sale)
+                            )
                           }
                           disabled={
-                            i.quantity >=
+                            i.quantity + quantityStep(i.sale) >
                             maxQtyForCartLine(
                               i,
                               i.color,

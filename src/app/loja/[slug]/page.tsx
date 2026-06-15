@@ -12,6 +12,7 @@ import {
 import { storefrontFromDb } from "@/lib/storefront";
 import { normalizeImageObjectPosition } from "@/lib/productImagePosition";
 import { parseImageObjectPositionsDb } from "@/lib/productImageFocus";
+import { productSaleFromDb } from "@/lib/saleMode";
 import { LojaClient, type CatalogProduct } from "./LojaClient";
 
 type Props = { params: { slug: string } };
@@ -160,6 +161,7 @@ export default async function LojaPublicaPage({ params }: Props) {
           : null,
       imageObjectPosition: legacyPos,
       imageObjectPositions,
+      sale: productSaleFromDb(p as Record<string, unknown>),
     };
   });
 

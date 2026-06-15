@@ -31,6 +31,12 @@ import {
 import { ProductChooseCategoryModal } from "@/components/ProductChooseCategoryModal";
 import { CategoryAutocompleteField } from "@/components/dashboard/CategoryAutocompleteField";
 import {
+  SaleModeFields,
+  saleModeToDbColumns,
+  INITIAL_SALE_MODE,
+  type SaleModeValue,
+} from "@/components/dashboard/SaleModeFields";
+import {
   type VariantStockRow,
   buildVariantCombinations,
   mergeVariantStockMap,
@@ -132,6 +138,9 @@ export default function NovoProdutoPage() {
     {}
   );
   const [form, setForm] = useState({ ...INITIAL_FORM });
+  const [saleMode, setSaleMode] = useState<SaleModeValue>({
+    ...INITIAL_SALE_MODE,
+  });
   const [isPromotion, setIsPromotion] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [storeId, setStoreId] = useState<string | null>(null);
@@ -178,6 +187,7 @@ export default function NovoProdutoPage() {
 
   function resetAll() {
     setForm({ ...INITIAL_FORM });
+    setSaleMode({ ...INITIAL_SALE_MODE });
     setPhotos([]);
     setColorEntries([]);
     setSizes([]);
@@ -291,6 +301,7 @@ export default function NovoProdutoPage() {
           form.imageObjectPosition
         ),
         image_object_positions: serializeImageObjectPositions(photos),
+        ...saleModeToDbColumns(saleMode),
       };
 
       let insertError = (await supabase.from("products").insert(payload)).error;
@@ -409,6 +420,32 @@ export default function NovoProdutoPage() {
       ) {
         const { image_object_positions: _iopa, ...withoutPosArr } = payload;
         insertError = (await supabase.from("products").insert(withoutPosArr))
+          .error;
+      }
+
+      if (
+        insertError &&
+        (isMissingColumnError(insertError.message, "sale_mode", insertError.code) ||
+          isMissingColumnError(insertError.message, "pack_size", insertError.code) ||
+          isMissingColumnError(
+            insertError.message,
+            "min_quantity",
+            insertError.code
+          ) ||
+          isMissingColumnError(
+            insertError.message,
+            "price_display",
+            insertError.code
+          ))
+      ) {
+        const {
+          sale_mode: _sm,
+          pack_size: _ps,
+          min_quantity: _mq,
+          price_display: _pd,
+          ...withoutSale
+        } = payload;
+        insertError = (await supabase.from("products").insert(withoutSale))
           .error;
       }
 
@@ -719,6 +756,15 @@ export default function NovoProdutoPage() {
                     O + abre o editor com foto e categoria pai.
                   </p>
                 </div>
+
+                <SaleModeFields
+                  value={saleMode}
+                  onChange={(patch) => {
+                    setSaleMode((s) => ({ ...s, ...patch }));
+                    setError("");
+                    setSaveOk(false);
+                  }}
+                />
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">

@@ -29,6 +29,13 @@ import {
 import { ProductChooseCategoryModal } from "@/components/ProductChooseCategoryModal";
 import { CategoryAutocompleteField } from "@/components/dashboard/CategoryAutocompleteField";
 import {
+  SaleModeFields,
+  saleModeToDbColumns,
+  INITIAL_SALE_MODE,
+  type SaleModeValue,
+} from "@/components/dashboard/SaleModeFields";
+import { productSaleFromDb } from "@/lib/saleMode";
+import {
   type VariantStockRow,
   buildVariantCombinations,
   mapFromVariantRows,
@@ -143,6 +150,9 @@ export default function EditarProdutoPage() {
     category: "",
     imageObjectPosition: "center",
   });
+  const [saleMode, setSaleMode] = useState<SaleModeValue>({
+    ...INITIAL_SALE_MODE,
+  });
   const [isPromotion, setIsPromotion] = useState(false);
   const [tab, setTab] = useState<ProductTab>("produto");
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
@@ -240,6 +250,13 @@ export default function EditarProdutoPage() {
           ),
         });
         setIsPromotion(Boolean(row.is_promotion));
+        const sale = productSaleFromDb(product as Record<string, unknown>);
+        setSaleMode({
+          saleMode: sale.saleMode,
+          packSize: sale.saleMode === "pack" ? String(sale.packSize) : "",
+          minQuantity: sale.saleMode === "min" ? String(sale.minQuantity) : "",
+          priceDisplay: sale.priceDisplay,
+        });
         const cols = optionArrayFromDb(product.colors);
         const szs = optionArrayFromDb(product.sizes);
         const hexes = colorHexesFromDb(row.color_hexes);
@@ -413,6 +430,7 @@ export default function EditarProdutoPage() {
           form.imageObjectPosition
         ),
         image_object_positions: serializeImageObjectPositions(photos),
+        ...saleModeToDbColumns(saleMode),
         updated_at: new Date().toISOString(),
       };
 
@@ -568,6 +586,33 @@ export default function EditarProdutoPage() {
             .from("products")
             .update(withoutPosArr)
             .eq("id", productId)
+        ).error;
+      }
+
+      if (
+        updateError &&
+        (isMissingColumnError(updateError.message, "sale_mode", updateError.code) ||
+          isMissingColumnError(updateError.message, "pack_size", updateError.code) ||
+          isMissingColumnError(
+            updateError.message,
+            "min_quantity",
+            updateError.code
+          ) ||
+          isMissingColumnError(
+            updateError.message,
+            "price_display",
+            updateError.code
+          ))
+      ) {
+        const {
+          sale_mode: _sm,
+          pack_size: _ps,
+          min_quantity: _mq,
+          price_display: _pd,
+          ...withoutSale
+        } = updatePayload;
+        updateError = (
+          await supabase.from("products").update(withoutSale).eq("id", productId)
         ).error;
       }
 
@@ -824,6 +869,14 @@ export default function EditarProdutoPage() {
                     O + abre o editor com foto e categoria pai.
                   </p>
                 </div>
+
+                <SaleModeFields
+                  value={saleMode}
+                  onChange={(patch) => {
+                    setSaleMode((s) => ({ ...s, ...patch }));
+                    setError("");
+                  }}
+                />
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
