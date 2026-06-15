@@ -76,31 +76,31 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8 pb-16">
-      <nav className="text-xs text-slate-500 mb-1" aria-label="Navegação secundária">
-        <Link href="/dashboard/conta" className="hover:text-landing-primary">
+      <nav className="text-xs text-slate-500 dark:text-slate-400 mb-1" aria-label="Navegação secundária">
+        <Link href="/dashboard/conta" className="hover:text-landing-primary dark:hover:text-violet-400">
           Conta
         </Link>
-        <span className="mx-1.5 text-slate-300">›</span>
-        <span className="text-slate-700 font-medium">Assinatura</span>
+        <span className="mx-1.5 text-slate-300 dark:text-slate-600">›</span>
+        <span className="text-slate-700 dark:text-slate-200 font-medium">Assinatura</span>
       </nav>
 
       <Link
         href="/dashboard/conta"
-        className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-landing-primary mb-6"
+        className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-landing-primary dark:hover:text-violet-400 mb-6"
       >
         <span aria-hidden>‹</span> Conta
       </Link>
 
-      <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+      <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
         Planos
       </h1>
-      <p className="mt-2 text-slate-600 text-sm max-w-2xl">
+      <p className="mt-2 text-slate-600 dark:text-slate-300 text-sm max-w-2xl">
         Escolha o plano ideal. Todos incluem período para testar — confira na página inicial.
       </p>
 
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <span
-          className={`text-sm font-semibold ${!annual ? "text-slate-900" : "text-slate-400"}`}
+          className={`text-sm font-semibold ${!annual ? "text-slate-900 dark:text-slate-100" : "text-slate-400 dark:text-slate-500"}`}
         >
           Mensal
         </span>
@@ -111,7 +111,7 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
           aria-label={annual ? "Cobrança anual" : "Cobrança mensal"}
           onClick={() => setAnnual((a) => !a)}
           className={`relative h-9 w-[52px] shrink-0 rounded-full transition-colors ${
-            annual ? "bg-cyan-500" : "bg-slate-200"
+            annual ? "bg-cyan-500" : "bg-slate-200 dark:bg-slate-700"
           }`}
         >
           <span
@@ -121,11 +121,11 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
           />
         </button>
         <span
-          className={`text-sm font-semibold ${annual ? "text-slate-900" : "text-slate-400"}`}
+          className={`text-sm font-semibold ${annual ? "text-slate-900 dark:text-slate-100" : "text-slate-400 dark:text-slate-500"}`}
         >
           Anual
         </span>
-        <span className="rounded-full bg-pink-100 px-2.5 py-0.5 text-xs font-bold text-pink-700">
+        <span className="rounded-full bg-pink-100 px-2.5 py-0.5 text-xs font-bold text-pink-700 dark:bg-pink-950/50 dark:text-pink-300">
           16% OFF
         </span>
       </div>
@@ -137,7 +137,7 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
           return (
             <div
               key={plan.id}
-              className={`relative flex flex-col rounded-2xl border bg-white p-6 shadow-md ${st.border}`}
+              className={`relative flex flex-col rounded-2xl border bg-white dark:bg-slate-900 p-6 shadow-md ${st.border}`}
             >
               {plan.highlight && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-cyan-500 px-4 py-1 text-xs font-bold uppercase tracking-wide text-white shadow">
@@ -150,23 +150,23 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
                 <PlanIcon kind={plan.icon} className="h-6 w-6" />
               </div>
               <h2 className={`text-xl font-bold ${st.title}`}>{plan.title}</h2>
-              <p className="mt-2 min-h-[4.5rem] text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 min-h-[4.5rem] text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                 {plan.description}
               </p>
               <div className="mt-4 mb-6">
-                <span className="text-3xl font-bold text-slate-900">
+                <span className="text-3xl font-bold text-slate-900 dark:text-slate-100">
                   R$ {formatBRL(price)}
                 </span>
-                <span className="text-slate-500 text-sm">/mês</span>
+                <span className="text-slate-500 dark:text-slate-400 text-sm">/mês</span>
                 {annual && (
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     equivalente no plano anual (16% off)
                   </p>
                 )}
               </div>
               <ul className="mb-8 flex-1 space-y-3">
                 {plan.features.map((f) => (
-                  <li key={f} className="flex gap-2 text-sm text-slate-700">
+                  <li key={f} className="flex gap-2 text-sm text-slate-700 dark:text-slate-300">
                     <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-cyan-500 text-white">
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -191,7 +191,7 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
         <button
           type="button"
           onClick={() => setCompareOpen((o) => !o)}
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-slate-800"
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 dark:bg-violet-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-slate-800 dark:hover:bg-violet-500"
         >
           Comparar planos
           <svg
@@ -208,13 +208,13 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
       </div>
 
       {compareOpen && (
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 shadow-sm">
           <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-4 py-3 text-left font-bold text-slate-800">Recurso</th>
+              <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
+                <th className="px-4 py-3 text-left font-bold text-slate-800 dark:text-slate-100">Recurso</th>
                 {plans.map((p) => (
-                  <th key={p.id} className="px-3 py-3 text-center font-bold text-slate-800">
+                  <th key={p.id} className="px-3 py-3 text-center font-bold text-slate-800 dark:text-slate-100">
                     {p.title.replace("Plano ", "")}
                   </th>
                 ))}
@@ -222,8 +222,8 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
             </thead>
             <tbody>
               {matrixRows.map((row) => (
-                <tr key={row} className="border-b border-slate-100">
-                  <td className="px-4 py-2.5 text-slate-700">{row}</td>
+                <tr key={row} className="border-b border-slate-100 dark:border-slate-800">
+                  <td className="px-4 py-2.5 text-slate-700 dark:text-slate-300">{row}</td>
                   {plans.map((p) => (
                     <td key={p.id} className="px-3 py-2.5 text-center">
                       {p.features.includes(row) ? (
@@ -231,7 +231,7 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
                           ✓
                         </span>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-slate-300 dark:text-slate-600">—</span>
                       )}
                     </td>
                   ))}

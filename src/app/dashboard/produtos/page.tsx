@@ -114,7 +114,7 @@ export default function ProdutosPage() {
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
         {loadError && (
-          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-950 rounded-lg text-sm whitespace-pre-wrap">
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-950 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-200 rounded-lg text-sm whitespace-pre-wrap">
             <p className="font-semibold">Não foi possível carregar a lista de produtos.</p>
             <p className="mt-1 opacity-90">{loadError}</p>
             <button
@@ -123,7 +123,7 @@ export default function ProdutosPage() {
                 setLoading(true);
                 loadProducts();
               }}
-              className="mt-3 text-sm font-medium text-amber-900 underline hover:no-underline"
+              className="mt-3 text-sm font-medium text-amber-900 dark:text-amber-300 underline hover:no-underline"
             >
               Tentar de novo
             </button>
@@ -131,8 +131,8 @@ export default function ProdutosPage() {
         )}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Produtos</h1>
-            <p className="text-slate-500 mt-1">
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Produtos</h1>
+            <p className="text-slate-500 dark:text-slate-400 mt-1">
               {products.length} {products.length === 1 ? "produto cadastrado" : "produtos cadastrados"}
             </p>
             <Link
@@ -151,12 +151,12 @@ export default function ProdutosPage() {
         </div>
 
         {products.length === 0 ? (
-          <div className="bg-white rounded-xl p-12 text-center shadow-sm">
+          <div className="bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-12 text-center shadow-sm">
             <span className="text-5xl block mb-4">📦</span>
-            <h2 className="text-xl font-semibold text-slate-800 mb-2">
+            <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2">
               Nenhum produto cadastrado
             </h2>
-            <p className="text-slate-500 mb-6">
+            <p className="text-slate-500 dark:text-slate-400 mb-6">
               Adicione seu primeiro produto para começar a vender
             </p>
             <Link
@@ -173,11 +173,11 @@ export default function ProdutosPage() {
               return (
               <div
                 key={product.id}
-                className={`bg-white rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md ${
+                className={`bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md ${
                   !product.active ? "opacity-60" : ""
                 }`}
               >
-                <div className="aspect-square bg-slate-100 relative">
+                <div className="aspect-square bg-slate-100 dark:bg-slate-800 relative">
                   {thumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -208,14 +208,14 @@ export default function ProdutosPage() {
                 </div>
 
                 <div className="p-4">
-                  <h3 className="font-semibold text-slate-800 truncate">
+                  <h3 className="font-semibold text-slate-800 dark:text-slate-100 truncate">
                     {product.name}
                   </h3>
                   <div className="mt-1 space-y-0.5">
                     {product.is_promotion &&
                       product.compare_at_price != null &&
                       product.compare_at_price > product.price && (
-                        <p className="text-sm text-slate-400 line-through">
+                        <p className="text-sm text-slate-400 dark:text-slate-500 line-through">
                           R$ {Number(product.compare_at_price).toFixed(2)}
                         </p>
                       )}
@@ -223,14 +223,14 @@ export default function ProdutosPage() {
                       R$ {product.price.toFixed(2)}
                     </p>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                     Estoque: {displayTotalStock(product)} unidades
                   </p>
 
                   <div className="flex items-center gap-2 mt-4">
                     <Link
                       href={`/dashboard/produtos/${product.id}`}
-                      className="flex-1 text-center text-sm bg-slate-100 text-slate-700 py-2 rounded-lg hover:bg-slate-200 transition-colors"
+                      className="flex-1 text-center text-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 py-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                     >
                       Editar
                     </Link>
@@ -238,15 +238,15 @@ export default function ProdutosPage() {
                       onClick={() => toggleActive(product)}
                       className={`text-sm px-3 py-2 rounded-lg transition-colors ${
                         product.active
-                          ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                          : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          ? "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/70"
+                          : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950/70"
                       }`}
                     >
                       {product.active ? "Desativar" : "Ativar"}
                     </button>
                     <button
                       onClick={() => deleteProduct(product.id)}
-                      className="text-sm px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                      className="text-sm px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-950/70 transition-colors"
                     >
                       Excluir
                     </button>

@@ -41,6 +41,15 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/**
+ * Telas "imersivas" de edição de produto (novo/[id]) têm a própria barra de
+ * ações fixa no rodapé — esconder a navegação inferior evita sobreposição no
+ * celular.
+ */
+function isImmersiveRoute(pathname: string) {
+  return pathname.startsWith("/dashboard/produtos/");
+}
+
 /** Navegação horizontal — desktop (pílulas no topo). */
 function TopNav({ pathname }: { pathname: string }) {
   return (
@@ -174,6 +183,8 @@ export function DashboardLayoutClient({
     );
   }
 
+  const immersive = isImmersiveRoute(pathname);
+
   return (
     <div className="relative min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Aurora animada de fundo */}
@@ -217,12 +228,15 @@ export function DashboardLayoutClient({
         </header>
 
         {/* pb extra no celular para não ficar atrás da barra inferior */}
-        <div key={pathname} className="vw-fade-in-up flex-1 pb-24 lg:pb-0">
+        <div
+          key={pathname}
+          className={`vw-fade-in-up flex-1 ${immersive ? "" : "pb-24 lg:pb-0"}`}
+        >
           {children}
         </div>
       </div>
 
-      <BottomNav pathname={pathname} />
+      {!immersive && <BottomNav pathname={pathname} />}
     </div>
   );
 }

@@ -37,15 +37,15 @@ function AccountRow({
   iconBg?: string;
 }) {
   const className =
-    "flex w-full items-center gap-4 rounded-2xl bg-slate-100 px-4 py-3.5 text-left transition hover:bg-slate-200/80 active:bg-slate-200/90";
+    "flex w-full items-center gap-4 rounded-2xl bg-slate-100 dark:bg-slate-800/70 px-4 py-3.5 text-left transition hover:bg-slate-200/80 dark:hover:bg-slate-800 active:bg-slate-200/90";
   const body = (
     <>
       <span
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 ring-slate-200/60 ${iconBg}`}
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 ring-slate-200/60 dark:ring-slate-700 dark:bg-slate-900 ${iconBg}`}
       >
         {icon}
       </span>
-      <span className="min-w-0 flex-1 font-semibold text-slate-800">{label}</span>
+      <span className="min-w-0 flex-1 font-semibold text-slate-800 dark:text-slate-100">{label}</span>
       <ChevronRight />
     </>
   );
@@ -78,7 +78,7 @@ function SectionTitle({
 }) {
   return (
     <h2
-      className={`text-lg font-bold text-slate-900 border-b border-slate-200 pb-2 mb-3 ${className}`}
+      className={`text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-800 pb-2 mb-3 ${className}`}
     >
       {children}
     </h2>
@@ -159,14 +159,14 @@ export default function ContaPage() {
 
   return (
     <main className="max-w-xl mx-auto px-4 py-8 pb-16">
-      <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+      <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
         Minha conta
       </h1>
 
       <SectionTitle className="mt-6">Perfil</SectionTitle>
-      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
         <div className="flex gap-4">
-          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-slate-200 ring-2 ring-slate-100">
+          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800 ring-2 ring-slate-100 dark:ring-slate-700">
             {store?.logo ? (
               <Image
                 src={store.logo}
@@ -176,17 +176,17 @@ export default function ContaPage() {
                 sizes="96px"
               />
             ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center px-2 text-center text-[10px] font-medium leading-tight text-slate-500">
+              <div className="flex h-full w-full flex-col items-center justify-center px-2 text-center text-[10px] font-medium leading-tight text-slate-500 dark:text-slate-400">
                 Adicione uma foto
               </div>
             )}
           </div>
           <div className="min-w-0 flex-1 pt-1">
-            <p className="text-lg font-bold text-slate-900 truncate">
+            <p className="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">
               {displayName}
             </p>
-            <p className="mt-1 text-sm text-slate-600 break-all">{email}</p>
-            <p className="mt-0.5 text-sm text-slate-600">{phoneDisplay}</p>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300 break-all">{email}</p>
+            <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{phoneDisplay}</p>
             <button
               type="button"
               onClick={() => setProfileOpen((o) => !o)}
@@ -197,22 +197,22 @@ export default function ContaPage() {
           </div>
         </div>
         {profileOpen && (
-          <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-sm text-slate-600">
+          <div className="mt-4 space-y-2 border-t border-slate-100 dark:border-slate-800 pt-4 text-sm text-slate-600 dark:text-slate-300">
             {store?.name && (
               <p>
-                <span className="font-medium text-slate-700">Loja:</span>{" "}
+                <span className="font-medium text-slate-700 dark:text-slate-200">Loja:</span>{" "}
                 {store.name}
               </p>
             )}
             {store?.slug && (
               <p>
-                <span className="font-medium text-slate-700">Slug:</span>{" "}
-                <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">
+                <span className="font-medium text-slate-700 dark:text-slate-200">Slug:</span>{" "}
+                <code className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs">
                   {store.slug}
                 </code>
               </p>
             )}
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               A foto da loja pode ser alterada em{" "}
               <Link
                 href="/dashboard/configuracoes"
@@ -227,9 +227,9 @@ export default function ContaPage() {
       </div>
 
       <SectionTitle>Assinatura</SectionTitle>
-      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
         <div className="flex items-start gap-3">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-landing-primary/10 text-landing-primary">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-landing-primary/10 dark:bg-landing-primary/20 text-landing-primary dark:text-teal-300">
             <svg
               className="h-6 w-6"
               fill="none"
@@ -246,8 +246,8 @@ export default function ContaPage() {
             </svg>
           </span>
           <div className="min-w-0 flex-1">
-            <p className="font-bold text-slate-900">VendeWhat</p>
-            <p className="mt-1 text-sm text-slate-600 leading-relaxed">
+            <p className="font-bold text-slate-900 dark:text-slate-100">VendeWhat</p>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
               Use o painel para montar o catálogo, receber pedidos e compartilhar a
               sua loja no WhatsApp.
             </p>

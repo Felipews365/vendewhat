@@ -135,32 +135,32 @@ export default function PedidosPage() {
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-slate-800">Pedidos</h1>
-      <p className="text-slate-600 mt-2 max-w-2xl">
+      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Pedidos</h1>
+      <p className="text-slate-600 dark:text-slate-300 mt-2 max-w-2xl">
         Pedidos feitos pelo catálogo quando o cliente usa{" "}
         <strong>Enviar pedido no WhatsApp</strong>. O resumo fica aqui; o
         contato continua pelo WhatsApp da loja.
       </p>
 
       {configHint && (
-        <div className="mt-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+        <div className="mt-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-200 text-sm">
           <p className="font-semibold">Pedidos: migração no Supabase</p>
           <p className="mt-1">{ORDERS_MIGRATION_HINT}</p>
         </div>
       )}
 
       {loadError && (
-        <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm">
+        <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-900 dark:text-red-300 text-sm">
           {loadError}
         </div>
       )}
 
       {orders.length === 0 && !configHint && !loadError ? (
-        <div className="mt-8 bg-white rounded-xl border border-slate-100 shadow-sm p-8 text-center">
+        <div className="mt-8 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm p-8 text-center">
           <span className="text-4xl" aria-hidden>
             🛒
           </span>
-          <p className="text-slate-600 mt-4 text-sm">
+          <p className="text-slate-600 dark:text-slate-300 mt-4 text-sm">
             Nenhum pedido registrado ainda. Quando um cliente finalizar no
             catálogo e enviar pelo WhatsApp, o pedido aparece aqui (com a API e o
             banco configurados).
@@ -168,7 +168,7 @@ export default function PedidosPage() {
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link
               href="/dashboard/produtos/novo"
-              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               Adicionar produto
             </Link>
@@ -197,52 +197,52 @@ export default function PedidosPage() {
             return (
               <li
                 key={o.id}
-                className="bg-white rounded-xl border border-slate-100 shadow-sm p-5"
+                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm p-5"
               >
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3 mb-3">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
                   <div>
-                    <p className="text-lg font-bold text-slate-800">
+                    <p className="text-lg font-bold text-slate-800 dark:text-slate-100">
                       {num != null ? (
                         <>Pedido nº {num}</>
                       ) : (
                         <>Pedido</>
                       )}
                     </p>
-                    <p className="text-sm text-slate-600 mt-1">
-                      <span className="font-medium text-slate-700">Cliente:</span>{" "}
+                    <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                      <span className="font-medium text-slate-700 dark:text-slate-200">Cliente:</span>{" "}
                       {client ?? "—"}
                     </p>
                     {phone ? (
-                      <p className="text-sm text-slate-600 mt-0.5">
-                        <span className="font-medium text-slate-700">Telefone:</span>{" "}
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">
+                        <span className="font-medium text-slate-700 dark:text-slate-200">Telefone:</span>{" "}
                         {phone}
                       </p>
                     ) : null}
                     {shipping ? (
-                      <p className="text-sm text-slate-600 mt-0.5">
-                        <span className="font-medium text-slate-700">
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">
+                        <span className="font-medium text-slate-700 dark:text-slate-200">
                           Forma de envio:
                         </span>{" "}
                         {shipping}
                       </p>
                     ) : null}
-                    <p className="text-sm text-slate-500 mt-2">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
                       {formatDate(o.created_at)}
                     </p>
-                    <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 font-mono">
                       id {o.id.slice(0, 8)}…
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold text-slate-800">
+                    <p className="text-lg font-bold text-slate-800 dark:text-slate-100">
                       {formatBRL(Number(o.subtotal))}
                     </p>
-                    <span className="inline-block mt-1 text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-teal-50 text-teal-800">
+                    <span className="inline-block mt-1 text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300">
                       {o.status}
                     </span>
                   </div>
                 </div>
-                <ul className="space-y-2 text-sm text-slate-700">
+                <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
                   {lines.map((line, i) => {
                     const bits: string[] = [];
                     if (line.color) bits.push(`Cor: ${line.color}`);
@@ -264,8 +264,8 @@ export default function PedidosPage() {
                   })}
                 </ul>
                 {o.notes?.trim() && (
-                  <p className="mt-3 text-sm text-slate-600 border-t border-slate-100 pt-3">
-                    <span className="font-medium text-slate-700">Obs:</span>{" "}
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-slate-800 pt-3">
+                    <span className="font-medium text-slate-700 dark:text-slate-200">Obs:</span>{" "}
                     {o.notes.trim()}
                   </p>
                 )}

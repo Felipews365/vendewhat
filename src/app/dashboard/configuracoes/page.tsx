@@ -298,16 +298,16 @@ export default function ConfiguracoesLojaPage() {
       />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-1">
-        <h1 className="text-2xl font-bold text-slate-800">Monte a sua loja</h1>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Monte a sua loja</h1>
         <button
           type="button"
           onClick={() => setShowSetupGuide(true)}
-          className="text-sm font-semibold text-landing-primary hover:text-landing-accent underline-offset-2 hover:underline shrink-0 w-fit"
+          className="text-sm font-semibold text-landing-primary hover:text-landing-accent dark:text-violet-400 dark:hover:text-violet-300 underline-offset-2 hover:underline shrink-0 w-fit"
         >
           Ver passo a passo
         </button>
       </div>
-      <p className="text-slate-600 text-sm mb-6 max-w-2xl leading-relaxed">
+      <p className="text-slate-600 dark:text-slate-300 text-sm mb-6 max-w-2xl leading-relaxed">
         Monte direto na vitrine: use os botões{" "}
         <strong className="text-landing-primary">+</strong>. A{" "}
         <strong>foto de capa é opcional</strong> — sem ela, a loja usa só as
@@ -316,13 +316,13 @@ export default function ConfiguracoesLojaPage() {
       </p>
 
       {storeSlug && (
-        <p className="text-xs text-slate-500 mb-4">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
           Loja pública:{" "}
           <Link
             href={`/loja/${storeSlug}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-landing-primary font-medium hover:underline"
+            className="text-landing-primary dark:text-violet-400 font-medium hover:underline"
           >
             /loja/{storeSlug}
           </Link>{" "}
@@ -331,12 +331,12 @@ export default function ConfiguracoesLojaPage() {
       )}
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-900 dark:text-red-300 rounded-lg text-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-sm">
+        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-300 rounded-lg text-sm">
           Loja salva com sucesso.
         </div>
       )}
@@ -377,7 +377,7 @@ export default function ConfiguracoesLojaPage() {
         <div className="flex gap-3 pt-2">
           <Link
             href="/dashboard"
-            className="flex-1 text-center py-3 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
+            className="flex-1 text-center py-3 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
           >
             Voltar
           </Link>

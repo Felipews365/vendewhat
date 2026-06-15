@@ -80,8 +80,8 @@ function TabButton({
       onClick={onClick}
       className={`pb-3 px-1 text-sm font-semibold border-b-2 transition-colors ${
         active
-          ? "border-landing-primary text-landing-primary"
-          : "border-transparent text-slate-500 hover:text-slate-700"
+          ? "border-landing-primary text-landing-primary dark:text-violet-400 dark:border-violet-400"
+          : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
       }`}
     >
       {children}
@@ -102,7 +102,7 @@ function SidebarRow({
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center justify-between gap-2 py-3 px-3 rounded-xl border border-slate-100 bg-slate-50/80 hover:bg-teal-50/50 hover:border-teal-100 text-left text-sm text-slate-700 transition-colors"
+      className="w-full flex items-center justify-between gap-2 py-3 px-3 rounded-xl border border-slate-100 bg-slate-50/80 hover:bg-teal-50/50 hover:border-teal-100 dark:border-slate-800 dark:bg-slate-800/50 dark:hover:bg-slate-800 dark:hover:border-slate-700 text-left text-sm text-slate-700 dark:text-slate-200 transition-colors"
     >
       <span className="flex items-center gap-2 min-w-0">
         <span className="text-lg shrink-0" aria-hidden>
@@ -622,33 +622,33 @@ export default function EditarProdutoPage() {
   }
 
   const inputClass =
-    "w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-landing-primary/30 focus:border-landing-primary";
+    "w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-landing-primary/30 focus:border-landing-primary dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500";
 
   if (pageLoading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center bg-[#f4f4f5]">
+      <div className="min-h-[50vh] flex items-center justify-center bg-[#f4f4f5] dark:bg-slate-950">
         <div className="animate-spin w-8 h-8 border-4 border-landing-primary border-t-transparent rounded-full" />
       </div>
     );
   }
 
   return (
-    <main className="min-h-full bg-[#f4f4f5] pb-32">
+    <main className="min-h-full bg-[#f4f4f5] dark:bg-slate-950 pb-32">
       <div className="max-w-7xl mx-auto px-4 py-6">
         <Link
           href="/dashboard/produtos"
-          className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-landing-primary transition-colors"
+          className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-landing-primary dark:hover:text-violet-400 transition-colors"
         >
           <span aria-hidden>‹</span> Voltar aos produtos
         </Link>
 
         <div className="flex flex-wrap items-center gap-3 mt-4">
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
             Editar produto
           </h1>
         </div>
 
-        <div className="flex gap-8 mt-4 border-b border-slate-200">
+        <div className="flex gap-8 mt-4 border-b border-slate-200 dark:border-slate-800">
           <TabButton active={tab === "produto"} onClick={() => setTab("produto")}>
             Produto
           </TabButton>
@@ -664,7 +664,7 @@ export default function EditarProdutoPage() {
         </div>
 
         {error && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm whitespace-pre-wrap break-words">
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-900 dark:text-red-300 rounded-xl text-sm whitespace-pre-wrap break-words">
             {error}
           </div>
         )}
@@ -672,9 +672,9 @@ export default function EditarProdutoPage() {
         <form onSubmit={handleSubmit} className="mt-6">
           {tab === "produto" && (
             <div className="grid lg:grid-cols-3 gap-8 lg:gap-0">
-              <div className="lg:pr-8 lg:border-r border-slate-200 space-y-5">
+              <div className="lg:pr-8 lg:border-r border-slate-200 dark:border-slate-800 space-y-5">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">
                     Nome do produto <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -689,7 +689,7 @@ export default function EditarProdutoPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">
                       Preço <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -715,7 +715,7 @@ export default function EditarProdutoPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">
                       Promoção
                     </label>
                     <div className="relative">
@@ -760,7 +760,7 @@ export default function EditarProdutoPage() {
                 <div>
                   <label
                     htmlFor="vw-image-object-position"
-                    className="block text-sm font-medium text-slate-700 mb-1.5"
+                    className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5"
                   >
                     Recorte no quadrado da loja (1.ª foto, 1:1)
                   </label>
@@ -795,15 +795,15 @@ export default function EditarProdutoPage() {
                 </div>
               </div>
 
-              <div className="lg:px-8 lg:border-r border-slate-200 space-y-5 pt-8 lg:pt-0">
-                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+              <div className="lg:px-8 lg:border-r border-slate-200 dark:border-slate-800 space-y-5 pt-8 lg:pt-0">
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
                   Informações opcionais
                 </h2>
 
                 <div>
                   <label
                     htmlFor="vw-product-category"
-                    className="block text-sm font-medium text-slate-700 mb-1.5"
+                    className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5"
                   >
                     Categorias
                   </label>
@@ -826,17 +826,17 @@ export default function EditarProdutoPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     Detalhes
                   </label>
-                  <div className="rounded-t-lg border border-b-0 border-slate-200 bg-slate-100 px-2 py-1.5 flex gap-1">
-                    <span className="text-xs px-2 py-1 rounded text-slate-500 bg-white border border-slate-200">
+                  <div className="rounded-t-lg border border-b-0 border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800 px-2 py-1.5 flex gap-1">
+                    <span className="text-xs px-2 py-1 rounded text-slate-500 bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400">
                       B
                     </span>
-                    <span className="text-xs px-2 py-1 rounded text-slate-500 bg-white border border-slate-200">
+                    <span className="text-xs px-2 py-1 rounded text-slate-500 bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400">
                       I
                     </span>
-                    <span className="text-xs px-2 py-1 rounded text-slate-500 bg-white border border-slate-200">
+                    <span className="text-xs px-2 py-1 rounded text-slate-500 bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400">
                       •
                     </span>
                   </div>
@@ -851,7 +851,7 @@ export default function EditarProdutoPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     Código / referência
                   </label>
                   <input
@@ -868,17 +868,17 @@ export default function EditarProdutoPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     Vídeo do produto
                   </label>
-                  <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 py-8 text-center text-slate-400 text-sm">
+                  <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">
                     <span className="text-2xl block mb-1">🎬</span>
                     Em breve
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     Tags para busca
                   </label>
                   <div className={`${inputClass} text-slate-400 cursor-not-allowed`}>
@@ -888,19 +888,19 @@ export default function EditarProdutoPage() {
               </div>
 
               <div className="lg:pl-8 space-y-5 pt-8 lg:pt-0">
-                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
                   Detalhes técnicos
                 </h2>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     Tipo de unidade
                   </label>
                   <div className={inputClass}>Unidade</div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     Dimensões da embalagem
                   </label>
                   <div className="grid grid-cols-2 gap-2">
@@ -941,11 +941,11 @@ export default function EditarProdutoPage() {
 
           {tab === "variacoes" && (
             <div className="max-w-2xl space-y-6">
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-slate-600 dark:text-slate-300">
                 Defina cores e tamanhos se o produto tiver variações. Na loja, o
                 cliente escolhe antes de comprar.
               </p>
-              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4 shadow-sm">
+              <section className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 space-y-4 shadow-sm">
                 <ProductColorsEditor
                   entries={colorEntries}
                   onEntriesChange={setColorEntries}
@@ -973,14 +973,14 @@ export default function EditarProdutoPage() {
           {tab === "estoque" && (
             <div className="max-w-lg space-y-4">
               {hasVariantOptions ? (
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-slate-600 dark:text-slate-300">
                   Com variações, as quantidades ficam na aba{" "}
                   <strong>Variações</strong> (grade por cor/tamanho). O total é a
                   soma automática.
                 </p>
               ) : (
                 <>
-                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1.5">
                     Quantidade em estoque
                   </label>
                   <input
@@ -997,11 +997,11 @@ export default function EditarProdutoPage() {
             </div>
           )}
 
-          <div className="fixed bottom-0 left-0 right-0 lg:right-[118px] z-40 bg-white/95 border-t border-slate-200 backdrop-blur-sm">
+          <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 border-t border-slate-200 dark:bg-slate-900/95 dark:border-slate-800 backdrop-blur-sm">
             <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col-reverse sm:flex-row gap-3 sm:justify-end sm:items-center">
               <Link
                 href="/dashboard/produtos"
-                className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-center hover:bg-slate-50 transition-colors"
+                className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-200 font-semibold text-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
                 Cancelar
               </Link>

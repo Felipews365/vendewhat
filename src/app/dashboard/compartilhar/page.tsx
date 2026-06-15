@@ -64,7 +64,7 @@ export default function DashboardCompartilharPage() {
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
       <h1 className="sr-only">Compartilhar sua loja</h1>
-      <div className="bg-white rounded-xl p-6 shadow-sm flex flex-col sm:flex-row gap-3 sm:items-center w-full max-w-md">
+      <div className="bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-6 shadow-sm flex flex-col sm:flex-row gap-3 sm:items-center w-full max-w-md">
         <button
           type="button"
           onClick={() =>
