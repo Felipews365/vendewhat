@@ -64,6 +64,24 @@ Orientações para o Claude Code trabalhar neste repositório.
   pré-visualização da loja pública deve continuar clara de propósito), seletor de fotos,
   editores de cor/tamanho/estoque, autocomplete de categoria e os modais.
 
+## Loja pública — carrinho e formas de envio
+
+O checkout fica no carrinho de [src/app/loja/[slug]/LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx).
+As **formas de envio** estão em [src/lib/shippingModes.ts](src/lib/shippingModes.ts)
+(`SHIPPING_MODES`: excursão, correios, retirada) e definem campos extras no carrinho:
+
+- **Excursão / Correios** → o cliente preenche o **endereço de entrega** (CEP, rua, número,
+  bairro, cidade, UF, complemento). Validação em `addressComplete`; o **CEP é obrigatório só no
+  Correios** (`cepRequired` + 8 dígitos). O endereço entra na mensagem do WhatsApp
+  (`*Endereço de entrega:*`) e no `payload.customerAddress` do pedido.
+- **Retirada** → mostra o **endereço da loja** (`storefront.pickupAddress`), configurado no editor
+  da vitrine ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), painel
+  "Rodapé da vitrine"). Se vazio, exibe aviso de combinar pelo WhatsApp.
+
+O endereço aparece no painel em [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx). Não há
+migration: `pickupAddress` mora no JSONB `stores.storefront` e o endereço do cliente no
+`orders.payload` (ver [src/app/api/orders/route.ts](src/app/api/orders/route.ts)).
+
 ## Supabase
 
 - **Project URL:** `https://dbtoinsifpevufbtwyzu.supabase.co`
