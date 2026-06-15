@@ -18,11 +18,11 @@ export const PLAN_CATALOG: PlanDefinition[] = [
   {
     id: "essencial",
     title: "Plano Essencial",
-    monthly: 69.9,
+    monthly: 89.9,
     description:
       "A opção perfeita para quem precisa criar um catálogo virtual simples e receber pedidos pelo WhatsApp.",
     features: [
-      "Recebimento de pedidos via WhatsApp",
+      "1 número de WhatsApp para atendimento",
       "Cadastro de produtos ilimitados",
       "Pedidos ilimitados sem taxas",
       "Controle de pedidos e clientes",
@@ -34,16 +34,18 @@ export const PLAN_CATALOG: PlanDefinition[] = [
   {
     id: "profissional",
     title: "Plano Profissional",
-    monthly: 99.9,
+    monthly: 299,
     description:
-      "A melhor escolha para quem precisa de um e-commerce profissional, com recursos extras para profissionalizar a operação.",
+      "A melhor escolha para quem quer uma IA atendendo no WhatsApp e receber pagamentos direto pela plataforma.",
     features: [
       "Todos os recursos do plano Essencial",
-      "Recebimento por cartão e link de cobrança",
+      "Atendimento por IA no WhatsApp 24h",
+      "Gateway de pagamento (cartão, PIX e link de cobrança)",
+      "1 número de WhatsApp para atendimento",
       "Conecte seu domínio (ex: sualoja.com.br)",
       "Cálculo do valor e prazo de entrega",
       "Criação de cupons de desconto",
-      "Vídeo no produto",
+      "Vídeo nos produtos (limitado)",
     ],
     accent: "cyan",
     highlight: true,
@@ -52,12 +54,14 @@ export const PLAN_CATALOG: PlanDefinition[] = [
   {
     id: "empresarial",
     title: "Plano Empresarial",
-    monthly: 165.9,
+    monthly: 599,
     description:
-      "Ideal para empresas que possuem grandes demandas e precisam de recursos avançados de gestão e vendas.",
+      "Ideal para empresas com grande demanda que precisam de CRM, IA e múltiplos atendentes no WhatsApp.",
     features: [
       "Todos os recursos do plano Profissional",
-      "Login para cliente acessar preços e pedidos",
+      "CRM de clientes completo",
+      "Até 3 números de WhatsApp para atendimento",
+      "Vídeos ilimitados nos produtos",
       "Recuperação de carrinhos abandonados",
       "API ilimitada e integração com ERP",
       "Cadastro de equipe e permissões",

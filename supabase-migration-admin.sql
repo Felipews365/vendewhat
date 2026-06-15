@@ -29,9 +29,9 @@ values
     'essencial',
     'Plano Essencial',
     'A opção perfeita para quem precisa criar um catálogo virtual simples e receber pedidos pelo WhatsApp.',
-    69.90,
+    89.90,
     array[
-      'Recebimento de pedidos via WhatsApp',
+      '1 número de WhatsApp para atendimento',
       'Cadastro de produtos ilimitados',
       'Pedidos ilimitados sem taxas',
       'Controle de pedidos e clientes',
@@ -42,26 +42,30 @@ values
   (
     'profissional',
     'Plano Profissional',
-    'A melhor escolha para quem precisa de um e-commerce profissional, com recursos extras para profissionalizar a operação.',
-    99.90,
+    'A melhor escolha para quem quer uma IA atendendo no WhatsApp e receber pagamentos direto pela plataforma.',
+    299.00,
     array[
       'Todos os recursos do plano Essencial',
-      'Recebimento por cartão e link de cobrança',
+      'Atendimento por IA no WhatsApp 24h',
+      'Gateway de pagamento (cartão, PIX e link de cobrança)',
+      '1 número de WhatsApp para atendimento',
       'Conecte seu domínio (ex: sualoja.com.br)',
       'Cálculo do valor e prazo de entrega',
       'Criação de cupons de desconto',
-      'Vídeo no produto'
+      'Vídeo nos produtos (limitado)'
     ],
     'cyan', 'star', true, 1
   ),
   (
     'empresarial',
     'Plano Empresarial',
-    'Ideal para empresas que possuem grandes demandas e precisam de recursos avançados de gestão e vendas.',
-    165.90,
+    'Ideal para empresas com grande demanda que precisam de CRM, IA e múltiplos atendentes no WhatsApp.',
+    599.00,
     array[
       'Todos os recursos do plano Profissional',
-      'Login para cliente acessar preços e pedidos',
+      'CRM de clientes completo',
+      'Até 3 números de WhatsApp para atendimento',
+      'Vídeos ilimitados nos produtos',
       'Recuperação de carrinhos abandonados',
       'API ilimitada e integração com ERP',
       'Cadastro de equipe e permissões'
