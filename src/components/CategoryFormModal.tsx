@@ -29,6 +29,8 @@ export type CategoryFormModalProps = {
   /** Título ao lado da seta (ex.: edição). */
   title?: string;
   onSave: (data: CategoryFormSaveData) => void;
+  /** Só ao editar uma categoria existente: mostra o botão "Excluir categoria". */
+  onDelete?: () => void;
 };
 
 export function CategoryFormModal({
@@ -42,6 +44,7 @@ export function CategoryFormModal({
   parentCategoryOptions = [],
   title = "Adicionar Categoria",
   onSave,
+  onDelete,
 }: CategoryFormModalProps) {
   const titleId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -379,6 +382,25 @@ export function CategoryFormModal({
             >
               Voltar
             </button>
+            {onDelete && (
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Excluir esta categoria? Os produtos não são apagados, só deixam de aparecer agrupados por ela."
+                    )
+                  ) {
+                    onDelete();
+                    onClose();
+                  }
+                }}
+                className="w-full rounded-full py-3.5 text-center text-sm font-bold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-60"
+              >
+                Excluir categoria
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -565,17 +565,14 @@ export function StoreVisualEditor({
                     title="Adicionar categoria"
                   >
                     <div className="relative w-[4rem] h-[4rem] sm:w-[4.5rem] sm:h-[4.5rem]">
-                      <div className="absolute inset-0 rounded-full bg-slate-200 overflow-hidden ring-2 ring-slate-100 shadow-sm transition-transform group-hover:scale-[1.03]" />
-                      <span
-                        className="absolute -top-0.5 -right-0.5 z-10 flex h-6 w-6 items-center justify-center rounded-full text-white text-base font-light leading-none shadow-md ring-2 ring-white"
-                        style={{ backgroundColor: sf.themePrimary }}
-                        aria-hidden
-                      >
-                        +
-                      </span>
+                      <div className="absolute inset-0 rounded-full border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center transition-colors group-hover:border-landing-primary/50 group-hover:bg-teal-50/40">
+                        <span className="text-slate-400 text-2xl font-light leading-none group-hover:text-landing-primary">
+                          +
+                        </span>
+                      </div>
                     </div>
                     <span className="mt-2 text-center text-[11px] text-slate-400 leading-tight max-w-[5rem]">
-                      Categoria {labeledStoreCategories.length + ei + 1}
+                      Adicionar
                     </span>
                   </button>
                 )
@@ -1443,6 +1440,26 @@ export function StoreVisualEditor({
             };
           });
         }}
+        onDelete={
+          storeCategoryModal.editIndex !== null
+            ? () => {
+                const editIdx = storeCategoryModal.editIndex;
+                setSf((s) => {
+                  if (
+                    editIdx === null ||
+                    editIdx < 0 ||
+                    editIdx >= s.categories.length
+                  ) {
+                    return s;
+                  }
+                  return {
+                    ...s,
+                    categories: s.categories.filter((_, j) => j !== editIdx),
+                  };
+                });
+              }
+            : undefined
+        }
       />
     </div>
   );
