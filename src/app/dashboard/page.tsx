@@ -21,11 +21,15 @@ interface UserData {
   store: Store | null;
 }
 
+type WaStatus = "disconnected" | "connecting" | "connected";
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [waStatus, setWaStatus] = useState<WaStatus>("disconnected");
+  const [waNumber, setWaNumber] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -53,6 +57,18 @@ export default function DashboardPage() {
         store,
       });
       setLoading(false);
+
+      // Status real da conexão Evolution (não confiar num valor fixo).
+      try {
+        const res = await fetch("/api/whatsapp/status", { cache: "no-store" });
+        const data = await res.json();
+        if (data?.ok) {
+          setWaStatus((data.status as WaStatus) ?? "disconnected");
+          setWaNumber(data.number ?? null);
+        }
+      } catch {
+        /* mantém desconectado se falhar */
+      }
     }
 
     loadUser();
@@ -114,18 +130,51 @@ export default function DashboardPage() {
 
       <div className="mb-8 max-w-xl">
         <div className="bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-6 shadow-sm">
-          <h2 className="font-semibold text-slate-800 dark:text-slate-100 mb-4">WhatsApp conectado</h2>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="font-semibold text-slate-800 dark:text-slate-100">WhatsApp & IA</h2>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                waStatus === "connected"
+                  ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300"
+                  : waStatus === "connecting"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              }`}
+            >
+              {waStatus === "connected"
+                ? "Conectado"
+                : waStatus === "connecting"
+                ? "Conectando…"
+                : "Desconectado"}
+            </span>
+          </div>
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-whatsapp/10 text-whatsapp text-lg">
               📱
             </span>
             <div>
-              <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
-                {user.store?.phone || "Não configurado"}
-              </p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
-                Os pedidos serão enviados para este número
-              </p>
+              {waStatus === "connected" ? (
+                <>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                    {waNumber || user.store?.phone || "Conectado"}
+                  </p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                    A IA pode atender seus clientes neste número
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                    WhatsApp ainda não conectado
+                  </p>
+                  <Link
+                    href="/dashboard/whatsapp"
+                    className="text-xs font-semibold text-landing-primary hover:text-landing-accent dark:text-violet-400 dark:hover:text-violet-300 underline-offset-2 hover:underline"
+                  >
+                    Conectar WhatsApp →
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
