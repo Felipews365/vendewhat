@@ -26,12 +26,33 @@ Orientações para o Claude Code trabalhar neste repositório.
 ## Estrutura
 
 - `src/app/` — rotas (App Router)
-  - `dashboard/` — painel do lojista (produtos, pedidos, conta, configurações, compartilhar)
+  - `dashboard/` — painel do lojista (produtos, pedidos, conta, configurações, compartilhar, WhatsApp & IA)
   - `loja/[slug]/` — página pública da loja
-  - `api/` — rotas de API (auth, orders)
+  - `admin/` — painel do dono do SaaS (route group `(panel)` + `login`)
+  - `api/` — rotas de API (auth, orders, whatsapp, admin)
 - `src/lib/supabase/` — clients do Supabase: `client.ts` (browser), `server.ts` (server), `admin.ts` (service role)
 - `src/components/` — componentes React
 - `*.sql` na raiz — migrations manuais do Supabase
+
+## UI do painel (layout, tema, animações)
+
+- **Layout do dashboard:** [src/components/dashboard/DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx)
+  (usado por [src/app/dashboard/layout.tsx](src/app/dashboard/layout.tsx)). Navegação por
+  ícones **no topo** (desktop, `lg+`) e numa **barra inferior fixa** (celular). Editar
+  `DASH_NAV` lá muda os itens do menu. Rotas "imersivas" (`/dashboard/produtos/novo` e
+  `/dashboard/produtos/[id]`) têm barra de ações própria no rodapé, então a navegação
+  inferior é escondida nelas (`isImmersiveRoute`).
+- **Tema claro/escuro:** Tailwind com `darkMode: "class"` ([tailwind.config.ts](tailwind.config.ts)).
+  Botão [src/components/ThemeToggle.tsx](src/components/ThemeToggle.tsx) alterna a classe `dark`
+  no `<html>` e salva em `localStorage` (`vw-theme`). Um script anti-flash em
+  [src/app/layout.tsx](src/app/layout.tsx) aplica o tema antes do render. Ao estilizar telas do
+  painel, **sempre adicionar variantes `dark:`** (ex.: `bg-white dark:bg-slate-900`).
+- **Animações:** keyframes/utilitários (`vw-fade-in-up`, `vw-pop-in`, `vw-aurora`) em
+  [src/app/globals.css](src/app/globals.css); respeitam `prefers-reduced-motion`.
+- **Pendente:** os widgets internos compartilhados ainda estão só no tema claro — editor visual
+  da loja ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), cuja
+  pré-visualização da loja pública deve continuar clara de propósito), seletor de fotos,
+  editores de cor/tamanho/estoque, autocomplete de categoria e os modais.
 
 ## Supabase
 
