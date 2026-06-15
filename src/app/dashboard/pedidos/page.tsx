@@ -38,6 +38,7 @@ type OrderRow = {
     orderNumber?: number;
     shippingMode?: string;
     shippingModeLabel?: string;
+    customerAddress?: string;
   } | null;
 };
 
@@ -194,6 +195,7 @@ export default function PedidosPage() {
               o.payload?.shippingModeLabel?.trim() ||
               shippingModeLabel(o.payload?.shippingMode) ||
               null;
+            const deliveryAddress = o.payload?.customerAddress?.trim() || null;
             return (
               <li
                 key={o.id}
@@ -224,6 +226,14 @@ export default function PedidosPage() {
                           Forma de envio:
                         </span>{" "}
                         {shipping}
+                      </p>
+                    ) : null}
+                    {deliveryAddress ? (
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">
+                        <span className="font-medium text-slate-700 dark:text-slate-200">
+                          Endereço:
+                        </span>{" "}
+                        {deliveryAddress}
                       </p>
                     ) : null}
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">

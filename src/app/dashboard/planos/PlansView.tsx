@@ -71,8 +71,36 @@ function uniqueFeaturesOrdered(plans: PlanDefinition[]) {
 export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
   const [annual, setAnnual] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [subscribing, setSubscribing] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const matrixRows = useMemo(() => uniqueFeaturesOrdered(plans), [plans]);
+
+  async function handleSubscribe(planId: string) {
+    setError(null);
+    setSubscribing(planId);
+    try {
+      const res = await fetch("/api/billing/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId, cycle: annual ? "annual" : "monthly" }),
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        initPoint?: string;
+        error?: string;
+      };
+      if (!res.ok || !j.ok || !j.initPoint) {
+        setError(j.error ?? "Não foi possível iniciar a assinatura.");
+        setSubscribing(null);
+        return;
+      }
+      window.location.href = j.initPoint;
+    } catch {
+      setError("Erro de conexão. Tente novamente.");
+      setSubscribing(null);
+    }
+  }
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8 pb-16">
@@ -176,16 +204,24 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
                   </li>
                 ))}
               </ul>
-              <Link
-                href="/#criar-loja"
-                className={`block w-full rounded-xl py-3.5 text-center text-sm font-bold transition ${st.btn}`}
+              <button
+                type="button"
+                onClick={() => handleSubscribe(plan.id)}
+                disabled={subscribing !== null}
+                className={`block w-full rounded-xl py-3.5 text-center text-sm font-bold transition disabled:opacity-60 disabled:cursor-not-allowed ${st.btn}`}
               >
-                Assinar
-              </Link>
+                {subscribing === plan.id ? "Redirecionando…" : "Assinar"}
+              </button>
             </div>
           );
         })}
       </div>
+
+      {error && (
+        <p className="mt-4 text-center text-sm font-medium text-rose-600 dark:text-rose-400">
+          {error}
+        </p>
+      )}
 
       <div className="mt-10 flex justify-center">
         <button

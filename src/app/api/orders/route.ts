@@ -19,6 +19,8 @@ type Body = {
   customerPhone?: string;
   /** excursao | correios | retirada */
   shippingMode?: string;
+  /** Endereço de entrega informado pelo cliente (excursão / correios). */
+  customerAddress?: string;
   lines?: OrderLineInput[];
 };
 
@@ -157,6 +159,12 @@ export async function POST(req: Request) {
   }
   const shippingModeLabelPt = shippingModeLabel(shippingMode) ?? shippingMode;
 
+  // Endereço só faz sentido para entrega (excursão / correios); na retirada fica vazio.
+  const customerAddress =
+    shippingMode === "retirada"
+      ? ""
+      : String(body.customerAddress ?? "").trim().slice(0, 500);
+
   const payloadLines = validated.pricedLines.map((l) => ({
     productId: l.productId,
     name: l.name,
@@ -202,6 +210,7 @@ export async function POST(req: Request) {
         orderNumber,
         shippingMode,
         shippingModeLabel: shippingModeLabelPt,
+        customerAddress: customerAddress || undefined,
       },
     })
     .select("id, order_number")

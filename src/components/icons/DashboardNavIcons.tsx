@@ -100,6 +100,17 @@ export function NavIconWhatsapp(props: NavGlyphProps) {
   );
 }
 
+/** Pagamentos — cartão */
+export function NavIconPagamentos(props: NavGlyphProps) {
+  return (
+    <Shell {...props}>
+      <rect x="2.5" y="5" width="19" height="14" rx="2.25" {...s} />
+      <path d="M2.5 9.5h19" {...s} />
+      <path d="M6 14.5h4" {...s} />
+    </Shell>
+  );
+}
+
 export const DASH_NAV_ICONS = {
   painel: NavIconPainel,
   loja: NavIconLoja,
@@ -107,6 +118,7 @@ export const DASH_NAV_ICONS = {
   pedidos: NavIconPedidos,
   conta: NavIconConta,
   whatsapp: NavIconWhatsapp,
+  pagamentos: NavIconPagamentos,
 } as const;
 
 export type DashNavIconKey = keyof typeof DASH_NAV_ICONS;

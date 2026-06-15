@@ -133,6 +133,34 @@ Actions → Run workflow).
 - Usa os secrets do repositório: `SUPABASE_URL` e `SUPABASE_ANON_KEY` (já cadastrados no GitHub).
 - Se um dia precisar mudar a frequência, edite o `cron` no arquivo do workflow.
 
+## Pagamentos (Mercado Pago)
+
+Duas integrações distintas, ambas via wrapper REST [src/lib/mercadopago.ts](src/lib/mercadopago.ts)
+(sem SDK, no padrão do `evolution.ts`). Migration: rode
+[supabase-migration-mercadopago.sql](supabase-migration-mercadopago.sql).
+
+1. **Mensalidade do SaaS (você → lojistas)** — assinatura **automática** (preapproval). O botão
+   "Assinar" em [PlansView.tsx](src/app/dashboard/planos/PlansView.tsx) chama
+   `POST /api/billing/subscribe`, que cria o preapproval na **sua** conta MP e redireciona ao
+   checkout. O `POST /api/billing/webhook` confirma os pagamentos, ativa a `subscription`, estende
+   `expires_at` (+1 mês) e grava em `payments` (`method='mercadopago'`). Usa `MP_ACCESS_TOKEN`.
+   O registro **manual** no admin continua existindo como fallback.
+2. **Gateway da loja (clientes → lojista)** — cada lojista cola o **Access Token** dele em
+   `/dashboard/pagamentos` (`POST /api/store/payment-gateway`, validado via `/users/me` e guardado
+   em `store_payment_gateway`; o token **nunca** vai ao browser). Na loja pública, o botão "Pagar com
+   Mercado Pago" chama `POST /api/pay/preference` (cria a preference com o token do lojista) e o
+   `POST /api/pay/webhook?store=<slug>` marca `orders.payment_status='pago'`.
+
+- **Segurança:** access tokens só no servidor; `store_payment_gateway` não tem policy de select
+  (só service role). Os webhooks **sempre reconsultam** o status na API do MP antes de confirmar e
+  são idempotentes (checam `payment_id`/`payment_id_external`).
+- **Variáveis de ambiente extras** (`.env` local / Vercel):
+  - `MP_ACCESS_TOKEN` — Access Token da **sua** conta MP (use `TEST-...` para testar). Só servidor.
+  - `APP_BASE_URL` — reaproveitada para `back_url`/`notification_url` (o MP precisa alcançar os
+    webhooks; em dev, use um túnel cloudflared/ngrok).
+- **Modo teste:** comece com credenciais `TEST-...` (tanto a sua quanto a do lojista). A UI mostra um
+  selo "Modo teste" quando o token do lojista começa com `TEST-`.
+
 ## Notas do ambiente (Windows / OneDrive)
 
 O repositório fica dentro do **OneDrive**, o que pode quebrar symlinks da pasta `.next` e causar

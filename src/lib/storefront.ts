@@ -36,6 +36,8 @@ export type StorefrontSettings = {
   youtubeUrl: string;
   /** Até 8 categorias na faixa abaixo do banner; vazio na loja usa fallback visual */
   categories: StorefrontCategoryItem[];
+  /** Endereço de retirada mostrado ao cliente quando escolhe "Retirada" no carrinho. */
+  pickupAddress: string;
   /** Bloco comercial abaixo do catálogo (frete, contato, pagamentos, redes). */
   footerShippingLine: string;
   footerReturnsLine: string;
@@ -65,6 +67,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   tiktokUrl: "",
   youtubeUrl: "",
   categories: [],
+  pickupAddress: "",
   footerShippingLine: "",
   footerReturnsLine: "",
   footerPolicyUrl: "",
@@ -206,6 +209,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     tiktokUrl: strOrEmpty(o.tiktokUrl),
     youtubeUrl: strOrEmpty(o.youtubeUrl),
     categories: categoriesFromDb(o.categories),
+    pickupAddress: strOrEmpty(o.pickupAddress),
     footerShippingLine: strOrEmpty(o.footerShippingLine),
     footerReturnsLine: strOrEmpty(o.footerReturnsLine),
     footerPolicyUrl: strOrEmpty(o.footerPolicyUrl),
@@ -240,6 +244,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     facebookUrl: s.facebookUrl.trim(),
     tiktokUrl: s.tiktokUrl.trim(),
     youtubeUrl: s.youtubeUrl.trim(),
+    pickupAddress: s.pickupAddress.trim(),
     footerShippingLine: s.footerShippingLine.trim(),
     footerReturnsLine: s.footerReturnsLine.trim(),
     footerPolicyUrl: s.footerPolicyUrl.trim(),

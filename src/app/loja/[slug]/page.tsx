@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { getProductImageUrls } from "@/lib/productImages";
 import { optionArrayFromDb } from "@/lib/productOptions";
 import { colorHexesFromDb } from "@/lib/productColorHexes";
@@ -116,6 +117,19 @@ export default async function LojaPublicaPage({ params }: Props) {
     console.error("[loja] Erro ao buscar produtos:", productsError.message, productsError);
   }
 
+  // Pagamento online: a tabela store_payment_gateway só é lida via service role
+  // (o token nunca vai pro browser). Aqui derivamos apenas um booleano.
+  let paymentEnabled = false;
+  const admin = createAdminSupabase();
+  if (admin) {
+    const { data: gw } = await admin
+      .from("store_payment_gateway")
+      .select("enabled, access_token")
+      .eq("store_id", store.id)
+      .maybeSingle();
+    paymentEnabled = Boolean(gw?.access_token && gw.enabled !== false);
+  }
+
   const list: CatalogProduct[] = (products ?? []).map((p) => {
     const images = getProductImageUrls({
       image: p.image,
@@ -176,6 +190,7 @@ export default async function LojaPublicaPage({ params }: Props) {
       }}
       storefront={storefrontFromDb(store.storefront)}
       products={list}
+      paymentEnabled={paymentEnabled}
     />
   );
 }

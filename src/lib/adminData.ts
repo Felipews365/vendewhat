@@ -22,6 +22,9 @@ export type SubscriptionRow = {
   expires_at: string | null;
   notes: string | null;
   gateway: string | null;
+  gateway_subscription_id: string | null;
+  gateway_status: string | null;
+  payer_email: string | null;
   created_at: string;
   updated_at: string;
 };

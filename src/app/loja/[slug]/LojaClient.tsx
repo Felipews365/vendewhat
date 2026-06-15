@@ -1254,17 +1254,30 @@ export function LojaClient({
   store,
   storefront,
   products,
+  paymentEnabled = false,
 }: {
   store: StoreInfo;
   storefront: StorefrontSettings;
   products: CatalogProduct[];
+  paymentEnabled?: boolean;
 }) {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [cartOpen, setCartOpen] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState("");
   const [notes, setNotes] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [shippingMode, setShippingMode] = useState<ShippingModeId | null>(null);
+  const [address, setAddress] = useState({
+    cep: "",
+    street: "",
+    number: "",
+    district: "",
+    city: "",
+    state: "",
+    complement: "",
+  });
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("new");
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
@@ -1450,6 +1463,39 @@ export function LojaClient({
     });
   }
 
+  /** Excursão e Correios pedem o endereço do cliente; Retirada mostra o da loja. */
+  const needsAddress = shippingMode === "excursao" || shippingMode === "correios";
+  const pickupAddress = storefront.pickupAddress.trim();
+
+  // Correios precisa de CEP válido (8 dígitos); excursão não exige.
+  const cepRequired = shippingMode === "correios";
+  const cepValid = address.cep.replace(/\D/g, "").length === 8;
+
+  const addressComplete =
+    address.street.trim().length > 1 &&
+    address.number.trim().length > 0 &&
+    address.district.trim().length > 0 &&
+    address.city.trim().length > 1 &&
+    address.state.trim().length >= 2 &&
+    (!cepRequired || cepValid);
+
+  function setAddressField(field: keyof typeof address, value: string) {
+    setAddress((a) => ({ ...a, [field]: value }));
+  }
+
+  function formatCustomerAddress(): string {
+    const a = address;
+    const parts: string[] = [];
+    const line1 = [a.street.trim(), a.number.trim()].filter(Boolean).join(", ");
+    if (line1) parts.push(line1);
+    if (a.complement.trim()) parts.push(a.complement.trim());
+    if (a.district.trim()) parts.push(a.district.trim());
+    const cityUf = [a.city.trim(), a.state.trim()].filter(Boolean).join("/");
+    if (cityUf) parts.push(cityUf);
+    if (a.cep.trim()) parts.push(`CEP ${a.cep.trim()}`);
+    return parts.join(" — ");
+  }
+
   function buildOrderMessage(orderCode?: number | null): string {
     const lines = [
       `*Pedido — ${store.name}*`,
@@ -1465,6 +1511,12 @@ export function LojaClient({
     if (shippingMode) {
       const lab = shippingModeLabel(shippingMode);
       if (lab) lines.push(`*Forma de envio:* ${lab}`);
+    }
+    if (needsAddress) {
+      const addr = formatCustomerAddress();
+      if (addr) lines.push(`*Endereço de entrega:* ${addr}`);
+    } else if (shippingMode === "retirada" && pickupAddress) {
+      lines.push(`*Retirada em:* ${pickupAddress}`);
     }
     lines.push(
       "",
@@ -1496,13 +1548,18 @@ export function LojaClient({
     [store.phone]
   );
 
-  /** Devolve o `order_number` gravado no painel, para incluir na mensagem ao vendedor. */
-  async function persistOrderSnapshot(): Promise<number | null> {
-    if (items.length === 0 || !store.slug) return null;
+  /** Devolve o pedido gravado no painel (número + id), para o WhatsApp e o pagamento online. */
+  async function persistOrderSnapshot(): Promise<{
+    orderNumber: number | null;
+    orderId: string | null;
+  }> {
+    const empty = { orderNumber: null, orderId: null };
+    if (items.length === 0 || !store.slug) return empty;
     const name = customerName.trim();
-    if (name.length < 2) return null;
-    if (!isCustomerPhoneValid(customerPhone)) return null;
-    if (!shippingMode) return null;
+    if (name.length < 2) return empty;
+    if (!isCustomerPhoneValid(customerPhone)) return empty;
+    if (!shippingMode) return empty;
+    if (needsAddress && !addressComplete) return empty;
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -1512,6 +1569,7 @@ export function LojaClient({
           customerName: name,
           customerPhone: customerPhone.trim(),
           shippingMode,
+          customerAddress: needsAddress ? formatCustomerAddress() : "",
           notes: notes.trim(),
           lines: items.map((i) => ({
             productId: i.id,
@@ -1523,6 +1581,7 @@ export function LojaClient({
       });
       const j = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
+        id?: string;
         orderNumber?: number;
         error?: string;
       };
@@ -1531,15 +1590,50 @@ export function LojaClient({
           "[VendeWhat] Pedido não salvo no painel:",
           j?.error ?? res.status
         );
-        return null;
+        return empty;
       }
-      if (typeof j.orderNumber === "number" && Number.isFinite(j.orderNumber)) {
-        return j.orderNumber;
-      }
-      return null;
+      return {
+        orderNumber:
+          typeof j.orderNumber === "number" && Number.isFinite(j.orderNumber)
+            ? j.orderNumber
+            : null,
+        orderId: typeof j.id === "string" ? j.id : null,
+      };
     } catch (e) {
       console.warn("[VendeWhat] Pedido não salvo no painel:", e);
-      return null;
+      return empty;
+    }
+  }
+
+  /** Cria o checkout do Mercado Pago para o pedido e redireciona o cliente. */
+  async function handlePayOnline() {
+    setPayError("");
+    setPaying(true);
+    try {
+      const snap = await persistOrderSnapshot();
+      if (!snap.orderId) {
+        setPayError("Não foi possível registrar o pedido. Confira os dados.");
+        return;
+      }
+      const res = await fetch("/api/pay/preference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: snap.orderId }),
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        initPoint?: string;
+        error?: string;
+      };
+      if (!res.ok || !j.ok || !j.initPoint) {
+        setPayError(j.error ?? "Não foi possível iniciar o pagamento.");
+        return;
+      }
+      window.location.assign(j.initPoint);
+    } catch {
+      setPayError("Falha de rede ao iniciar o pagamento.");
+    } finally {
+      setPaying(false);
     }
   }
 
@@ -2322,6 +2416,101 @@ export function LojaClient({
                         })}
                       </div>
                     </fieldset>
+                    {needsAddress && (
+                      <div className="space-y-2 min-w-0">
+                        <p className="text-sm font-medium text-boutique-wine">
+                          Endereço de entrega <span className="text-red-600">*</span>
+                        </p>
+                        <p className="text-xs text-stone-500 -mt-1">
+                          Onde você quer receber o pedido.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="postal-code"
+                            value={address.cep}
+                            onChange={(e) => setAddressField("cep", e.target.value)}
+                            placeholder={cepRequired ? "CEP *" : "CEP"}
+                            aria-invalid={
+                              cepRequired && address.cep.trim().length > 0 && !cepValid
+                            }
+                            className={`w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none ${
+                              cepRequired && address.cep.trim().length > 0 && !cepValid
+                                ? "border-red-400"
+                                : "border-stone-200"
+                            }`}
+                          />
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={address.number}
+                            onChange={(e) => setAddressField("number", e.target.value)}
+                            placeholder="Número"
+                            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
+                          />
+                          <input
+                            type="text"
+                            autoComplete="address-line1"
+                            value={address.street}
+                            onChange={(e) => setAddressField("street", e.target.value)}
+                            placeholder="Rua / logradouro"
+                            className="col-span-2 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={address.district}
+                            onChange={(e) => setAddressField("district", e.target.value)}
+                            placeholder="Bairro"
+                            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
+                          />
+                          <input
+                            type="text"
+                            autoComplete="address-level2"
+                            value={address.city}
+                            onChange={(e) => setAddressField("city", e.target.value)}
+                            placeholder="Cidade"
+                            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
+                          />
+                          <input
+                            type="text"
+                            autoComplete="address-level1"
+                            maxLength={2}
+                            value={address.state}
+                            onChange={(e) =>
+                              setAddressField("state", e.target.value.toUpperCase())
+                            }
+                            placeholder="UF"
+                            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm uppercase focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={address.complement}
+                            onChange={(e) =>
+                              setAddressField("complement", e.target.value)
+                            }
+                            placeholder="Complemento (opcional)"
+                            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {shippingMode === "retirada" && (
+                      <div className="rounded-xl border border-boutique-muted/60 bg-boutique-light/50 px-3 py-3 text-sm min-w-0">
+                        <p className="font-medium text-boutique-wine mb-1">
+                          Endereço para retirada
+                        </p>
+                        {pickupAddress ? (
+                          <p className="text-stone-700 whitespace-pre-line break-words">
+                            {pickupAddress}
+                          </p>
+                        ) : (
+                          <p className="text-stone-500">
+                            A loja vai combinar o local de retirada pelo WhatsApp.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="text-sm font-medium text-boutique-wine">
@@ -2349,10 +2538,10 @@ export function LojaClient({
                 <button
                   type="button"
                   onClick={async () => {
-                    const orderCode = await persistOrderSnapshot();
+                    const snap = await persistOrderSnapshot();
                     const href = whatsAppLink(
                       store.phone,
-                      buildOrderMessage(orderCode)
+                      buildOrderMessage(snap.orderNumber)
                     );
                     if (!href) return;
                     setCartOpen(false);
@@ -2376,7 +2565,8 @@ export function LojaClient({
                   disabled={
                     customerName.trim().length < 2 ||
                     !isCustomerPhoneValid(customerPhone) ||
-                    !shippingMode
+                    !shippingMode ||
+                    (needsAddress && !addressComplete)
                   }
                   className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-whatsapp text-white font-semibold hover:bg-whatsapp-dark transition-colors disabled:opacity-45 disabled:pointer-events-none"
                 >
@@ -2385,13 +2575,37 @@ export function LojaClient({
                   </svg>
                   Enviar pedido no WhatsApp
                 </button>
+                {paymentEnabled && (
+                  <button
+                    type="button"
+                    onClick={handlePayOnline}
+                    disabled={
+                      paying ||
+                      customerName.trim().length < 2 ||
+                      !isCustomerPhoneValid(customerPhone) ||
+                      !shippingMode ||
+                      (needsAddress && !addressComplete)
+                    }
+                    className="mt-3 flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-[#009ee3] text-white font-semibold hover:bg-[#0089c7] transition-colors disabled:opacity-45 disabled:pointer-events-none"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                      <rect x="2.5" y="5" width="19" height="14" rx="2.25" />
+                      <path d="M2.5 9.5h19" strokeLinecap="round" />
+                    </svg>
+                    {paying ? "Abrindo pagamento…" : "Pagar com Mercado Pago"}
+                  </button>
+                )}
+                {payError && (
+                  <p className="text-xs text-rose-600 text-center mt-2">{payError}</p>
+                )}
                 <p className="text-xs text-slate-400 text-center mt-2">
                   Registramos no painel com código do pedido e abrimos o WhatsApp com a
                   mesma mensagem
                 </p>
                 {customerName.trim().length < 2 ||
                 !isCustomerPhoneValid(customerPhone) ||
-                !shippingMode ? (
+                !shippingMode ||
+                (needsAddress && !addressComplete) ? (
                   <p className="text-xs text-amber-700 text-center mt-2">
                     {customerName.trim().length < 2 ? (
                       <>
@@ -2403,10 +2617,20 @@ export function LojaClient({
                         Informe um <strong>telefone válido</strong> com DDD (10 a 15
                         dígitos).
                       </>
-                    ) : (
+                    ) : !shippingMode ? (
                       <>
                         Selecione a <strong>forma de envio</strong> (excursão,
                         Correios ou retirada).
+                      </>
+                    ) : cepRequired && !cepValid ? (
+                      <>
+                        Para Correios, informe um <strong>CEP válido</strong> (8
+                        dígitos) e o endereço completo.
+                      </>
+                    ) : (
+                      <>
+                        Informe o <strong>endereço de entrega</strong> (rua, número,
+                        bairro, cidade e UF).
                       </>
                     )}
                   </p>

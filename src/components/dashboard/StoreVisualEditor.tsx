@@ -1275,6 +1275,24 @@ export function StoreVisualEditor({
           só é exibido ao cliente quando houver pelo menos um campo preenchido,
           Pix/dinheiro ativo ou alguma rede social.
         </p>
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-1.5">
+          <label className="block text-sm font-medium text-slate-700">
+            Endereço para retirada
+          </label>
+          <p className="text-xs text-slate-500">
+            Mostrado ao cliente no carrinho quando ele escolhe{" "}
+            <strong>Retirada</strong> como forma de envio.
+          </p>
+          <textarea
+            value={sf.pickupAddress}
+            onChange={(e) =>
+              setSf((s) => ({ ...s, pickupAddress: e.target.value }))
+            }
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm resize-none"
+            placeholder="Ex.: Rua das Flores, 123 — Centro, São Paulo/SP. Seg–Sex 9h–18h."
+          />
+        </div>
         <label className="block text-sm font-medium text-slate-700">
           Frete / envio (linha superior)
         </label>

@@ -33,6 +33,12 @@ const DASH_NAV: readonly {
     label: "WhatsApp & IA",
     icon: "whatsapp",
   },
+  {
+    href: "/dashboard/pagamentos",
+    short: "Pagamentos",
+    label: "Pagamentos da loja",
+    icon: "pagamentos",
+  },
   { href: "/dashboard/conta", short: "Conta", label: "Conta", icon: "conta" },
 ];
 

@@ -155,6 +155,22 @@ export default function ClientForm({
         className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"
       >
         <h2 className="text-lg font-bold text-slate-900">Assinatura</h2>
+        {subscription?.gateway === "mercadopago" && (
+          <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-800">
+            <span className="font-semibold">Assinatura automática (Mercado Pago)</span>
+            {subscription.gateway_status && (
+              <span className="ml-1">· status MP: {subscription.gateway_status}</span>
+            )}
+            {subscription.gateway_subscription_id && (
+              <div className="mt-0.5 text-sky-600">
+                id: {subscription.gateway_subscription_id}
+              </div>
+            )}
+            <div className="mt-0.5 text-sky-600">
+              Renovação e vencimento são atualizados pelo webhook do MP.
+            </div>
+          </div>
+        )}
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="block">
             <span className={labelCls}>Plano</span>
