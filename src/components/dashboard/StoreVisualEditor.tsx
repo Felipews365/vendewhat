@@ -4,9 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CategoryFormModal } from "@/components/CategoryFormModal";
-import type {
-  StorefrontCategoryItem,
-  StorefrontSettings,
+import {
+  HERO_RECOMMENDED_HEIGHT,
+  HERO_RECOMMENDED_WIDTH,
+  MAX_HERO_IMAGES,
+  heroImageProportionWarning,
+  type StorefrontCategoryItem,
+  type StorefrontSettings,
 } from "@/lib/storefront";
 
 /** Prévia na vitrine: produtos reais da loja + sempre um cartão “novo”. */
@@ -51,6 +55,84 @@ type EditorPanel =
   | "search"
   | "categories"
   | "footer";
+
+/** Mede a imagem (URL ou blob) e avisa se a proporção não combina com o banner. */
+function useHeroProportionWarning(src: string | null): string | null {
+  const [warning, setWarning] = useState<string | null>(null);
+  useEffect(() => {
+    if (!src) {
+      setWarning(null);
+      return;
+    }
+    let active = true;
+    const img = new window.Image();
+    img.onload = () => {
+      if (active) {
+        setWarning(
+          heroImageProportionWarning(img.naturalWidth, img.naturalHeight)
+        );
+      }
+    };
+    img.onerror = () => {
+      if (active) setWarning(null);
+    };
+    img.src = src;
+    return () => {
+      active = false;
+    };
+  }, [src]);
+  return warning;
+}
+
+/** Miniatura de uma foto do banner com botão remover e aviso de proporção. */
+function HeroPhotoThumb({
+  src,
+  onRemove,
+}: {
+  /** URL pública (foto salva) ou blob: (foto pendente). */
+  src: string;
+  onRemove: () => void;
+}) {
+  const warning = useHeroProportionWarning(src);
+  const isBlob = src.startsWith("blob:");
+  return (
+    <div className="shrink-0">
+      <div
+        className={`relative w-24 h-14 rounded-lg border overflow-hidden ${
+          warning ? "border-amber-400 ring-1 ring-amber-300" : "border-slate-200"
+        }`}
+      >
+        {isBlob ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <Image src={src} alt="" fill className="object-cover" sizes="96px" />
+        )}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="absolute top-0 right-0 w-5 h-5 bg-black/70 text-white text-xs leading-none"
+          aria-label="Remover foto"
+        >
+          ×
+        </button>
+        {warning && (
+          <span
+            className="absolute bottom-0 left-0 right-0 bg-amber-400/90 text-amber-950 text-[9px] font-bold text-center leading-tight py-px"
+            aria-hidden
+          >
+            pode cortar
+          </span>
+        )}
+      </div>
+      {warning && (
+        <p className="mt-1 w-24 text-[9px] leading-tight text-amber-700">
+          {warning}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function PlusFab({
   label,
@@ -192,6 +274,19 @@ export function StoreVisualEditor({
     open: boolean;
     editIndex: number | null;
   }>({ open: false, editIndex: null });
+
+  /** Pré-visualização (blob:) das fotos do banner ainda não salvas. */
+  const [pendingHeroUrls, setPendingHeroUrls] = useState<string[]>([]);
+  useEffect(() => {
+    const urls = pendingHeroFiles.map((f) => URL.createObjectURL(f));
+    setPendingHeroUrls(urls);
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [pendingHeroFiles]);
+
+  const heroPhotoCount = sf.heroImages.length + pendingHeroFiles.length;
+  const heroSlotsFull = heroPhotoCount >= MAX_HERO_IMAGES;
 
   const MAX_CATALOG_PREVIEW = 32;
   const productsInPreview = catalogPreview.slice(0, MAX_CATALOG_PREVIEW);
@@ -841,66 +936,75 @@ export function StoreVisualEditor({
         title="Fotos do banner (opcional)"
         onClose={() => setPanel(null)}
       >
-        <p className="text-xs text-slate-500">
-          A loja funciona sem foto — o fundo usa suas cores. Se quiser, até 10
-          imagens largas; arraste na área do banner ou escolha aqui.
-        </p>
-        <button
-          type="button"
-          onClick={() => bannerInputRef.current?.click()}
-          className="w-full py-3 rounded-xl bg-slate-100 text-slate-800 font-semibold text-sm hover:bg-slate-200"
-        >
-          Adicionar fotos
-        </button>
-        <div className="flex flex-wrap gap-2">
-          {sf.heroImages.map((url, i) => (
-            <div
-              key={`${url}-${i}`}
-              className="relative w-20 h-12 rounded border border-slate-200 overflow-hidden shrink-0"
-            >
-              <Image src={url} alt="" fill className="object-cover" sizes="80px" />
-              <button
-                type="button"
-                onClick={() =>
+        <div className="rounded-xl bg-sky-50 border border-sky-100 p-3 text-xs text-sky-900 space-y-1">
+          <p className="font-semibold">
+            📐 Tamanho ideal: {HERO_RECOMMENDED_WIDTH} × {HERO_RECOMMENDED_HEIGHT}{" "}
+            pixels (foto larga, deitada).
+          </p>
+          <p>
+            Pode enviar até {MAX_HERO_IMAGES} fotos — com mais de uma, elas passam
+            sozinhas (carrossel). Fora desse tamanho a foto é cortada para encher
+            o banner; avisamos abaixo se for cortar muito.
+          </p>
+        </div>
+
+        {!heroSlotsFull ? (
+          <button
+            type="button"
+            onClick={() => bannerInputRef.current?.click()}
+            className="w-full py-3 rounded-xl bg-slate-100 text-slate-800 font-semibold text-sm hover:bg-slate-200"
+          >
+            Adicionar foto ({heroPhotoCount}/{MAX_HERO_IMAGES})
+          </button>
+        ) : (
+          <p className="text-xs text-slate-500 text-center py-2">
+            Você já tem {MAX_HERO_IMAGES} fotos. Remova uma para trocar.
+          </p>
+        )}
+
+        {heroPhotoCount > 0 ? (
+          <div className="flex flex-wrap gap-3">
+            {sf.heroImages.map((url, i) => (
+              <HeroPhotoThumb
+                key={`${url}-${i}`}
+                src={url}
+                onRemove={() =>
                   setSf((s) => ({
                     ...s,
                     heroImages: s.heroImages.filter((_, j) => j !== i),
                   }))
                 }
-                className="absolute top-0 right-0 w-5 h-5 bg-black/70 text-white text-xs"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-          {pendingHeroFiles.map((file, i) => (
-            <div
-              key={`p-${i}`}
-              className="flex items-center gap-1 text-[10px] border border-dashed border-landing-primary rounded px-2 py-1"
-            >
-              <span className="truncate max-w-[100px]">{file.name}</span>
-              <button
-                type="button"
-                className="text-red-600"
-                onClick={() =>
+              />
+            ))}
+            {pendingHeroUrls.map((url, i) => (
+              <HeroPhotoThumb
+                key={`p-${i}-${url}`}
+                src={url}
+                onRemove={() =>
                   setPendingHeroFiles((prev) => prev.filter((_, j) => j !== i))
                 }
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setSf((s) => ({ ...s, heroImages: [] }));
-            setPendingHeroFiles([]);
-          }}
-          className="text-xs text-red-600 hover:underline"
-        >
-          Limpar todas as fotos
-        </button>
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">
+            Sem foto, a loja fica só com as suas cores (sem banner). Tudo bem
+            deixar assim!
+          </p>
+        )}
+
+        {heroPhotoCount > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setSf((s) => ({ ...s, heroImages: [] }));
+              setPendingHeroFiles([]);
+            }}
+            className="text-xs text-red-600 hover:underline"
+          >
+            Tirar o banner (remover todas as fotos)
+          </button>
+        )}
       </EditorSheet>
 
       <EditorSheet

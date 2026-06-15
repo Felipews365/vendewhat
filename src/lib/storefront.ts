@@ -2,6 +2,36 @@
  * Configurações visuais da loja pública (coluna `stores.storefront` JSONB).
  */
 
+/** Máximo de fotos no banner (carrossel quando >1; vazio = sem banner). */
+export const MAX_HERO_IMAGES = 3;
+
+/** Proporção ideal do banner na loja pública (1920×600 ≈ 3.2:1). */
+export const HERO_RECOMMENDED_WIDTH = 1920;
+export const HERO_RECOMMENDED_HEIGHT = 600;
+export const HERO_TARGET_RATIO = HERO_RECOMMENDED_WIDTH / HERO_RECOMMENDED_HEIGHT;
+
+/**
+ * Avalia se uma foto serve para o banner sem cortar demais.
+ * Banner é bem largo; fotos quadradas ou em pé perdem muito nas laterais/topo.
+ */
+export function heroImageProportionWarning(
+  width: number,
+  height: number
+): string | null {
+  if (!width || !height) return null;
+  const ratio = width / height;
+  if (ratio < 1.2) {
+    return "Foto quadrada ou em pé: vai cortar bastante as bordas. O ideal é uma foto larga (paisagem).";
+  }
+  if (ratio < HERO_TARGET_RATIO * 0.72) {
+    return "Foto pouco larga para o banner: as laterais podem ser cortadas.";
+  }
+  if (ratio > HERO_TARGET_RATIO * 1.55) {
+    return "Foto muito larga/fininha: o topo e a base podem ser cortados.";
+  }
+  return null;
+}
+
 /** Bolinha “Categorias” abaixo do banner (estilo stories). */
 export type StorefrontCategoryItem = {
   label: string;
@@ -152,7 +182,7 @@ function heroImagesFromDb(o: Record<string, unknown>): string[] {
       .filter((x): x is string => typeof x === "string")
       .map((s) => s.trim())
       .filter(Boolean)
-      .slice(0, 10);
+      .slice(0, MAX_HERO_IMAGES);
   }
   const single = o.heroImage;
   if (typeof single === "string" && single.trim()) {
@@ -234,7 +264,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     heroImages: s.heroImages
       .map((u) => u.trim())
       .filter(Boolean)
-      .slice(0, 10),
+      .slice(0, MAX_HERO_IMAGES),
     infoBullets: s.infoBullets.map((b) => b.trim()).filter(Boolean),
     themePrimary: s.themePrimary.trim(),
     themeSecondary: s.themeSecondary.trim(),

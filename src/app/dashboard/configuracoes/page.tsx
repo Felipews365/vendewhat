@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   DEFAULT_STOREFRONT,
+  MAX_HERO_IMAGES,
   type StorefrontSettings,
   normalizeInstagramUrl,
   normalizeSocialUrl,
@@ -102,7 +103,21 @@ export default function ConfiguracoesLojaPage() {
 
   function addBannerFiles(fileList: FileList | File[]) {
     const list = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
-    if (list.length) setPendingHeroFiles((prev) => [...prev, ...list]);
+    if (!list.length) return;
+    setPendingHeroFiles((prev) => {
+      const free = MAX_HERO_IMAGES - sf.heroImages.length - prev.length;
+      if (free <= 0) {
+        showToast(`O banner aceita no máximo ${MAX_HERO_IMAGES} fotos.`, "error");
+        return prev;
+      }
+      if (list.length > free) {
+        showToast(
+          `Só cabem mais ${free} foto(s) no banner — usei as primeiras.`,
+          "error"
+        );
+      }
+      return [...prev, ...list.slice(0, free)];
+    });
   }
 
   useEffect(() => {
@@ -170,7 +185,7 @@ export default function ConfiguracoesLojaPage() {
 
     try {
       const supabase = createClient();
-      const maxHero = 10;
+      const maxHero = MAX_HERO_IMAGES;
       let heroImages = [...sf.heroImages];
 
       if (heroImages.length + pendingHeroFiles.length > maxHero) {
