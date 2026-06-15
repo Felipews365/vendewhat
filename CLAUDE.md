@@ -82,6 +82,17 @@ O endereço aparece no painel em [/dashboard/pedidos](src/app/dashboard/pedidos/
 migration: `pickupAddress` mora no JSONB `stores.storefront` e o endereço do cliente no
 `orders.payload` (ver [src/app/api/orders/route.ts](src/app/api/orders/route.ts)).
 
+### Impressão de pedidos
+
+A página de pedidos tem **Imprimir** (por pedido) e **Imprimir todos** (no topo). Ambos chamam
+`printReceipts()` em [src/app/dashboard/pedidos/page.tsx](src/app/dashboard/pedidos/page.tsx),
+que abre uma janela `window.open` com um recibo montado em HTML/CSS próprios (string em
+`PRINT_STYLES` + `buildReceiptHtml`), independente do tema escuro do painel. A janela mostra uma
+**pré-visualização** com barra "Imprimir"/"Fechar" (escondida no `@media print`); no modo "todos"
+cada pedido vai numa página separada (`page-break-before`). O cabeçalho usa a **logo** (`stores.logo`)
+e os dados da loja do `storefront` (`footerPhone`, `footerEmail`, `footerWebsite`, `pickupAddress`) —
+cada linha só aparece se preenchida. Não há migration nova.
+
 ## Supabase
 
 - **Project URL:** `https://dbtoinsifpevufbtwyzu.supabase.co`
