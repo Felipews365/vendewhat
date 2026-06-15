@@ -6,8 +6,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   DEFAULT_STOREFRONT,
-  MAX_PHOTOS_PER_CAROUSEL,
-  carouselLimitForPlan,
+  HERO_TARGET_RATIO,
+  bannerPhotoLimitForPlan,
   type StorefrontSettings,
   normalizeInstagramUrl,
   normalizeSocialUrl,
@@ -19,8 +19,15 @@ import {
   StoreVisualEditor,
   type CatalogPreviewProduct,
 } from "@/components/dashboard/StoreVisualEditor";
+import { ProductImageCropModal } from "@/components/ProductImageCropModal";
 import { getProductImageUrls } from "@/lib/productImages";
 import { useToast } from "@/components/Toast";
+
+/** Fila de fotos do banner aguardando ajuste (recorte) antes do upload. */
+type HeroCropSession = {
+  files: File[];
+  current: number;
+};
 
 export default function ConfiguracoesLojaPage() {
   const router = useRouter();
@@ -38,6 +45,8 @@ export default function ConfiguracoesLojaPage() {
   const [logoObjectUrl, setLogoObjectUrl] = useState<string | null>(null);
   const [sf, setSf] = useState<StorefrontSettings>({ ...DEFAULT_STOREFRONT });
   const [heroUploading, setHeroUploading] = useState(false);
+  const [heroCrop, setHeroCrop] = useState<HeroCropSession | null>(null);
+  const [heroCropSrc, setHeroCropSrc] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
   const [cheapestPlanId, setCheapestPlanId] = useState<string | null>(null);
   const [bannerDrag, setBannerDrag] = useState(false);
@@ -93,93 +102,93 @@ export default function ConfiguracoesLojaPage() {
     return () => URL.revokeObjectURL(url);
   }, [pendingLogoFile]);
 
-  const maxCarousels = carouselLimitForPlan(planId, cheapestPlanId);
+  const maxBannerPhotos = bannerPhotoLimitForPlan(planId, cheapestPlanId);
 
-  /** Envia fotos direto pro storage e já adiciona no carrossel indicado. */
-  async function uploadHeroPhotos(
-    carouselIndex: number,
-    fileList: FileList | File[]
-  ) {
+  /** Cria object URL da foto em ajuste (para o modal de recorte). */
+  useEffect(() => {
+    if (!heroCrop) {
+      setHeroCropSrc(null);
+      return;
+    }
+    const file = heroCrop.files[heroCrop.current];
+    if (!file) {
+      setHeroCropSrc(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setHeroCropSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [heroCrop]);
+
+  /** Ao escolher fotos, abre o ajuste (recorte) uma a uma antes de enviar. */
+  function selectHeroPhotos(fileList: FileList | File[]) {
     if (!storeId) return;
     const list = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
     if (!list.length) return;
-    const current = sf.heroCarousels[carouselIndex] ?? [];
-    const free = MAX_PHOTOS_PER_CAROUSEL - current.length;
+    const free = maxBannerPhotos - sf.heroImages.length;
     if (free <= 0) {
       showToast(
-        `Cada carrossel aceita no máximo ${MAX_PHOTOS_PER_CAROUSEL} fotos.`,
+        `O banner aceita no máximo ${maxBannerPhotos} fotos no seu plano.`,
         "error"
       );
       return;
     }
-    const toUpload = list.slice(0, free);
+    const toAdjust = list.slice(0, free);
     if (list.length > free) {
-      showToast(`Só cabem mais ${free} foto(s) neste carrossel.`, "error");
+      showToast(`Só cabem mais ${free} foto(s) no banner.`, "error");
     }
+    setHeroCrop({ files: toAdjust, current: 0 });
+  }
+
+  /** Fecha o modal ou avança para a próxima foto da fila. */
+  function advanceHeroCrop() {
+    setHeroCrop((prev) => {
+      if (!prev) return null;
+      const next = prev.current + 1;
+      if (next >= prev.files.length) return null;
+      return { ...prev, current: next };
+    });
+  }
+
+  /** Envia uma foto (já recortada/ajustada) e adiciona ao banner. */
+  async function uploadOneHeroPhoto(file: File) {
+    if (!storeId) return;
     setHeroUploading(true);
     try {
       const supabase = createClient();
-      const urls: string[] = [];
-      for (let i = 0; i < toUpload.length; i++) {
-        const file = toUpload[i];
-        const ext = file.name.split(".").pop() || "jpg";
-        const fileName = `${storeId}/storefront-hero-${Date.now()}-${i}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from("product-images")
-          .upload(fileName, file);
-        if (upErr) {
-          showToast("Erro ao enviar foto: " + upErr.message, "error");
-          continue;
-        }
-        const { data } = supabase.storage
-          .from("product-images")
-          .getPublicUrl(fileName);
-        urls.push(data.publicUrl);
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `${storeId}/storefront-hero-${Date.now()}-${Math.round(
+        Math.random() * 1e6
+      )}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("product-images")
+        .upload(fileName, file);
+      if (upErr) {
+        showToast("Erro ao enviar foto: " + upErr.message, "error");
+        return;
       }
-      if (urls.length) {
-        setSf((s) => {
-          const next = s.heroCarousels.map((c) => [...c]);
-          while (next.length <= carouselIndex) next.push([]);
-          next[carouselIndex] = [...next[carouselIndex], ...urls].slice(
-            0,
-            MAX_PHOTOS_PER_CAROUSEL
-          );
-          return { ...s, heroCarousels: next };
-        });
-      }
+      const { data } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(fileName);
+      setSf((s) => ({
+        ...s,
+        heroImages: [...s.heroImages, data.publicUrl].slice(0, maxBannerPhotos),
+      }));
     } finally {
       setHeroUploading(false);
     }
   }
 
-  function removeHeroPhoto(carouselIndex: number, photoIndex: number) {
-    setSf((s) => {
-      const next = s.heroCarousels
-        .map((c, ci) =>
-          ci === carouselIndex ? c.filter((_, pi) => pi !== photoIndex) : c
-        )
-        .filter((c) => c.length > 0);
-      return { ...s, heroCarousels: next };
-    });
+  /** Chamado pelo modal de recorte ao confirmar (ou “usar foto inteira”). */
+  async function handleHeroCropDone(file: File) {
+    advanceHeroCrop();
+    await uploadOneHeroPhoto(file);
   }
 
-  function addCarousel() {
-    setSf((s) => {
-      if (s.heroCarousels.length >= maxCarousels) {
-        showToast(
-          `Seu plano permite até ${maxCarousels} carrosséis no banner.`,
-          "error"
-        );
-        return s;
-      }
-      return { ...s, heroCarousels: [...s.heroCarousels, []] };
-    });
-  }
-
-  function removeCarousel(carouselIndex: number) {
+  function removeHeroPhoto(photoIndex: number) {
     setSf((s) => ({
       ...s,
-      heroCarousels: s.heroCarousels.filter((_, i) => i !== carouselIndex),
+      heroImages: s.heroImages.filter((_, i) => i !== photoIndex),
     }));
   }
 
@@ -272,7 +281,7 @@ export default function ConfiguracoesLojaPage() {
     try {
       const supabase = createClient();
       // As fotos do banner já foram enviadas ao escolher (upload imediato);
-      // aqui só persistimos as URLs que estão em sf.heroCarousels.
+      // aqui só persistimos as URLs que estão em sf.heroImages.
 
       let nextLogo: string | null = storeLogo;
       if (logoRemoved) {
@@ -335,7 +344,6 @@ export default function ConfiguracoesLojaPage() {
 
       setSf((prev) => ({
         ...prev,
-        heroCarousels: prev.heroCarousels.filter((c) => c.length > 0),
         instagramUrl: ig,
         facebookUrl: fb,
         tiktokUrl: tt,
@@ -364,7 +372,7 @@ export default function ConfiguracoesLojaPage() {
 
   const heroPreviewTitle =
     sf.heroTitle.trim() || storeName || "Nome da sua loja";
-  const bannerBgSrc = sf.heroCarousels[0]?.[0] ?? null;
+  const bannerBgSrc = sf.heroImages[0] ?? null;
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
@@ -442,11 +450,9 @@ export default function ConfiguracoesLojaPage() {
           bannerDrag={bannerDrag}
           setBannerDrag={setBannerDrag}
           heroUploading={heroUploading}
-          maxCarousels={maxCarousels}
-          onUploadHeroPhotos={uploadHeroPhotos}
+          maxBannerPhotos={maxBannerPhotos}
+          onSelectHeroPhotos={selectHeroPhotos}
           onRemoveHeroPhoto={removeHeroPhoto}
-          onAddCarousel={addCarousel}
-          onRemoveCarousel={removeCarousel}
           setBullet={setBullet}
           addBullet={addBullet}
           removeBullet={removeBullet}
@@ -469,6 +475,20 @@ export default function ConfiguracoesLojaPage() {
           </button>
         </div>
       </form>
+
+      {heroCrop && heroCropSrc && heroCrop.files[heroCrop.current] && (
+        <ProductImageCropModal
+          imageSrc={heroCropSrc}
+          sourceFileName={heroCrop.files[heroCrop.current].name}
+          originalFile={heroCrop.files[heroCrop.current]}
+          aspect={HERO_TARGET_RATIO}
+          title="Ajustar foto do banner"
+          description="Arraste e use o zoom para enquadrar a foto no formato largo do banner."
+          confirmLabel="Usar este enquadramento"
+          onCancel={advanceHeroCrop}
+          onComplete={handleHeroCropDone}
+        />
+      )}
     </main>
   );
 }

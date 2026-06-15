@@ -67,6 +67,14 @@ type Props = {
   originalFile: File;
   onCancel: () => void;
   onComplete: (file: File) => void;
+  /** Proporção do recorte (largura/altura). Padrão 1 (quadrado, vitrine). */
+  aspect?: number;
+  /** Título do modal. */
+  title?: string;
+  /** Texto de ajuda abaixo do título. */
+  description?: string;
+  /** Rótulo do botão que confirma o recorte. */
+  confirmLabel?: string;
 };
 
 export function ProductImageCropModal({
@@ -75,6 +83,10 @@ export function ProductImageCropModal({
   originalFile,
   onCancel,
   onComplete,
+  aspect = 1,
+  title = "Ajustar foto (quadrado)",
+  description = "Arraste e use o zoom para encaixar como na vitrine (cards 1:1).",
+  confirmLabel = "Usar este enquadramento",
 }: Props) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -112,29 +124,33 @@ export function ProductImageCropModal({
     }
   }
 
+  const wide = aspect > 1.6;
+
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm"
       role="dialog"
       aria-modal
       aria-labelledby="crop-title"
     >
-      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+      <div
+        className={`bg-white rounded-2xl shadow-xl w-full ${
+          wide ? "max-w-2xl" : "max-w-lg"
+        } max-h-[92vh] flex flex-col overflow-hidden border border-slate-200`}
+      >
         <div className="px-4 py-3 border-b border-slate-100">
           <h2 id="crop-title" className="text-lg font-bold text-slate-800">
-            Ajustar foto (quadrado)
+            {title}
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Arraste e use o zoom para encaixar como na vitrine (cards 1:1).
-          </p>
+          <p className="text-xs text-slate-500 mt-1">{description}</p>
         </div>
 
-        <div className="relative w-full h-56 sm:h-72 bg-slate-900">
+        <div className="relative w-full h-[38vh] min-h-[180px] sm:h-72 bg-slate-900">
           <Cropper
             image={imageSrc}
             crop={crop}
             zoom={zoom}
-            aspect={1}
+            aspect={aspect}
             onCropChange={setCrop}
             onZoomChange={setZoom}
             onCropComplete={onCropComplete}
@@ -181,7 +197,7 @@ export function ProductImageCropModal({
               disabled={busy || !cropReady}
               className="order-1 sm:order-2 py-2.5 px-4 rounded-lg bg-whatsapp text-white font-semibold hover:bg-whatsapp-dark disabled:opacity-50"
             >
-              {busy ? "Gerando…" : "Usar este enquadramento"}
+              {busy ? "Gerando…" : confirmLabel}
             </button>
           </div>
         </div>

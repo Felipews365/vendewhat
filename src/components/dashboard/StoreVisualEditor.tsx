@@ -7,7 +7,6 @@ import { CategoryFormModal } from "@/components/CategoryFormModal";
 import {
   HERO_RECOMMENDED_HEIGHT,
   HERO_RECOMMENDED_WIDTH,
-  MAX_PHOTOS_PER_CAROUSEL,
   heroImageProportionWarning,
   type StorefrontCategoryItem,
   type StorefrontSettings,
@@ -235,11 +234,9 @@ export function StoreVisualEditor({
   bannerDrag,
   setBannerDrag,
   heroUploading,
-  maxCarousels,
-  onUploadHeroPhotos,
+  maxBannerPhotos,
+  onSelectHeroPhotos,
   onRemoveHeroPhoto,
-  onAddCarousel,
-  onRemoveCarousel,
   setBullet,
   addBullet,
   removeBullet,
@@ -265,16 +262,11 @@ export function StoreVisualEditor({
   setBannerDrag: (v: boolean) => void;
   /** True enquanto envia fotos do banner (mostra carregando). */
   heroUploading: boolean;
-  /** Quantos carrosséis o plano da loja permite. */
-  maxCarousels: number;
-  /** Envia fotos para um carrossel (upload imediato). */
-  onUploadHeroPhotos: (
-    carouselIndex: number,
-    files: FileList | File[]
-  ) => void;
-  onRemoveHeroPhoto: (carouselIndex: number, photoIndex: number) => void;
-  onAddCarousel: () => void;
-  onRemoveCarousel: (carouselIndex: number) => void;
+  /** Quantas fotos o plano da loja permite no banner. */
+  maxBannerPhotos: number;
+  /** Recebe as fotos escolhidas (abre o ajuste/recorte antes de enviar). */
+  onSelectHeroPhotos: (files: FileList | File[]) => void;
+  onRemoveHeroPhoto: (photoIndex: number) => void;
   setBullet: (i: number, value: string) => void;
   addBullet: () => void;
   removeBullet: (i: number) => void;
@@ -287,17 +279,8 @@ export function StoreVisualEditor({
     editIndex: number | null;
   }>({ open: false, editIndex: null });
 
-  /** Índice do carrossel-alvo quando o input de arquivo abre. */
-  const [heroTargetCarousel, setHeroTargetCarousel] = useState(0);
-
-  const carouselCount = sf.heroCarousels.length;
-  const heroPhotoCount = sf.heroCarousels.reduce((n, c) => n + c.length, 0);
-
-  /** Abre o seletor de arquivos mirando um carrossel específico. */
-  function pickPhotosFor(carouselIndex: number) {
-    setHeroTargetCarousel(carouselIndex);
-    bannerInputRef.current?.click();
-  }
+  const heroPhotoCount = sf.heroImages.length;
+  const heroSlotsFull = heroPhotoCount >= maxBannerPhotos;
 
   const MAX_CATALOG_PREVIEW = 32;
   const productsInPreview = catalogPreview.slice(0, MAX_CATALOG_PREVIEW);
@@ -514,8 +497,7 @@ export function StoreVisualEditor({
             className="sr-only"
             aria-hidden
             onChange={(e) => {
-              if (e.target.files?.length)
-                onUploadHeroPhotos(heroTargetCarousel, e.target.files);
+              if (e.target.files?.length) onSelectHeroPhotos(e.target.files);
               e.target.value = "";
             }}
           />
@@ -543,7 +525,7 @@ export function StoreVisualEditor({
                 e.stopPropagation();
                 setBannerDrag(false);
                 if (e.dataTransfer.files?.length)
-                  onUploadHeroPhotos(0, e.dataTransfer.files);
+                  onSelectHeroPhotos(e.dataTransfer.files);
               }}
             >
               {bannerBgSrc ? (
@@ -600,9 +582,9 @@ export function StoreVisualEditor({
                 onClick={() => setPanel("banner")}
               />
             </div>
-            {carouselCount > 1 && (
+            {heroPhotoCount > 1 && (
               <span className="absolute top-2 left-3 sm:top-3 sm:left-4 z-30 px-2 py-0.5 rounded-full bg-black/55 text-white text-[10px] font-semibold backdrop-blur-sm">
-                {carouselCount} faixas no banner
+                {heroPhotoCount} fotos passando
               </span>
             )}
           </div>
@@ -959,11 +941,10 @@ export function StoreVisualEditor({
             pixels (foto larga, deitada).
           </p>
           <p>
-            O banner pode ter até <strong>{maxCarousels} faixas</strong>, uma
-            embaixo da outra. Cada faixa é um carrossel de até{" "}
-            {MAX_PHOTOS_PER_CAROUSEL} fotos (com mais de uma, elas passam
-            sozinhas). Fora do tamanho, a foto é cortada para encher — avisamos
-            quando for cortar muito.
+            Você pode colocar até <strong>{maxBannerPhotos} fotos</strong> no
+            banner — elas passam <strong>uma atrás da outra</strong> sozinhas
+            (1ª, 2ª, 3ª…). Ao escolher cada foto, você ajusta o enquadramento no
+            formato do banner.
           </p>
         </div>
 
@@ -974,78 +955,46 @@ export function StoreVisualEditor({
           </p>
         )}
 
-        {carouselCount === 0 ? (
+        {heroPhotoCount === 0 ? (
           <p className="text-xs text-slate-500">
             Sem foto, a loja fica só com as suas cores (sem banner). Tudo bem
-            deixar assim! Toque em “Adicionar faixa” para começar.
+            deixar assim! Toque em “Adicionar foto” para começar.
           </p>
         ) : (
-          <div className="space-y-3">
-            {sf.heroCarousels.map((carousel, ci) => (
-              <div
-                key={`carousel-${ci}`}
-                className="rounded-xl border border-slate-200 p-3 space-y-2"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-slate-700">
-                    {ci === 0 ? "Faixa principal" : `Faixa ${ci + 1}`}
-                    <span className="ml-1 font-normal text-slate-400">
-                      ({carousel.length}/{MAX_PHOTOS_PER_CAROUSEL} fotos)
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveCarousel(ci)}
-                    className="text-[11px] text-red-600 hover:underline"
-                  >
-                    Remover faixa
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  {carousel.map((url, pi) => (
-                    <HeroPhotoThumb
-                      key={`${url}-${pi}`}
-                      src={url}
-                      onRemove={() => onRemoveHeroPhoto(ci, pi)}
-                    />
-                  ))}
-                  {carousel.length < MAX_PHOTOS_PER_CAROUSEL && (
-                    <button
-                      type="button"
-                      onClick={() => pickPhotosFor(ci)}
-                      disabled={heroUploading}
-                      className="w-24 h-14 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 text-xs font-medium hover:border-landing-primary hover:text-landing-primary disabled:opacity-50"
-                    >
-                      + foto
-                    </button>
-                  )}
-                </div>
+          <div className="flex flex-wrap gap-3">
+            {sf.heroImages.map((url, i) => (
+              <div key={`${url}-${i}`} className="relative">
+                <HeroPhotoThumb src={url} onRemove={() => onRemoveHeroPhoto(i)} />
+                <span className="absolute -top-1.5 -left-1.5 z-10 w-5 h-5 rounded-full bg-landing-primary text-white text-[10px] font-bold flex items-center justify-center shadow">
+                  {i + 1}
+                </span>
               </div>
             ))}
           </div>
         )}
 
-        {carouselCount < maxCarousels ? (
+        {!heroSlotsFull ? (
           <button
             type="button"
-            onClick={onAddCarousel}
-            className="w-full py-3 rounded-xl bg-slate-100 text-slate-800 font-semibold text-sm hover:bg-slate-200"
+            onClick={() => bannerInputRef.current?.click()}
+            disabled={heroUploading}
+            className="w-full py-3 rounded-xl bg-slate-100 text-slate-800 font-semibold text-sm hover:bg-slate-200 disabled:opacity-50"
           >
-            + Adicionar faixa ({carouselCount}/{maxCarousels})
+            + Adicionar foto ({heroPhotoCount}/{maxBannerPhotos})
           </button>
         ) : (
           <p className="text-[11px] text-slate-500 text-center">
-            Você atingiu o limite de {maxCarousels} faixas do seu plano.
+            Você atingiu o limite de {maxBannerPhotos} fotos do seu plano.
           </p>
         )}
 
         {heroPhotoCount > 0 && (
           <button
             type="button"
-            onClick={() => setSf((s) => ({ ...s, heroCarousels: [] }))}
+            onClick={() => setSf((s) => ({ ...s, heroImages: [] }))}
             className="text-xs text-red-600 hover:underline"
           >
-            Tirar o banner (remover todas as faixas)
+            Tirar o banner (remover todas as fotos)
           </button>
         )}
       </EditorSheet>

@@ -2,28 +2,28 @@
  * Configurações visuais da loja pública (coluna `stores.storefront` JSONB).
  */
 
-/** Máximo de fotos dentro de um carrossel (1 = estático; 2+ = passa sozinho). */
-export const MAX_PHOTOS_PER_CAROUSEL = 3;
-
-/** Quantos carrosséis (faixas do banner) cada faixa de plano permite. */
-export const MAX_CAROUSELS_CHEAP = 5; // plano mais barato
-export const MAX_CAROUSELS_OTHER = 10; // demais planos
+/**
+ * O banner é um único carrossel: as fotos passam uma atrás da outra (1→2→…).
+ * Cada foto é um "banner". A quantidade máxima depende do plano.
+ */
+export const MAX_BANNER_PHOTOS_CHEAP = 5; // plano mais barato
+export const MAX_BANNER_PHOTOS_OTHER = 10; // demais planos
 /** Teto absoluto guardado/renderizado (defensivo, p. ex. após downgrade). */
-export const MAX_CAROUSELS_ABS = MAX_CAROUSELS_OTHER;
+export const MAX_BANNER_PHOTOS_ABS = MAX_BANNER_PHOTOS_OTHER;
 
 /**
- * Limite de carrosséis do plano. Plano mais barato → 5; qualquer outro → 10.
- * `planId` é o plano atual da loja; `cheapestPlanId` é o de menor preço.
- * Sem plano/desconhecido → trata como o mais barato (5).
+ * Limite de fotos no banner pelo plano. Plano mais barato → 5; qualquer
+ * outro → 10. `planId` é o plano atual da loja; `cheapestPlanId` o de menor
+ * preço. Sem plano/desconhecido → trata como o mais barato (5).
  */
-export function carouselLimitForPlan(
+export function bannerPhotoLimitForPlan(
   planId: string | null | undefined,
   cheapestPlanId: string | null | undefined
 ): number {
   if (planId && cheapestPlanId && planId !== cheapestPlanId) {
-    return MAX_CAROUSELS_OTHER;
+    return MAX_BANNER_PHOTOS_OTHER;
   }
-  return MAX_CAROUSELS_CHEAP;
+  return MAX_BANNER_PHOTOS_CHEAP;
 }
 
 /** Proporção ideal do banner na loja pública (1920×600 ≈ 3.2:1). */
@@ -70,12 +70,11 @@ export type StorefrontSettings = {
   /** Ex.: #catalogo ou URL externa */
   heroCtaHref: string;
   /**
-   * Faixas do banner empilhadas na loja. Cada faixa é um carrossel com até
-   * MAX_PHOTOS_PER_CAROUSEL fotos (1 = estática; 2+ = passa sozinha). Vazio =
-   * sem banner. A quantidade de faixas é limitada pelo plano (ver
-   * `carouselLimitForPlan`).
+   * Fotos do banner — um único carrossel: passam uma atrás da outra na loja
+   * (1 = estática; 2+ = passa sozinha). Vazio = sem banner. A quantidade é
+   * limitada pelo plano (ver `bannerPhotoLimitForPlan`).
    */
-  heroCarousels: string[][];
+  heroImages: string[];
   /** Frases curtas abaixo do logo (ex.: pedido mínimo) */
   infoBullets: string[];
   /** Cor de destaque (botões catálogo, detalhes) — ex. rosa pó */
@@ -112,7 +111,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroTitle: "",
   heroCtaLabel: "Ver produtos",
   heroCtaHref: "#catalogo",
-  heroCarousels: [],
+  heroImages: [],
   infoBullets: [],
   themePrimary: "#c9a8ac",
   themeSecondary: "#5c2e36",
@@ -200,35 +199,32 @@ function categoriesFromDb(v: unknown): StorefrontCategoryItem[] {
   return out;
 }
 
-/** Limpa um carrossel: strings não-vazias, no máximo MAX_PHOTOS_PER_CAROUSEL. */
-function sanitizeCarousel(raw: unknown): string[] {
+/** Lista de strings não-vazias e aparadas (ignora não-strings). */
+function sanitizeStringList(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((x): x is string => typeof x === "string")
     .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, MAX_PHOTOS_PER_CAROUSEL);
+    .filter(Boolean);
 }
 
 /**
- * Lê `heroCarousels` (faixas do banner) ou migra o formato antigo:
- * `heroImages` (lista única, vira 1 carrossel) ou `heroImage` (foto única).
+ * Fotos do banner (carrossel único). Lê `heroImages` ou migra formatos
+ * antigos: `heroCarousels` (faixas → achata tudo numa lista) ou `heroImage`
+ * (foto única). Cap no teto absoluto.
  */
-function heroCarouselsFromDb(o: Record<string, unknown>): string[][] {
-  const carousels = o.heroCarousels;
-  if (Array.isArray(carousels)) {
-    return carousels
-      .map(sanitizeCarousel)
-      .filter((c) => c.length > 0)
-      .slice(0, MAX_CAROUSELS_ABS);
+function heroImagesFromDb(o: Record<string, unknown>): string[] {
+  const direct = sanitizeStringList(o.heroImages);
+  if (direct.length > 0) return direct.slice(0, MAX_BANNER_PHOTOS_ABS);
+  // Legado: heroCarousels (faixas) → achata na ordem em uma lista só.
+  if (Array.isArray(o.heroCarousels)) {
+    const flat = o.heroCarousels.flatMap((c) => sanitizeStringList(c));
+    if (flat.length > 0) return flat.slice(0, MAX_BANNER_PHOTOS_ABS);
   }
-  // Legado: heroImages era uma lista única de fotos do banner → 1 carrossel.
-  const legacyList = sanitizeCarousel(o.heroImages);
-  if (legacyList.length > 0) return [legacyList];
-  // Legado mais antigo ainda: heroImage (uma foto só).
+  // Legado mais antigo: heroImage (uma foto só).
   const single = o.heroImage;
   if (typeof single === "string" && single.trim()) {
-    return [[single.trim()]];
+    return [single.trim()];
   }
   return [];
 }
@@ -264,7 +260,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     heroTitle: strOrEmpty(o.heroTitle),
     heroCtaLabel: str(o.heroCtaLabel, DEFAULT_STOREFRONT.heroCtaLabel),
     heroCtaHref: str(o.heroCtaHref, DEFAULT_STOREFRONT.heroCtaHref),
-    heroCarousels: heroCarouselsFromDb(o),
+    heroImages: heroImagesFromDb(o),
     infoBullets: bulletsFromDb(o.infoBullets),
     themePrimary: str(o.themePrimary, DEFAULT_STOREFRONT.themePrimary),
     themeSecondary: str(o.themeSecondary, DEFAULT_STOREFRONT.themeSecondary),
@@ -303,10 +299,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     heroTitle: s.heroTitle.trim(),
     heroCtaLabel: s.heroCtaLabel.trim(),
     heroCtaHref: s.heroCtaHref.trim() || "#catalogo",
-    heroCarousels: s.heroCarousels
-      .map(sanitizeCarousel)
-      .filter((c) => c.length > 0)
-      .slice(0, MAX_CAROUSELS_ABS),
+    heroImages: sanitizeStringList(s.heroImages).slice(0, MAX_BANNER_PHOTOS_ABS),
     infoBullets: s.infoBullets.map((b) => b.trim()).filter(Boolean),
     themePrimary: s.themePrimary.trim(),
     themeSecondary: s.themeSecondary.trim(),

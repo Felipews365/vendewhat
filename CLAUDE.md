@@ -59,18 +59,23 @@ Orientações para o Claude Code trabalhar neste repositório.
   usado como `imageUrl` da categoria — sem hospedagem. A galeria fica no
   [CategoryFormModal.tsx](src/components/CategoryFormModal.tsx) (variant `store`), ao lado do upload
   e do campo de URL.
-- **Banner da loja (faixas/carrosséis):** o banner é uma lista de **faixas empilhadas**
-  (`storefront.heroCarousels: string[][]` em [src/lib/storefront.ts](src/lib/storefront.ts)).
-  Cada faixa é um carrossel de até `MAX_PHOTOS_PER_CAROUSEL` (3) fotos; a **1ª faixa** leva o
-  título/subtítulo/CTA na loja pública ([LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx),
-  componente `HeroBannerBlock`), as demais são só imagem. Sem faixas = sem banner. O **número de
-  faixas** depende do plano: `carouselLimitForPlan()` → plano mais barato 5, demais 10. O editor
-  ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), painel `banner`) gerencia
-  as faixas; o **upload é imediato** (vai pro bucket `product-images` ao escolher a foto, em
-  [configuracoes/page.tsx](src/app/dashboard/configuracoes/page.tsx) → `uploadHeroPhotos`), então o
-  "Salvar" só persiste as URLs no JSONB. `storefrontFromDb` migra os formatos antigos (`heroImages`
-  lista única → 1 faixa; `heroImage` foto única). Mostra dica de tamanho ideal (1920×600) e avisa
-  por foto quando a proporção vai cortar muito (`heroImageProportionWarning`).
+- **Banner da loja (um carrossel só):** o banner é **uma lista única de fotos**
+  (`storefront.heroImages: string[]` em [src/lib/storefront.ts](src/lib/storefront.ts)) que
+  passam **uma atrás da outra** (1→2→…) no mesmo lugar — não há faixas empilhadas. Renderizado por
+  `HeroBannerBlock` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) (auto-avança; setas +
+  bolinhas; o título/subtítulo/CTA ficam por cima). Sem foto = sem banner. O **número de fotos**
+  depende do plano: `bannerPhotoLimitForPlan()` → plano mais barato 5, demais 10 (teto absoluto
+  `MAX_BANNER_PHOTOS_ABS`). O editor
+  ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), painel `banner`) lista as
+  fotos numeradas. Ao escolher cada foto, abre o **ajuste/recorte** no formato do banner
+  ([ProductImageCropModal.tsx](src/components/ProductImageCropModal.tsx), generalizado com `aspect` —
+  aqui `HERO_TARGET_RATIO`; o mesmo modal recorta 1:1 nas fotos de produto). Depois do recorte o
+  **upload é imediato** (vai pro bucket `product-images`, em
+  [configuracoes/page.tsx](src/app/dashboard/configuracoes/page.tsx) → `selectHeroPhotos` →
+  `uploadOneHeroPhoto`), então o "Salvar" só persiste as URLs no JSONB. `storefrontFromDb` migra
+  formatos antigos (`heroCarousels` faixas → achata numa lista; `heroImage` foto única). Mostra dica
+  de tamanho ideal (1920×600) e avisa por foto quando a proporção vai cortar muito
+  (`heroImageProportionWarning`).
 - **Pendente:** os widgets internos compartilhados ainda estão só no tema claro — editor visual
   da loja ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), cuja
   pré-visualização da loja pública deve continuar clara de propósito), seletor de fotos,
