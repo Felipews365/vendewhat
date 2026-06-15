@@ -2,6 +2,7 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import AnimateOnScroll from "@/components/AnimateOnScroll";
 import FaqAccordion from "@/components/FaqAccordion";
+import AiChatDemo from "@/components/AiChatDemo";
 import { loadPlans } from "@/lib/plans.server";
 import type { PlanDefinition } from "@/lib/plans";
 
@@ -334,6 +335,58 @@ export default async function Home() {
               </AnimateOnScroll>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Atendimento por IA */}
+      <section id="ia" className="scroll-mt-28 overflow-hidden bg-gradient-to-b from-teal-50/60 to-white px-4 py-20">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2">
+          <AnimateOnScroll animation="fade-right">
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-white/70 px-4 py-1.5 text-xs font-semibold text-whatsapp-dark shadow-sm backdrop-blur">
+              🤖 Atendimento automático
+            </span>
+            <h2 className="mt-5 text-3xl font-bold leading-tight text-slate-800 md:text-4xl">
+              Uma IA que{" "}
+              <span className="vw-gradient-text bg-gradient-to-r from-whatsapp via-emerald-500 to-teal-500">
+                vende por você
+              </span>{" "}
+              no WhatsApp
+            </h2>
+            <p className="mt-4 max-w-xl text-lg text-slate-600">
+              Conecte seu WhatsApp e deixe a IA responder dúvidas, mostrar produtos
+              do seu catálogo e enviar o link da loja — 24 horas por dia, sem você
+              perder nenhuma venda.
+            </p>
+            <ul className="mt-6 space-y-3">
+              {[
+                "Responde na hora, mesmo de madrugada",
+                "Conhece todo o seu catálogo e preços",
+                "Envia o link da loja para fechar o pedido",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-3 text-slate-700">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-whatsapp/15 text-whatsapp-dark">
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="#planos"
+              className="mt-8 inline-flex items-center gap-2 rounded-xl bg-whatsapp px-7 py-3.5 font-semibold text-white shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 hover:bg-whatsapp-dark"
+            >
+              Ativar IA na minha loja
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </Link>
+          </AnimateOnScroll>
+
+          <AnimateOnScroll animation="fade-left" delay={150}>
+            <AiChatDemo />
+          </AnimateOnScroll>
         </div>
       </section>
 
