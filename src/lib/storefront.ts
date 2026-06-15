@@ -2,8 +2,29 @@
  * Configurações visuais da loja pública (coluna `stores.storefront` JSONB).
  */
 
-/** Máximo de fotos no banner (carrossel quando >1; vazio = sem banner). */
-export const MAX_HERO_IMAGES = 3;
+/** Máximo de fotos dentro de um carrossel (1 = estático; 2+ = passa sozinho). */
+export const MAX_PHOTOS_PER_CAROUSEL = 3;
+
+/** Quantos carrosséis (faixas do banner) cada faixa de plano permite. */
+export const MAX_CAROUSELS_CHEAP = 5; // plano mais barato
+export const MAX_CAROUSELS_OTHER = 10; // demais planos
+/** Teto absoluto guardado/renderizado (defensivo, p. ex. após downgrade). */
+export const MAX_CAROUSELS_ABS = MAX_CAROUSELS_OTHER;
+
+/**
+ * Limite de carrosséis do plano. Plano mais barato → 5; qualquer outro → 10.
+ * `planId` é o plano atual da loja; `cheapestPlanId` é o de menor preço.
+ * Sem plano/desconhecido → trata como o mais barato (5).
+ */
+export function carouselLimitForPlan(
+  planId: string | null | undefined,
+  cheapestPlanId: string | null | undefined
+): number {
+  if (planId && cheapestPlanId && planId !== cheapestPlanId) {
+    return MAX_CAROUSELS_OTHER;
+  }
+  return MAX_CAROUSELS_CHEAP;
+}
 
 /** Proporção ideal do banner na loja pública (1920×600 ≈ 3.2:1). */
 export const HERO_RECOMMENDED_WIDTH = 1920;
@@ -48,8 +69,13 @@ export type StorefrontSettings = {
   heroCtaLabel: string;
   /** Ex.: #catalogo ou URL externa */
   heroCtaHref: string;
-  /** Fotos do lado direito do banner (1 = estático; 2+ = carrossel) */
-  heroImages: string[];
+  /**
+   * Faixas do banner empilhadas na loja. Cada faixa é um carrossel com até
+   * MAX_PHOTOS_PER_CAROUSEL fotos (1 = estática; 2+ = passa sozinha). Vazio =
+   * sem banner. A quantidade de faixas é limitada pelo plano (ver
+   * `carouselLimitForPlan`).
+   */
+  heroCarousels: string[][];
   /** Frases curtas abaixo do logo (ex.: pedido mínimo) */
   infoBullets: string[];
   /** Cor de destaque (botões catálogo, detalhes) — ex. rosa pó */
@@ -86,7 +112,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroTitle: "",
   heroCtaLabel: "Ver produtos",
   heroCtaHref: "#catalogo",
-  heroImages: [],
+  heroCarousels: [],
   infoBullets: [],
   themePrimary: "#c9a8ac",
   themeSecondary: "#5c2e36",
@@ -174,19 +200,35 @@ function categoriesFromDb(v: unknown): StorefrontCategoryItem[] {
   return out;
 }
 
-/** Lê heroImages[] ou migra heroImage legado (uma foto). */
-function heroImagesFromDb(o: Record<string, unknown>): string[] {
-  const arr = o.heroImages;
-  if (Array.isArray(arr)) {
-    return arr
-      .filter((x): x is string => typeof x === "string")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, MAX_HERO_IMAGES);
+/** Limpa um carrossel: strings não-vazias, no máximo MAX_PHOTOS_PER_CAROUSEL. */
+function sanitizeCarousel(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((x): x is string => typeof x === "string")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, MAX_PHOTOS_PER_CAROUSEL);
+}
+
+/**
+ * Lê `heroCarousels` (faixas do banner) ou migra o formato antigo:
+ * `heroImages` (lista única, vira 1 carrossel) ou `heroImage` (foto única).
+ */
+function heroCarouselsFromDb(o: Record<string, unknown>): string[][] {
+  const carousels = o.heroCarousels;
+  if (Array.isArray(carousels)) {
+    return carousels
+      .map(sanitizeCarousel)
+      .filter((c) => c.length > 0)
+      .slice(0, MAX_CAROUSELS_ABS);
   }
+  // Legado: heroImages era uma lista única de fotos do banner → 1 carrossel.
+  const legacyList = sanitizeCarousel(o.heroImages);
+  if (legacyList.length > 0) return [legacyList];
+  // Legado mais antigo ainda: heroImage (uma foto só).
   const single = o.heroImage;
   if (typeof single === "string" && single.trim()) {
-    return [single.trim()];
+    return [[single.trim()]];
   }
   return [];
 }
@@ -222,7 +264,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     heroTitle: strOrEmpty(o.heroTitle),
     heroCtaLabel: str(o.heroCtaLabel, DEFAULT_STOREFRONT.heroCtaLabel),
     heroCtaHref: str(o.heroCtaHref, DEFAULT_STOREFRONT.heroCtaHref),
-    heroImages: heroImagesFromDb(o),
+    heroCarousels: heroCarouselsFromDb(o),
     infoBullets: bulletsFromDb(o.infoBullets),
     themePrimary: str(o.themePrimary, DEFAULT_STOREFRONT.themePrimary),
     themeSecondary: str(o.themeSecondary, DEFAULT_STOREFRONT.themeSecondary),
@@ -261,10 +303,10 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     heroTitle: s.heroTitle.trim(),
     heroCtaLabel: s.heroCtaLabel.trim(),
     heroCtaHref: s.heroCtaHref.trim() || "#catalogo",
-    heroImages: s.heroImages
-      .map((u) => u.trim())
-      .filter(Boolean)
-      .slice(0, MAX_HERO_IMAGES),
+    heroCarousels: s.heroCarousels
+      .map(sanitizeCarousel)
+      .filter((c) => c.length > 0)
+      .slice(0, MAX_CAROUSELS_ABS),
     infoBullets: s.infoBullets.map((b) => b.trim()).filter(Boolean),
     themePrimary: s.themePrimary.trim(),
     themeSecondary: s.themeSecondary.trim(),

@@ -1877,40 +1877,46 @@ export function LojaClient({
         </div>
       </header>
 
-      {/* Banner só aparece para quem compra se o vendedor enviou ao menos uma foto */}
-      {storefront.heroImages.length > 0 && (
+      {/* Faixas do banner empilhadas. Só aparecem se o vendedor enviou fotos.
+          A 1ª faixa leva o título/CTA (hero); as demais são só imagem. */}
+      {storefront.heroCarousels.map((images, carouselIdx) => (
         <HeroBannerBlock
-          images={storefront.heroImages}
+          key={`hero-${carouselIdx}`}
+          images={images}
           themePrimary={storefront.themePrimary}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/20 to-transparent z-10 pointer-events-none" />
-          <div className="absolute inset-0 z-20 flex flex-col justify-end px-6 sm:px-10 md:px-14 pb-6 sm:pb-10 md:pb-12 max-w-3xl">
-            {storefront.heroSubtitle && (
-              <p className="text-sm sm:text-base text-white/90 font-medium tracking-widest uppercase">
-                {storefront.heroSubtitle}
-              </p>
-            )}
-            <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-[1.1] mt-2 drop-shadow-lg">
-              {heroDisplayTitle}
-            </h2>
-            {store.description && (
-              <p className="mt-3 text-white/85 text-sm md:text-base max-w-md leading-relaxed drop-shadow">
-                {store.description}
-              </p>
-            )}
-            <a
-              href={storefront.heroCtaHref || "#catalogo"}
-              onClick={(e) =>
-                handleHeroCta(e, storefront.heroCtaHref || "#catalogo")
-              }
-              className="mt-6 inline-flex items-center justify-center px-8 py-3 rounded-md text-white text-sm font-bold uppercase tracking-widest shadow-lg hover:opacity-90 transition-opacity self-start"
-              style={{ backgroundColor: "var(--store-secondary)" }}
-            >
-              {storefront.heroCtaLabel}
-            </a>
-          </div>
+          {carouselIdx === 0 && (
+            <>
+              <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/20 to-transparent z-10 pointer-events-none" />
+              <div className="absolute inset-0 z-20 flex flex-col justify-end px-6 sm:px-10 md:px-14 pb-6 sm:pb-10 md:pb-12 max-w-3xl">
+                {storefront.heroSubtitle && (
+                  <p className="text-sm sm:text-base text-white/90 font-medium tracking-widest uppercase">
+                    {storefront.heroSubtitle}
+                  </p>
+                )}
+                <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-[1.1] mt-2 drop-shadow-lg">
+                  {heroDisplayTitle}
+                </h2>
+                {store.description && (
+                  <p className="mt-3 text-white/85 text-sm md:text-base max-w-md leading-relaxed drop-shadow">
+                    {store.description}
+                  </p>
+                )}
+                <a
+                  href={storefront.heroCtaHref || "#catalogo"}
+                  onClick={(e) =>
+                    handleHeroCta(e, storefront.heroCtaHref || "#catalogo")
+                  }
+                  className="mt-6 inline-flex items-center justify-center px-8 py-3 rounded-md text-white text-sm font-bold uppercase tracking-widest shadow-lg hover:opacity-90 transition-opacity self-start"
+                  style={{ backgroundColor: "var(--store-secondary)" }}
+                >
+                  {storefront.heroCtaLabel}
+                </a>
+              </div>
+            </>
+          )}
         </HeroBannerBlock>
-      )}
+      ))}
 
       {categoryStripItems.length > 0 && (
         <StorefrontCategoriesStrip

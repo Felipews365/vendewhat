@@ -6,7 +6,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   DEFAULT_STOREFRONT,
-  MAX_HERO_IMAGES,
+  MAX_PHOTOS_PER_CAROUSEL,
+  carouselLimitForPlan,
   type StorefrontSettings,
   normalizeInstagramUrl,
   normalizeSocialUrl,
@@ -36,8 +37,9 @@ export default function ConfiguracoesLojaPage() {
   const [logoRemoved, setLogoRemoved] = useState(false);
   const [logoObjectUrl, setLogoObjectUrl] = useState<string | null>(null);
   const [sf, setSf] = useState<StorefrontSettings>({ ...DEFAULT_STOREFRONT });
-  const [pendingHeroFiles, setPendingHeroFiles] = useState<File[]>([]);
-  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [heroUploading, setHeroUploading] = useState(false);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [cheapestPlanId, setCheapestPlanId] = useState<string | null>(null);
   const [bannerDrag, setBannerDrag] = useState(false);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [catalogPreview, setCatalogPreview] = useState<CatalogPreviewProduct[]>(
@@ -91,33 +93,94 @@ export default function ConfiguracoesLojaPage() {
     return () => URL.revokeObjectURL(url);
   }, [pendingLogoFile]);
 
-  useEffect(() => {
-    if (pendingHeroFiles.length === 0) {
-      setPreviewBlobUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(pendingHeroFiles[0]);
-    setPreviewBlobUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [pendingHeroFiles]);
+  const maxCarousels = carouselLimitForPlan(planId, cheapestPlanId);
 
-  function addBannerFiles(fileList: FileList | File[]) {
+  /** Envia fotos direto pro storage e já adiciona no carrossel indicado. */
+  async function uploadHeroPhotos(
+    carouselIndex: number,
+    fileList: FileList | File[]
+  ) {
+    if (!storeId) return;
     const list = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
     if (!list.length) return;
-    setPendingHeroFiles((prev) => {
-      const free = MAX_HERO_IMAGES - sf.heroImages.length - prev.length;
-      if (free <= 0) {
-        showToast(`O banner aceita no máximo ${MAX_HERO_IMAGES} fotos.`, "error");
-        return prev;
+    const current = sf.heroCarousels[carouselIndex] ?? [];
+    const free = MAX_PHOTOS_PER_CAROUSEL - current.length;
+    if (free <= 0) {
+      showToast(
+        `Cada carrossel aceita no máximo ${MAX_PHOTOS_PER_CAROUSEL} fotos.`,
+        "error"
+      );
+      return;
+    }
+    const toUpload = list.slice(0, free);
+    if (list.length > free) {
+      showToast(`Só cabem mais ${free} foto(s) neste carrossel.`, "error");
+    }
+    setHeroUploading(true);
+    try {
+      const supabase = createClient();
+      const urls: string[] = [];
+      for (let i = 0; i < toUpload.length; i++) {
+        const file = toUpload[i];
+        const ext = file.name.split(".").pop() || "jpg";
+        const fileName = `${storeId}/storefront-hero-${Date.now()}-${i}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from("product-images")
+          .upload(fileName, file);
+        if (upErr) {
+          showToast("Erro ao enviar foto: " + upErr.message, "error");
+          continue;
+        }
+        const { data } = supabase.storage
+          .from("product-images")
+          .getPublicUrl(fileName);
+        urls.push(data.publicUrl);
       }
-      if (list.length > free) {
+      if (urls.length) {
+        setSf((s) => {
+          const next = s.heroCarousels.map((c) => [...c]);
+          while (next.length <= carouselIndex) next.push([]);
+          next[carouselIndex] = [...next[carouselIndex], ...urls].slice(
+            0,
+            MAX_PHOTOS_PER_CAROUSEL
+          );
+          return { ...s, heroCarousels: next };
+        });
+      }
+    } finally {
+      setHeroUploading(false);
+    }
+  }
+
+  function removeHeroPhoto(carouselIndex: number, photoIndex: number) {
+    setSf((s) => {
+      const next = s.heroCarousels
+        .map((c, ci) =>
+          ci === carouselIndex ? c.filter((_, pi) => pi !== photoIndex) : c
+        )
+        .filter((c) => c.length > 0);
+      return { ...s, heroCarousels: next };
+    });
+  }
+
+  function addCarousel() {
+    setSf((s) => {
+      if (s.heroCarousels.length >= maxCarousels) {
         showToast(
-          `Só cabem mais ${free} foto(s) no banner — usei as primeiras.`,
+          `Seu plano permite até ${maxCarousels} carrosséis no banner.`,
           "error"
         );
+        return s;
       }
-      return [...prev, ...list.slice(0, free)];
+      return { ...s, heroCarousels: [...s.heroCarousels, []] };
     });
+  }
+
+  function removeCarousel(carouselIndex: number) {
+    setSf((s) => ({
+      ...s,
+      heroCarousels: s.heroCarousels.filter((_, i) => i !== carouselIndex),
+    }));
   }
 
   useEffect(() => {
@@ -148,6 +211,29 @@ export default function ConfiguracoesLojaPage() {
           : null
       );
       setSf(storefrontFromDb(store.storefront));
+
+      // Plano da loja (define quantos carrosséis o banner permite).
+      const [{ data: sub }, { data: planRows }] = await Promise.all([
+        supabase
+          .from("subscriptions")
+          .select("plan_id")
+          .eq("store_id", store.id)
+          .maybeSingle(),
+        supabase
+          .from("plans")
+          .select("id, monthly")
+          .eq("active", true)
+          .order("monthly", { ascending: true }),
+      ]);
+      setPlanId(
+        sub && typeof sub.plan_id === "string" ? sub.plan_id : null
+      );
+      setCheapestPlanId(
+        planRows && planRows.length > 0 && typeof planRows[0].id === "string"
+          ? planRows[0].id
+          : "essencial"
+      );
+
       await loadCatalogPreview(store.id);
       setLoading(false);
     }
@@ -185,34 +271,8 @@ export default function ConfiguracoesLojaPage() {
 
     try {
       const supabase = createClient();
-      const maxHero = MAX_HERO_IMAGES;
-      let heroImages = [...sf.heroImages];
-
-      if (heroImages.length + pendingHeroFiles.length > maxHero) {
-        setError(
-          `No máximo ${maxHero} fotos no banner. Remova algumas ou envie menos arquivos.`
-        );
-        setSaving(false);
-        return;
-      }
-
-      for (let i = 0; i < pendingHeroFiles.length; i++) {
-        const file = pendingHeroFiles[i];
-        const ext = file.name.split(".").pop() || "jpg";
-        const fileName = `${storeId}/storefront-hero-${Date.now()}-${i}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from("product-images")
-          .upload(fileName, file);
-        if (upErr) {
-          setError("Erro ao enviar imagem do banner: " + upErr.message);
-          setSaving(false);
-          return;
-        }
-        const { data: urlData } = supabase.storage
-          .from("product-images")
-          .getPublicUrl(fileName);
-        heroImages.push(urlData.publicUrl);
-      }
+      // As fotos do banner já foram enviadas ao escolher (upload imediato);
+      // aqui só persistimos as URLs que estão em sf.heroCarousels.
 
       let nextLogo: string | null = storeLogo;
       if (logoRemoved) {
@@ -248,7 +308,6 @@ export default function ConfiguracoesLojaPage() {
 
       const payload = storefrontToDb({
         ...sf,
-        heroImages,
         instagramUrl: ig,
         facebookUrl: fb,
         tiktokUrl: tt,
@@ -276,13 +335,12 @@ export default function ConfiguracoesLojaPage() {
 
       setSf((prev) => ({
         ...prev,
-        heroImages,
+        heroCarousels: prev.heroCarousels.filter((c) => c.length > 0),
         instagramUrl: ig,
         facebookUrl: fb,
         tiktokUrl: tt,
       }));
       setStoreLogo(nextLogo);
-      setPendingHeroFiles([]);
       setPendingLogoFile(null);
       setLogoRemoved(false);
       await loadCatalogPreview(storeId);
@@ -306,7 +364,7 @@ export default function ConfiguracoesLojaPage() {
 
   const heroPreviewTitle =
     sf.heroTitle.trim() || storeName || "Nome da sua loja";
-  const bannerBgSrc = sf.heroImages[0] ?? previewBlobUrl;
+  const bannerBgSrc = sf.heroCarousels[0]?.[0] ?? null;
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
@@ -383,9 +441,12 @@ export default function ConfiguracoesLojaPage() {
           logoInputRef={logoInputRef}
           bannerDrag={bannerDrag}
           setBannerDrag={setBannerDrag}
-          addBannerFiles={addBannerFiles}
-          pendingHeroFiles={pendingHeroFiles}
-          setPendingHeroFiles={setPendingHeroFiles}
+          heroUploading={heroUploading}
+          maxCarousels={maxCarousels}
+          onUploadHeroPhotos={uploadHeroPhotos}
+          onRemoveHeroPhoto={removeHeroPhoto}
+          onAddCarousel={addCarousel}
+          onRemoveCarousel={removeCarousel}
           setBullet={setBullet}
           addBullet={addBullet}
           removeBullet={removeBullet}
