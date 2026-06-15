@@ -102,6 +102,7 @@ type UnderlineFieldProps = {
   required?: boolean;
   minLength?: number;
   autoComplete?: string;
+  onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void;
   icon: React.ReactNode;
   trailing?: React.ReactNode;
 };
@@ -116,6 +117,7 @@ export function UnderlineField({
   required,
   minLength,
   autoComplete,
+  onPaste,
   icon,
   trailing,
 }: UnderlineFieldProps) {
@@ -143,6 +145,7 @@ export function UnderlineField({
         required={required}
         minLength={minLength}
         autoComplete={autoComplete}
+        onPaste={onPaste}
         className="w-full bg-transparent border-0 border-b border-slate-200 py-2.5 text-slate-800 placeholder:text-slate-400 focus:ring-0 focus:border-landing-accent outline-none transition-colors text-[15px]"
       />
     </div>

@@ -97,7 +97,9 @@ export default function CriarLojaClient() {
   const [showPass, setShowPass] = useState(false);
   const [form, setForm] = useState({
     email: "",
+    confirmEmail: "",
     password: "",
+    confirmPassword: "",
     storeName: "",
     name: "",
     phone: "",
@@ -127,6 +129,14 @@ export default function CriarLojaClient() {
       setError("Informe um e-mail válido e senha com pelo menos 6 caracteres.");
       return;
     }
+    if (form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase()) {
+      setError("Os e-mails não conferem. Verifique e tente novamente.");
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setError("As senhas não conferem. Verifique e tente novamente.");
+      return;
+    }
     setError("");
     setStep(2);
   }
@@ -137,10 +147,11 @@ export default function CriarLojaClient() {
     setError("");
 
     try {
+      const { confirmEmail: _confirmEmail, confirmPassword: _confirmPassword, ...payload } = form;
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -203,6 +214,18 @@ export default function CriarLojaClient() {
                 icon={iconMail}
               />
               <UnderlineField
+                label="Confirme o e-mail"
+                name="confirmEmail"
+                type="email"
+                value={form.confirmEmail}
+                onChange={handleChange}
+                placeholder="repita seu e-mail"
+                required
+                autoComplete="email"
+                onPaste={(e) => e.preventDefault()}
+                icon={iconMail}
+              />
+              <UnderlineField
                 label="Senha"
                 name="password"
                 type={showPass ? "text" : "password"}
@@ -212,6 +235,29 @@ export default function CriarLojaClient() {
                 required
                 minLength={6}
                 autoComplete="new-password"
+                icon={
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowPass((v) => !v)}
+                    className="p-0.5 rounded hover:bg-slate-100 text-landing-primary"
+                    aria-label={showPass ? "Ocultar senha" : "Mostrar senha"}
+                  >
+                    <EyeIcon open={showPass} />
+                  </button>
+                }
+              />
+              <UnderlineField
+                label="Confirme a senha"
+                name="confirmPassword"
+                type={showPass ? "text" : "password"}
+                value={form.confirmPassword}
+                onChange={handleChange}
+                placeholder="repita sua senha"
+                required
+                minLength={6}
+                autoComplete="new-password"
+                onPaste={(e) => e.preventDefault()}
                 icon={
                   <button
                     type="button"
