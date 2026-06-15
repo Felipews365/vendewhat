@@ -77,15 +77,15 @@ export default function DashboardPage() {
 
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Painel da loja</h1>
-          <p className="text-slate-500 mt-1">
-            Gerencie sua loja <strong>{user.store?.name}</strong>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Painel da loja</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">
+            Gerencie sua loja <strong className="dark:text-slate-200">{user.store?.name}</strong>
           </p>
         </div>
         <button
           type="button"
           onClick={() => setShowSetupGuide(true)}
-          className="text-sm font-semibold text-landing-primary hover:text-landing-accent underline-offset-2 hover:underline text-left sm:text-right w-fit"
+          className="text-sm font-semibold text-landing-primary hover:text-landing-accent dark:text-violet-400 dark:hover:text-violet-300 underline-offset-2 hover:underline text-left sm:text-right w-fit"
         >
           Ver passo a passo para montar a loja
         </button>
@@ -97,32 +97,33 @@ export default function DashboardPage() {
           { label: "Pedidos", value: "0", icon: "🛒" },
           { label: "Vendas hoje", value: "R$ 0", icon: "💰" },
           { label: "Visitas", value: "0", icon: "👁️" },
-        ].map((stat) => (
+        ].map((stat, i) => (
           <div
             key={stat.label}
-            className="bg-white rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow"
+            className="vw-pop-in bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow"
+            style={{ animationDelay: `${i * 70}ms` }}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-slate-500">{stat.label}</span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">{stat.label}</span>
               <span className="text-2xl">{stat.icon}</span>
             </div>
-            <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
+            <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{stat.value}</p>
           </div>
         ))}
       </div>
 
       <div className="mb-8 max-w-xl">
-        <div className="bg-white rounded-xl p-6 shadow-sm">
-          <h2 className="font-semibold text-slate-800 mb-4">WhatsApp conectado</h2>
+        <div className="bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-6 shadow-sm">
+          <h2 className="font-semibold text-slate-800 dark:text-slate-100 mb-4">WhatsApp conectado</h2>
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-whatsapp/10 text-whatsapp text-lg">
               📱
             </span>
             <div>
-              <p className="text-sm font-medium text-slate-800">
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
                 {user.store?.phone || "Não configurado"}
               </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 dark:text-slate-500">
                 Os pedidos serão enviados para este número
               </p>
             </div>
@@ -130,7 +131,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <h2 className="text-lg font-semibold text-slate-800 mb-4">Ações rápidas</h2>
+      <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Ações rápidas</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
           {
@@ -155,22 +156,22 @@ export default function DashboardPage() {
           <Link
             key={action.title}
             href={action.href}
-            className="bg-white rounded-xl p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group"
+            className="bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-5 shadow-sm hover:shadow-md hover:dark:ring-violet-700 transition-all hover:-translate-y-0.5 group"
           >
             <span className="text-2xl group-hover:scale-110 inline-block transition-transform">
               {action.icon}
             </span>
-            <h3 className="mt-2 font-semibold text-slate-800">{action.title}</h3>
-            <p className="text-sm text-slate-500 mt-1">{action.desc}</p>
+            <h3 className="mt-2 font-semibold text-slate-800 dark:text-slate-100">{action.title}</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{action.desc}</p>
           </Link>
         ))}
       </div>
 
-      <div className="mt-8 bg-emerald-50 border border-emerald-200 rounded-xl p-6">
-        <h3 className="font-semibold text-emerald-800">
+      <div className="mt-8 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900 rounded-xl p-6">
+        <h3 className="font-semibold text-emerald-800 dark:text-emerald-300">
           Sua loja foi criada com sucesso! 🎉
         </h3>
-        <p className="text-sm text-emerald-700 mt-1">
+        <p className="text-sm text-emerald-700 dark:text-emerald-400/90 mt-1">
           Próximo passo: adicione seus primeiros produtos para começar a vender.
         </p>
       </div>

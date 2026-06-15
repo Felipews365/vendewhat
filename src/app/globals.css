@@ -7,6 +7,11 @@
   --background: #ffffff;
 }
 
+html.dark {
+  --foreground: #e2e8f0;
+  --background: #020617;
+}
+
 body {
   color: var(--foreground);
   background: var(--background);
@@ -15,4 +20,63 @@ body {
 
 html {
   scroll-behavior: smooth;
+}
+
+/* ---- Animações do painel ---- */
+
+@keyframes vw-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes vw-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  60% {
+    transform: translateY(-2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes vw-aurora {
+  0% {
+    transform: translate3d(-10%, 0, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(10%, 6%, 0) scale(1.25);
+  }
+  100% {
+    transform: translate3d(-10%, 0, 0) scale(1.1);
+  }
+}
+
+.vw-fade-in-up {
+  animation: vw-fade-in-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.vw-pop-in {
+  animation: vw-pop-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.vw-aurora {
+  animation: vw-aurora 18s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vw-fade-in-up,
+  .vw-pop-in,
+  .vw-aurora {
+    animation: none;
+  }
 }
