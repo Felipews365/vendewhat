@@ -291,7 +291,7 @@ export default function ConfiguracoesLojaPage() {
   const bannerBgSrc = sf.heroImages[0] ?? previewBlobUrl;
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-8">
+    <main className="max-w-6xl mx-auto px-4 py-8">
       <StoreSetupGuideModal
         open={showSetupGuide}
         onClose={() => setShowSetupGuide(false)}
