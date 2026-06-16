@@ -21,6 +21,8 @@ export const CATEGORY_PRESETS: CategoryPreset[] = [
   { label: "Vestidos", emoji: "👗", bg: "#e0e7ff" },
   { label: "Moletons", emoji: "🧥", bg: "#f3e8ff" },
   { label: "Shorts", emoji: "🩳", bg: "#dcfce7" },
+  { label: "Bermudas", emoji: "🩳", bg: "#cffafe" },
+  { label: "Shorts jeans", emoji: "🩳", bg: "#dbeafe" },
   { label: "Jaquetas", emoji: "🧥", bg: "#ffedd5" },
   { label: "Acessórios", emoji: "👜", bg: "#fae8d7" },
   { label: "Bolsas", emoji: "👜", bg: "#fee2e2" },
