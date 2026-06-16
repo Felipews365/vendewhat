@@ -91,13 +91,19 @@ As **formas de envio** estão em [src/lib/shippingModes.ts](src/lib/shippingMode
   bairro, cidade, UF, complemento). Validação em `addressComplete`; o **CEP é obrigatório só no
   Correios** (`cepRequired` + 8 dígitos). O endereço entra na mensagem do WhatsApp
   (`*Endereço de entrega:*`) e no `payload.customerAddress` do pedido.
+- **Excursão** → além do endereço, exige o **nome da excursão** (`excursionName`, validado por
+  `excursionComplete`). Vai na mensagem do WhatsApp (`*Excursão:*`) e em `payload.excursionName`.
+  A liberação dos botões de finalizar usa `checkoutReady` (junta nome, telefone, forma de envio,
+  endereço quando aplicável e nome da excursão).
 - **Retirada** → mostra o **endereço da loja** (`storefront.pickupAddress`), configurado no editor
   da vitrine ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), painel
   "Rodapé da vitrine"). Se vazio, exibe aviso de combinar pelo WhatsApp.
 
-O endereço aparece no painel em [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx). Não há
-migration: `pickupAddress` mora no JSONB `stores.storefront` e o endereço do cliente no
-`orders.payload` (ver [src/app/api/orders/route.ts](src/app/api/orders/route.ts)).
+O endereço e o nome da excursão aparecem no painel em
+[/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (tela e comprovante impresso). Não há
+migration: `pickupAddress` mora no JSONB `stores.storefront` e os dados do cliente
+(`customerAddress`, `excursionName`) no `orders.payload` (ver
+[src/app/api/orders/route.ts](src/app/api/orders/route.ts)).
 
 ### Impressão de pedidos
 

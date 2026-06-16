@@ -1278,6 +1278,7 @@ export function LojaClient({
     state: "",
     complement: "",
   });
+  const [excursionName, setExcursionName] = useState("");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("new");
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
@@ -1479,6 +1480,17 @@ export function LojaClient({
     address.state.trim().length >= 2 &&
     (!cepRequired || cepValid);
 
+  // Excursão exige o nome da excursão.
+  const excursionComplete =
+    shippingMode !== "excursao" || excursionName.trim().length > 0;
+  // Condição única para liberar o envio/pagamento do pedido.
+  const checkoutReady =
+    customerName.trim().length >= 2 &&
+    isCustomerPhoneValid(customerPhone) &&
+    !!shippingMode &&
+    (!needsAddress || addressComplete) &&
+    excursionComplete;
+
   function setAddressField(field: keyof typeof address, value: string) {
     setAddress((a) => ({ ...a, [field]: value }));
   }
@@ -1511,6 +1523,9 @@ export function LojaClient({
     if (shippingMode) {
       const lab = shippingModeLabel(shippingMode);
       if (lab) lines.push(`*Forma de envio:* ${lab}`);
+    }
+    if (shippingMode === "excursao" && excursionName.trim()) {
+      lines.push(`*Excursão:* ${excursionName.trim()}`);
     }
     if (needsAddress) {
       const addr = formatCustomerAddress();
@@ -1560,6 +1575,7 @@ export function LojaClient({
     if (!isCustomerPhoneValid(customerPhone)) return empty;
     if (!shippingMode) return empty;
     if (needsAddress && !addressComplete) return empty;
+    if (!excursionComplete) return empty;
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -1569,6 +1585,8 @@ export function LojaClient({
           customerName: name,
           customerPhone: customerPhone.trim(),
           shippingMode,
+          excursionName:
+            shippingMode === "excursao" ? excursionName.trim() : "",
           customerAddress: needsAddress ? formatCustomerAddress() : "",
           notes: notes.trim(),
           lines: items.map((i) => ({
@@ -2417,6 +2435,21 @@ export function LojaClient({
                         })}
                       </div>
                     </fieldset>
+                    {shippingMode === "excursao" && (
+                      <div className="space-y-1.5 min-w-0">
+                        <label className="text-sm font-medium text-boutique-wine">
+                          Nome da excursão <span className="text-red-600">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={excursionName}
+                          onChange={(e) => setExcursionName(e.target.value)}
+                          placeholder="Ex.: Excursão da Dona Maria"
+                          maxLength={120}
+                          className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
+                        />
+                      </div>
+                    )}
                     {needsAddress && (
                       <div className="space-y-2 min-w-0">
                         <p className="text-sm font-medium text-boutique-wine">
@@ -2563,12 +2596,7 @@ export function LojaClient({
                       window.open(href, "_blank", "noopener,noreferrer");
                     }
                   }}
-                  disabled={
-                    customerName.trim().length < 2 ||
-                    !isCustomerPhoneValid(customerPhone) ||
-                    !shippingMode ||
-                    (needsAddress && !addressComplete)
-                  }
+                  disabled={!checkoutReady}
                   className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-whatsapp text-white font-semibold hover:bg-whatsapp-dark transition-colors disabled:opacity-45 disabled:pointer-events-none"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -2580,13 +2608,7 @@ export function LojaClient({
                   <button
                     type="button"
                     onClick={handlePayOnline}
-                    disabled={
-                      paying ||
-                      customerName.trim().length < 2 ||
-                      !isCustomerPhoneValid(customerPhone) ||
-                      !shippingMode ||
-                      (needsAddress && !addressComplete)
-                    }
+                    disabled={paying || !checkoutReady}
                     className="mt-3 flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-[#009ee3] text-white font-semibold hover:bg-[#0089c7] transition-colors disabled:opacity-45 disabled:pointer-events-none"
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
@@ -2603,10 +2625,7 @@ export function LojaClient({
                   Registramos no painel com código do pedido e abrimos o WhatsApp com a
                   mesma mensagem
                 </p>
-                {customerName.trim().length < 2 ||
-                !isCustomerPhoneValid(customerPhone) ||
-                !shippingMode ||
-                (needsAddress && !addressComplete) ? (
+                {!checkoutReady ? (
                   <p className="text-xs text-amber-700 text-center mt-2">
                     {customerName.trim().length < 2 ? (
                       <>
@@ -2622,6 +2641,10 @@ export function LojaClient({
                       <>
                         Selecione a <strong>forma de envio</strong> (excursão,
                         Correios ou retirada).
+                      </>
+                    ) : !excursionComplete ? (
+                      <>
+                        Informe o <strong>nome da excursão</strong>.
                       </>
                     ) : cepRequired && !cepValid ? (
                       <>

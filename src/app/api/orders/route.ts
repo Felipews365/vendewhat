@@ -19,6 +19,8 @@ type Body = {
   customerPhone?: string;
   /** excursao | correios | retirada */
   shippingMode?: string;
+  /** Nome da excursão (só quando shippingMode === "excursao"). */
+  excursionName?: string;
   /** Endereço de entrega informado pelo cliente (excursão / correios). */
   customerAddress?: string;
   lines?: OrderLineInput[];
@@ -165,6 +167,12 @@ export async function POST(req: Request) {
       ? ""
       : String(body.customerAddress ?? "").trim().slice(0, 500);
 
+  // Nome da excursão só faz sentido quando a forma de envio é "excursao".
+  const excursionName =
+    shippingMode === "excursao"
+      ? String(body.excursionName ?? "").trim().slice(0, 120)
+      : "";
+
   const payloadLines = validated.pricedLines.map((l) => ({
     productId: l.productId,
     name: l.name,
@@ -210,6 +218,7 @@ export async function POST(req: Request) {
         orderNumber,
         shippingMode,
         shippingModeLabel: shippingModeLabelPt,
+        excursionName: excursionName || undefined,
         customerAddress: customerAddress || undefined,
       },
     })

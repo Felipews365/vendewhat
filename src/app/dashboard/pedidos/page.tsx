@@ -48,6 +48,7 @@ type OrderRow = {
     orderNumber?: number;
     shippingMode?: string;
     shippingModeLabel?: string;
+    excursionName?: string;
     customerAddress?: string;
   } | null;
 };
@@ -84,6 +85,7 @@ type PrintData = {
   client: string | null;
   phone: string | null;
   shipping: string | null;
+  excursion: string | null;
   deliveryAddress: string | null;
   date: string;
   total: string;
@@ -281,6 +283,7 @@ function buildReceiptHtml(store: StoreInfo, o: PrintData) {
     ${metaRow("Cliente:", o.client)}
     ${metaRow("Telefone:", o.phone)}
     ${metaRow("Forma de envio:", o.shipping)}
+    ${metaRow("Excursão:", o.excursion)}
     ${metaRow("Endereço:", o.deliveryAddress)}
     <hr class="divider" />
     <table>
@@ -348,6 +351,7 @@ function orderToPrintData(o: OrderRow): PrintData {
       o.payload?.shippingModeLabel?.trim() ||
       shippingModeLabel(o.payload?.shippingMode) ||
       null,
+    excursion: o.payload?.excursionName?.trim() || null,
     deliveryAddress: o.payload?.customerAddress?.trim() || null,
     date: formatDate(o.created_at),
     total: formatBRL(Number(o.subtotal)),
@@ -559,6 +563,7 @@ export default function PedidosPage() {
               shippingModeLabel(o.payload?.shippingMode) ||
               null;
             const deliveryAddress = o.payload?.customerAddress?.trim() || null;
+            const excursion = o.payload?.excursionName?.trim() || null;
             return (
               <li
                 key={o.id}
@@ -589,6 +594,14 @@ export default function PedidosPage() {
                           Forma de envio:
                         </span>{" "}
                         {shipping}
+                      </p>
+                    ) : null}
+                    {excursion ? (
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">
+                        <span className="font-medium text-slate-700 dark:text-slate-200">
+                          Excursão:
+                        </span>{" "}
+                        {excursion}
                       </p>
                     ) : null}
                     {deliveryAddress ? (
