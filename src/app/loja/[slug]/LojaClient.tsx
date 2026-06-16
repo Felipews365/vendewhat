@@ -1285,6 +1285,21 @@ export function LojaClient({
   /** Filtro da faixa de categorias (null = todos) */
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
+  /** Registra uma visita ao abrir a loja (uma vez por carregamento). */
+  const visitPinged = useRef(false);
+  useEffect(() => {
+    if (visitPinged.current || !store.slug) return;
+    visitPinged.current = true;
+    fetch("/api/loja/visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: store.slug }),
+      keepalive: true,
+    }).catch(() => {
+      /* contar visita nunca pode atrapalhar a loja */
+    });
+  }, [store.slug]);
+
   const filteredProducts = useMemo(() => {
     let list = products;
     const cf = categoryFilter?.trim();
@@ -1553,6 +1568,13 @@ export function LojaClient({
     );
     if (notes.trim()) {
       lines.push("", `Obs: ${notes.trim()}`);
+    }
+    const pixKey = storefront.pixKey.trim();
+    if (pixKey) {
+      lines.push("", "*Pagamento via Pix:*", `Chave: ${pixKey}`);
+      const pixName = storefront.pixName.trim();
+      if (pixName) lines.push(`Titular: ${pixName}`);
+      lines.push("Faça o Pix e envie o comprovante aqui, por favor. 🙏");
     }
     return lines.join("\n");
   }

@@ -99,6 +99,12 @@ As **formas de envio** estão em [src/lib/shippingModes.ts](src/lib/shippingMode
   da vitrine ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), painel
   "Rodapé da vitrine"). Se vazio, exibe aviso de combinar pelo WhatsApp.
 
+**Pix na mensagem do WhatsApp:** se a loja preencher a **chave Pix** (`storefront.pixKey` + titular
+`pixName`, no mesmo painel "Rodapé da vitrine"), a mensagem do **Enviar pedido no WhatsApp**
+(`buildOrderMessage` em LojaClient) termina com a chave para o cliente pagar e enviar o comprovante.
+Sem migration: mora no JSONB `stores.storefront`. É o fluxo de pagamento dos pedidos que **não**
+passam pelo Mercado Pago.
+
 O endereço e o nome da excursão aparecem no painel em
 [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (tela e comprovante impresso). Não há
 migration: `pickupAddress` mora no JSONB `stores.storefront` e os dados do cliente
@@ -116,11 +122,38 @@ cada pedido vai numa página separada (`page-break-before`). O cabeçalho usa a 
 e os dados da loja do `storefront` (`footerPhone`, `footerEmail`, `footerWebsite`, `pickupAddress`) —
 cada linha só aparece se preenchida. Não há migration nova.
 
+### Painel de pedidos (status, pagamento, filtros)
+
+Em [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx):
+
+- **Abas Em aberto × Finalizados** (com contador), **seletor de dia** (`Dia:`) e **agrupamento por
+  dia** (cabeçalhos "Hoje"/"Ontem"/data por extenso — `dayLabel`/`dayKey`). O status de atendimento
+  usa `orders.status` (`"novo"` = em aberto; `"finalizado"`).
+- **Marcar finalizado / reabrir** e **marcar pago / não pago** chamam
+  [/api/orders/update](src/app/api/orders/update/route.ts), que autentica o dono (server client) e
+  escreve via **service role** (a tabela `orders` só tem policy de SELECT). Pagamento confirmado na
+  mão grava `payment_provider='manual'`; quem veio do gateway mantém `'mercadopago'`.
+- **Selo de pagamento** (`paymentInfo`): "Pago pelo Mercado Pago" / "Pago (confirmado pela loja)"
+  (verde), pendente/falhou (amarelo/vermelho). Só aparece quando há `payment_provider` — pedidos só
+  de WhatsApp sem confirmação não mostram selo. Também sai no comprovante impresso.
+
+Sem migration nova: usa `orders.status` e as colunas de pagamento do
+[supabase-migration-mercadopago.sql](supabase-migration-mercadopago.sql).
+
+### Números do painel inicial e visitas
+
+[/dashboard/page.tsx](src/app/dashboard/page.tsx) mostra **Produtos**, **Pedidos**, **Vendas hoje**
+(soma de `orders.subtotal` do dia) e **Visitas** — todos consultados no banco (antes eram fixos em
+"0"). As **visitas** vêm da tabela `store_visits` (uma linha por acesso à loja pública): a página
+pinga [/api/loja/visit](src/app/api/loja/visit/route.ts) no carregamento (`LojaClient`, uma vez por
+load via `useRef`, gravação por service role). Migration:
+[supabase-migration-store-visits.sql](supabase-migration-store-visits.sql).
+
 ## Supabase
 
 - **Project URL:** `https://dbtoinsifpevufbtwyzu.supabase.co`
 - **Tabelas principais:** `stores`, `products`, `orders`, `store_whatsapp`, `whatsapp_messages`,
-  `plans`, `subscriptions`, `payments`
+  `plans`, `subscriptions`, `payments`, `store_payment_gateway`, `store_visits`
 - **Storage bucket:** `product-images`
 - **Variáveis de ambiente** (`.env` local / Vercel):
   - `NEXT_PUBLIC_SUPABASE_URL`
@@ -201,7 +234,11 @@ Duas integrações distintas, ambas via wrapper REST [src/lib/mercadopago.ts](sr
    `/dashboard/pagamentos` (`POST /api/store/payment-gateway`, validado via `/users/me` e guardado
    em `store_payment_gateway`; o token **nunca** vai ao browser). Na loja pública, o botão "Pagar com
    Mercado Pago" chama `POST /api/pay/preference` (cria a preference com o token do lojista) e o
-   `POST /api/pay/webhook?store=<slug>` marca `orders.payment_status='pago'`.
+   `POST /api/pay/webhook?store=<slug>` marca `orders.payment_status='pago'`
+   (`payment_provider='mercadopago'`). Na transição para pago, o webhook também **avisa a loja no
+   WhatsApp** (mensagem para o próprio número conectado via Evolution — `getConfig` + `sendText`),
+   com o pedido e "Pagamento confirmado". Só dispara uma vez (checa o status anterior) e exige o
+   WhatsApp da loja conectado; sem conexão, fica só o selo no painel.
 
 - **Segurança:** access tokens só no servidor; `store_payment_gateway` não tem policy de select
   (só service role). Os webhooks **sempre reconsultam** o status na API do MP antes de confirmar e

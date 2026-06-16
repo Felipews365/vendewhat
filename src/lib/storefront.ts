@@ -104,6 +104,10 @@ export type StorefrontSettings = {
   footerHours: string;
   footerShowPix: boolean;
   footerShowCash: boolean;
+  /** Chave Pix da loja (CPF/CNPJ, telefone, e-mail ou aleatória) — entra na mensagem de pedido por WhatsApp. */
+  pixKey: string;
+  /** Nome do titular da conta Pix (mostrado junto da chave). */
+  pixName: string;
 };
 
 export const DEFAULT_STOREFRONT: StorefrontSettings = {
@@ -132,6 +136,8 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   footerHours: "",
   footerShowPix: false,
   footerShowCash: false,
+  pixKey: "",
+  pixName: "",
 };
 
 function str(v: unknown, fallback: string): string {
@@ -290,6 +296,8 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       o.footerShowCash,
       DEFAULT_STOREFRONT.footerShowCash
     ),
+    pixKey: strOrEmpty(o.pixKey),
+    pixName: strOrEmpty(o.pixName),
   };
 }
 
@@ -319,6 +327,8 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     footerHours: s.footerHours.trim(),
     footerShowPix: s.footerShowPix,
     footerShowCash: s.footerShowCash,
+    pixKey: s.pixKey.trim(),
+    pixName: s.pixName.trim(),
     categories: s.categories
       .map((c) => {
         const label = c.label.trim();

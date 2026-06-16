@@ -30,6 +30,12 @@ export default function DashboardPage() {
   const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [waStatus, setWaStatus] = useState<WaStatus>("disconnected");
   const [waNumber, setWaNumber] = useState<string | null>(null);
+  const [stats, setStats] = useState({
+    products: 0,
+    orders: 0,
+    salesToday: 0,
+    visits: 0,
+  });
 
   useEffect(() => {
     const supabase = createClient();
@@ -57,6 +63,45 @@ export default function DashboardPage() {
         store,
       });
       setLoading(false);
+
+      // Números reais do painel (produtos, pedidos e vendas de hoje).
+      if (store?.id) {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        try {
+          const [prodRes, ordRes, salesRes, visitsRes] = await Promise.all([
+            supabase
+              .from("products")
+              .select("id", { count: "exact", head: true })
+              .eq("store_id", store.id),
+            supabase
+              .from("orders")
+              .select("id", { count: "exact", head: true })
+              .eq("store_id", store.id),
+            supabase
+              .from("orders")
+              .select("subtotal")
+              .eq("store_id", store.id)
+              .gte("created_at", todayStart.toISOString()),
+            supabase
+              .from("store_visits")
+              .select("id", { count: "exact", head: true })
+              .eq("store_id", store.id),
+          ]);
+          const salesToday = (salesRes.data ?? []).reduce(
+            (sum, r) => sum + Number((r as { subtotal?: number }).subtotal ?? 0),
+            0
+          );
+          setStats({
+            products: prodRes.count ?? 0,
+            orders: ordRes.count ?? 0,
+            salesToday,
+            visits: visitsRes.count ?? 0,
+          });
+        } catch {
+          /* mantém zeros se alguma consulta falhar */
+        }
+      }
 
       // Status real da conexão Evolution (não confiar num valor fixo).
       try {
@@ -109,10 +154,17 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Produtos", value: "0", icon: "📦" },
-          { label: "Pedidos", value: "0", icon: "🛒" },
-          { label: "Vendas hoje", value: "R$ 0", icon: "💰" },
-          { label: "Visitas", value: "0", icon: "👁️" },
+          { label: "Produtos", value: String(stats.products), icon: "📦" },
+          { label: "Pedidos", value: String(stats.orders), icon: "🛒" },
+          {
+            label: "Vendas hoje",
+            value: new Intl.NumberFormat("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }).format(stats.salesToday),
+            icon: "💰",
+          },
+          { label: "Visitas", value: String(stats.visits), icon: "👁️" },
         ].map((stat, i) => (
           <div
             key={stat.label}

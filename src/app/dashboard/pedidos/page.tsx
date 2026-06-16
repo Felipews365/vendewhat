@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/Toast";
 import {
   isMissingOrdersColumnError,
   ORDERS_MIGRATION_HINT,
@@ -39,6 +40,9 @@ type OrderRow = {
   customer_phone: string | null;
   subtotal: number;
   status: string;
+  payment_status: string | null;
+  payment_provider: string | null;
+  paid_at: string | null;
   notes: string | null;
   payload: {
     lines?: PayloadLine[];
@@ -71,6 +75,94 @@ function formatDate(iso: string) {
   }
 }
 
+/** Só a hora (para o card, já que o dia vira cabeçalho do grupo). */
+function formatTime(iso: string) {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" }).format(
+      new Date(iso)
+    );
+  } catch {
+    return iso;
+  }
+}
+
+const DAY_MS = 86_400_000;
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+/** Rótulo amigável do dia do pedido: "Hoje", "Ontem" ou a data por extenso. */
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const diff = Math.round((startOfDay(new Date()) - startOfDay(d)) / DAY_MS);
+  if (diff === 0) return "Hoje";
+  if (diff === 1) return "Ontem";
+  const s = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(d);
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Data local do pedido no formato YYYY-MM-DD (para comparar com o seletor de dia). */
+function dayKey(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Um pedido está "finalizado" quando o lojista marcou; o resto fica "em aberto". */
+function isFinalized(o: { status: string }): boolean {
+  return o.status === "finalizado";
+}
+
+function paymentProviderLabel(provider: string | null | undefined) {
+  switch ((provider ?? "").toLowerCase()) {
+    case "mercadopago":
+      return "Mercado Pago";
+    default:
+      return provider?.trim() || null;
+  }
+}
+
+type PaymentInfo = {
+  /** Texto curto para selo/linha, ex.: "Pago pelo Mercado Pago". */
+  label: string;
+  /** "pago" | "falhou" | "pendente" — define a cor do selo. */
+  tone: string;
+};
+
+/**
+ * Só retorna algo quando o pedido tem um provedor de pagamento (gateway ou
+ * confirmação manual da loja). Pedidos só de WhatsApp sem confirmação ficam com
+ * payment_status "pendente" por padrão e não mostram selo (evita poluir a lista).
+ */
+function paymentInfo(
+  provider: string | null | undefined,
+  status: string | null | undefined
+): PaymentInfo | null {
+  const tone = (status ?? "pendente").toLowerCase();
+  if ((provider ?? "").toLowerCase() === "manual") {
+    return { label: "Pago (confirmado pela loja)", tone: "pago" };
+  }
+  const prov = paymentProviderLabel(provider);
+  if (!prov) return null;
+  const label =
+    tone === "pago"
+      ? `Pago pelo ${prov}`
+      : tone === "falhou"
+      ? `Pagamento ${prov} falhou`
+      : `Pagamento ${prov} pendente`;
+  return { label, tone };
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -90,6 +182,7 @@ type PrintData = {
   date: string;
   total: string;
   status: string;
+  payment: string | null;
   notes: string | null;
   lines: PayloadLine[];
 };
@@ -296,6 +389,7 @@ function buildReceiptHtml(store: StoreInfo, o: PrintData) {
       <span>Total</span>
       <span>${escapeHtml(o.total)}</span>
     </div>
+    ${o.payment ? `<p class="meta" style="margin-top:8px"><span>Pagamento:</span> ${escapeHtml(o.payment)}</p>` : ""}
     ${
       o.notes?.trim()
         ? `<p class="notes"><span>Obs:</span> ${escapeHtml(o.notes.trim())}</p>`
@@ -356,6 +450,7 @@ function orderToPrintData(o: OrderRow): PrintData {
     date: formatDate(o.created_at),
     total: formatBRL(Number(o.subtotal)),
     status: o.status,
+    payment: paymentInfo(o.payment_provider, o.payment_status)?.label ?? null,
     notes: o.notes,
     lines: o.payload?.lines ?? [],
   };
@@ -390,6 +485,10 @@ export default function PedidosPage() {
   });
   const [loadError, setLoadError] = useState<string | null>(null);
   const [configHint, setConfigHint] = useState(false);
+  const [filter, setFilter] = useState<"abertos" | "finalizados">("abertos");
+  const [dayFilter, setDayFilter] = useState<string>("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const loadOrders = useCallback(async () => {
     setLoadError(null);
@@ -430,7 +529,7 @@ export default function PedidosPage() {
     const { data, error } = await supabase
       .from("orders")
       .select(
-        "id, created_at, order_number, customer_name, customer_phone, subtotal, status, notes, payload"
+        "id, created_at, order_number, customer_name, customer_phone, subtotal, status, payment_status, payment_provider, paid_at, notes, payload"
       )
       .eq("store_id", store.id)
       .order("created_at", { ascending: false })
@@ -463,6 +562,90 @@ export default function PedidosPage() {
     loadOrders();
   }, [loadOrders]);
 
+  /** Atualiza status de atendimento e/ou pagamento; reflete na hora na tela. */
+  const updateOrder = useCallback(
+    async (
+      orderId: string,
+      patch: { status?: string; paymentStatus?: string },
+      okMsg: string
+    ) => {
+      setBusyId(orderId);
+      try {
+        const res = await fetch("/api/orders/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId, ...patch }),
+        });
+        const j = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+        };
+        if (!res.ok || !j.ok) {
+          showToast(j.error ?? "Não foi possível atualizar o pedido.", "error");
+          return;
+        }
+        setOrders((prev) =>
+          prev.map((o) => {
+            if (o.id !== orderId) return o;
+            const next: OrderRow = { ...o };
+            if (patch.status !== undefined) next.status = patch.status;
+            if (patch.paymentStatus !== undefined) {
+              const keepMp = o.payment_provider === "mercadopago";
+              next.payment_status = patch.paymentStatus;
+              if (patch.paymentStatus === "pago") {
+                next.paid_at = new Date().toISOString();
+                next.payment_provider = keepMp ? "mercadopago" : "manual";
+              } else {
+                next.paid_at = null;
+                next.payment_provider = keepMp ? "mercadopago" : null;
+              }
+            }
+            return next;
+          })
+        );
+        showToast(okMsg, "success");
+      } catch {
+        showToast("Falha de rede ao atualizar o pedido.", "error");
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [showToast]
+  );
+
+  // Pedidos do dia escolhido (ou todos, se nenhum dia selecionado).
+  const dateScoped = useMemo(
+    () =>
+      orders.filter((o) => !dayFilter || dayKey(o.created_at) === dayFilter),
+    [orders, dayFilter]
+  );
+
+  const openCount = useMemo(
+    () => dateScoped.filter((o) => !isFinalized(o)).length,
+    [dateScoped]
+  );
+  const doneCount = dateScoped.length - openCount;
+
+  const visibleOrders = useMemo(
+    () =>
+      dateScoped.filter((o) =>
+        filter === "finalizados" ? isFinalized(o) : !isFinalized(o)
+      ),
+    [dateScoped, filter]
+  );
+
+  /** Pedidos visíveis agrupados por dia (já vêm ordenados do mais novo). */
+  const groups = useMemo(() => {
+    const out: { label: string; items: OrderRow[] }[] = [];
+    for (const o of visibleOrders) {
+      const label = dayLabel(o.created_at);
+      const last = out[out.length - 1];
+      if (last && last.label === label) last.items.push(o);
+      else out.push({ label, items: [o] });
+    }
+    return out;
+  }, [visibleOrders]);
+
   if (loading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
@@ -482,11 +665,11 @@ export default function PedidosPage() {
             contato continua pelo WhatsApp da loja.
           </p>
         </div>
-        {orders.length > 0 && (
+        {visibleOrders.length > 0 && (
           <button
             type="button"
             onClick={() =>
-              printAllOrders(storeInfo, orders.map(orderToPrintData))
+              printAllOrders(storeInfo, visibleOrders.map(orderToPrintData))
             }
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shrink-0"
           >
@@ -523,6 +706,57 @@ export default function PedidosPage() {
         </div>
       )}
 
+      {orders.length > 0 && (
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-1 text-sm font-semibold">
+            {(
+              [
+                ["abertos", `Em aberto (${openCount})`],
+                ["finalizados", `Finalizados (${doneCount})`],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setFilter(key)}
+                className={
+                  "px-4 py-1.5 rounded-lg transition-colors " +
+                  (filter === key
+                    ? "bg-landing-primary text-white"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800")
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="inline-flex items-center gap-2 text-sm">
+            <label
+              htmlFor="day-filter"
+              className="text-slate-500 dark:text-slate-400 font-medium"
+            >
+              Dia:
+            </label>
+            <input
+              id="day-filter"
+              type="date"
+              value={dayFilter}
+              onChange={(e) => setDayFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-200 text-sm"
+            />
+            {dayFilter && (
+              <button
+                type="button"
+                onClick={() => setDayFilter("")}
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 font-medium"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {orders.length === 0 && !configHint && !loadError ? (
         <div className="mt-8 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm p-8 text-center">
           <span className="text-4xl" aria-hidden>
@@ -542,9 +776,26 @@ export default function PedidosPage() {
             </Link>
           </div>
         </div>
+      ) : orders.length > 0 && visibleOrders.length === 0 ? (
+        <div className="mt-8 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+          {dayFilter
+            ? `Nenhum pedido ${
+                filter === "finalizados" ? "finalizado" : "em aberto"
+              } nesse dia.`
+            : filter === "finalizados"
+            ? "Nenhum pedido finalizado ainda."
+            : "Nenhum pedido em aberto. Tudo em dia! 🎉"}
+        </div>
       ) : orders.length > 0 ? (
-        <ul className="mt-8 space-y-4">
-          {orders.map((o) => {
+        <div className="mt-8 space-y-8">
+          {groups.map((g) => (
+            <section key={g.label}>
+              <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-3">
+                {g.label} · {g.items.length}{" "}
+                {g.items.length === 1 ? "pedido" : "pedidos"}
+              </h2>
+              <ul className="space-y-4">
+                {g.items.map((o) => {
             const lines = o.payload?.lines ?? [];
             const num =
               o.order_number ??
@@ -564,6 +815,7 @@ export default function PedidosPage() {
               null;
             const deliveryAddress = o.payload?.customerAddress?.trim() || null;
             const excursion = o.payload?.excursionName?.trim() || null;
+            const payment = paymentInfo(o.payment_provider, o.payment_status);
             return (
               <li
                 key={o.id}
@@ -613,7 +865,7 @@ export default function PedidosPage() {
                       </p>
                     ) : null}
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-                      {formatDate(o.created_at)}
+                      {formatTime(o.created_at)}
                     </p>
                     <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 font-mono">
                       id {o.id.slice(0, 8)}…
@@ -623,9 +875,33 @@ export default function PedidosPage() {
                     <p className="text-lg font-bold text-slate-800 dark:text-slate-100">
                       {formatBRL(Number(o.subtotal))}
                     </p>
-                    <span className="inline-block mt-1 text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300">
-                      {o.status}
-                    </span>
+                    <div className="mt-1 flex flex-wrap justify-end gap-1.5">
+                      <span
+                        className={
+                          "inline-block text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full " +
+                          (isFinalized(o)
+                            ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                            : "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300")
+                        }
+                      >
+                        {isFinalized(o) ? "Finalizado" : "Em aberto"}
+                      </span>
+                      {payment ? (
+                        <span
+                          className={
+                            "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full " +
+                            (payment.tone === "pago"
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                              : payment.tone === "falhou"
+                              ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                              : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300")
+                          }
+                        >
+                          <span aria-hidden>💳</span>
+                          {payment.label}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="mt-2">
                       <button
                         type="button"
@@ -679,10 +955,62 @@ export default function PedidosPage() {
                     {o.notes.trim()}
                   </p>
                 )}
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={busyId === o.id}
+                    onClick={() =>
+                      updateOrder(
+                        o.id,
+                        { status: isFinalized(o) ? "novo" : "finalizado" },
+                        isFinalized(o)
+                          ? "Pedido reaberto."
+                          : "Pedido finalizado!"
+                      )
+                    }
+                    className={
+                      "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 " +
+                      (isFinalized(o)
+                        ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                        : "bg-emerald-600 text-white hover:bg-emerald-700")
+                    }
+                  >
+                    {isFinalized(o) ? "↩ Reabrir" : "✓ Marcar como finalizado"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyId === o.id}
+                    onClick={() =>
+                      updateOrder(
+                        o.id,
+                        {
+                          paymentStatus:
+                            o.payment_status === "pago" ? "pendente" : "pago",
+                        },
+                        o.payment_status === "pago"
+                          ? "Pagamento desmarcado."
+                          : "Pedido marcado como pago!"
+                      )
+                    }
+                    className={
+                      "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 " +
+                      (o.payment_status === "pago"
+                        ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                        : "bg-landing-primary text-white hover:opacity-90")
+                    }
+                  >
+                    {o.payment_status === "pago"
+                      ? "Desmarcar pago"
+                      : "💳 Marcar como pago"}
+                  </button>
+                </div>
               </li>
-            );
-          })}
-        </ul>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
       ) : null}
     </main>
   );

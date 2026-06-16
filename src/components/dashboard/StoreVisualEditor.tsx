@@ -1493,6 +1493,30 @@ export function StoreVisualEditor({
             Mostrar dinheiro
           </label>
         </div>
+        <label className="block text-sm font-medium text-slate-700">
+          Chave Pix
+        </label>
+        <input
+          type="text"
+          value={sf.pixKey}
+          onChange={(e) => setSf((s) => ({ ...s, pixKey: e.target.value }))}
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          placeholder="CPF, telefone, e-mail ou chave aleatória"
+        />
+        <label className="block text-sm font-medium text-slate-700">
+          Nome do titular do Pix
+        </label>
+        <input
+          type="text"
+          value={sf.pixName}
+          onChange={(e) => setSf((s) => ({ ...s, pixName: e.target.value }))}
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          placeholder="Ex.: Maria da Silva"
+        />
+        <p className="text-[11px] text-slate-500">
+          Quando o cliente finalizar por <strong>Enviar pedido no WhatsApp</strong>,
+          a chave Pix entra na mensagem para ele pagar e enviar o comprovante.
+        </p>
         <p className="text-[11px] text-slate-500">
           Instagram, Facebook, TikTok e YouTube ficam em{" "}
           <button
