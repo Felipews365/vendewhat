@@ -59,6 +59,16 @@ Orientações para o Claude Code trabalhar neste repositório.
   usado como `imageUrl` da categoria — sem hospedagem. A galeria fica no
   [CategoryFormModal.tsx](src/components/CategoryFormModal.tsx) (variant `store`), ao lado do upload
   e do campo de URL.
+- **Categorias salvam na hora:** no editor da loja, salvar/excluir uma categoria pelo modal
+  **persiste imediatamente** (não espera o "Salvar loja"). As categorias moram no JSONB
+  `storefront.categories`; o `onSave`/`onDelete` em
+  [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) atualiza o estado `sf` **e**
+  chama a prop `onAutoSaveStorefront`, implementada por `autoSaveStorefront` em
+  [configuracoes/page.tsx](src/app/dashboard/configuracoes/page.tsx) (grava o `storefront` em
+  `stores` na hora e recarrega a prévia). O toast "Categoria salva!" vem do modal; o auto-save só
+  avisa em caso de erro. O resto da vitrine (banner, cores, logo, rodapé…) continua só no "Salvar
+  loja". Produtos têm página própria (`/dashboard/produtos/[id]` e `/novo`) com seu próprio Salvar,
+  independente disso.
 - **Banner da loja (um carrossel só):** o banner é **uma lista única de fotos**
   (`storefront.heroImages: string[]` em [src/lib/storefront.ts](src/lib/storefront.ts)) que
   passam **uma atrás da outra** (1→2→…) no mesmo lugar — não há faixas empilhadas. Renderizado por
