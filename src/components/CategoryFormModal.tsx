@@ -299,7 +299,7 @@ export function CategoryFormModal({
               </label>
               <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
                 {CATEGORY_PRESETS.map((p) => {
-                  const uri = emojiCategoryImage(p.emoji, p.bg);
+                  const uri = p.image ?? emojiCategoryImage(p.emoji, p.bg);
                   const selected = imageUrl.trim() === uri;
                   return (
                     <button
@@ -307,14 +307,24 @@ export function CategoryFormModal({
                       type="button"
                       onClick={() => handlePresetPick(p.label, uri)}
                       title={p.label}
-                      className={`aspect-square rounded-full flex items-center justify-center text-xl transition-transform hover:scale-105 ${
+                      className={`aspect-square rounded-full overflow-hidden flex items-center justify-center text-xl transition-transform hover:scale-105 ${
                         selected
                           ? "ring-2 ring-landing-primary ring-offset-2"
                           : "ring-1 ring-slate-200"
                       }`}
                       style={{ backgroundColor: p.bg }}
                     >
-                      <span aria-hidden>{p.emoji}</span>
+                      {p.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.image}
+                          alt=""
+                          aria-hidden
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span aria-hidden>{p.emoji}</span>
+                      )}
                     </button>
                   );
                 })}
