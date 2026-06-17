@@ -742,7 +742,18 @@ export default function PedidosPage() {
               type="date"
               value={dayFilter}
               onChange={(e) => setDayFilter(e.target.value)}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-200 text-sm"
+              onClick={(e) => {
+                // Abre a agenda ao clicar em qualquer parte do campo (não só no ícone)
+                const el = e.currentTarget as HTMLInputElement & {
+                  showPicker?: () => void;
+                };
+                try {
+                  el.showPicker?.();
+                } catch {
+                  /* navegador sem suporte: cai no comportamento padrão */
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-200 text-sm cursor-pointer"
             />
             {dayFilter && (
               <button
