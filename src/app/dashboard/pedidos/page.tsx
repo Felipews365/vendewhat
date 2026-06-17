@@ -488,6 +488,8 @@ export default function PedidosPage() {
   const [filter, setFilter] = useState<"abertos" | "finalizados">("abertos");
   const [dayFilter, setDayFilter] = useState<string>("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { showToast } = useToast();
 
   const loadOrders = useCallback(async () => {
@@ -646,6 +648,43 @@ export default function PedidosPage() {
     return out;
   }, [visibleOrders]);
 
+  // IDs visíveis (respeitando aba + dia) — base para "selecionar todos".
+  const visibleIds = useMemo(
+    () => visibleOrders.map((o) => o.id),
+    [visibleOrders]
+  );
+
+  // Quantos dos selecionados ainda estão visíveis (o resto é ignorado ao imprimir).
+  const selectedVisibleCount = useMemo(
+    () => visibleIds.filter((id) => selectedIds.has(id)).length,
+    [visibleIds, selectedIds]
+  );
+  const allVisibleSelected =
+    visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const printSelected = useCallback(() => {
+    const chosen = visibleOrders.filter((o) => selectedIds.has(o.id));
+    if (chosen.length === 0) {
+      showToast("Selecione pelo menos um pedido para imprimir.", "error");
+      return;
+    }
+    printAllOrders(storeInfo, chosen.map(orderToPrintData));
+  }, [visibleOrders, selectedIds, storeInfo, showToast]);
+
   if (loading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
@@ -666,12 +705,87 @@ export default function PedidosPage() {
           </p>
         </div>
         {visibleOrders.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() =>
+                selectMode ? exitSelectMode() : setSelectMode(true)
+              }
+              className={
+                "inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors " +
+                (selectMode
+                  ? "border-landing-primary bg-landing-primary/10 text-landing-primary dark:bg-landing-primary/20"
+                  : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700")
+              }
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4"
+                aria-hidden
+              >
+                <polyline points="9 11 12 14 22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+              {selectMode ? "Cancelar seleção" : "Selecionar"}
+            </button>
+            {!selectMode && (
+              <button
+                type="button"
+                onClick={() =>
+                  printAllOrders(storeInfo, visibleOrders.map(orderToPrintData))
+                }
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-4 h-4"
+                  aria-hidden
+                >
+                  <polyline points="6 9 6 2 18 2 18 9" />
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                  <rect x="6" y="14" width="12" height="8" />
+                </svg>
+                Imprimir todos
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {selectMode && visibleOrders.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-landing-primary/30 bg-landing-primary/5 dark:bg-landing-primary/10 px-4 py-3">
           <button
             type="button"
             onClick={() =>
-              printAllOrders(storeInfo, visibleOrders.map(orderToPrintData))
+              setSelectedIds(
+                allVisibleSelected ? new Set() : new Set(visibleIds)
+              )
             }
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shrink-0"
+            className="text-sm font-semibold text-landing-primary hover:underline"
+          >
+            {allVisibleSelected ? "Limpar seleção" : "Selecionar todos"}
+          </button>
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            {selectedVisibleCount} de {visibleIds.length} selecionado
+            {selectedVisibleCount === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={printSelected}
+            disabled={selectedVisibleCount === 0}
+            className="ml-auto inline-flex items-center gap-2 rounded-xl bg-landing-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -688,10 +802,11 @@ export default function PedidosPage() {
               <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
               <rect x="6" y="14" width="12" height="8" />
             </svg>
-            Imprimir todos
+            Imprimir selecionados
+            {selectedVisibleCount > 0 ? ` (${selectedVisibleCount})` : ""}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {configHint && (
         <div className="mt-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-200 text-sm">
@@ -845,11 +960,28 @@ export default function PedidosPage() {
             const deliveryAddress = o.payload?.customerAddress?.trim() || null;
             const excursion = o.payload?.excursionName?.trim() || null;
             const payment = paymentInfo(o.payment_provider, o.payment_status);
+            const selected = selectedIds.has(o.id);
             return (
               <li
                 key={o.id}
-                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm p-5"
+                className={
+                  "bg-white dark:bg-slate-900 rounded-xl border shadow-sm p-5 transition " +
+                  (selectMode && selected
+                    ? "border-landing-primary ring-2 ring-landing-primary/40"
+                    : "border-slate-100 dark:border-slate-800")
+                }
               >
+                {selectMode && (
+                  <label className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-100 dark:border-slate-800 cursor-pointer select-none text-sm font-medium text-slate-700 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleSelected(o.id)}
+                      className="h-4 w-4 rounded border-slate-300 text-landing-primary focus:ring-landing-primary"
+                    />
+                    {selected ? "Selecionado para imprimir" : "Selecionar este pedido"}
+                  </label>
+                )}
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
                   <div>
                     <p className="text-lg font-bold text-slate-800 dark:text-slate-100">

@@ -113,7 +113,10 @@ migration: `pickupAddress` mora no JSONB `stores.storefront` e os dados do clien
 
 ### Impressão de pedidos
 
-A página de pedidos tem **Imprimir** (por pedido) e **Imprimir todos** (no topo). Ambos chamam
+A página de pedidos tem **Imprimir** (por pedido), **Imprimir todos** (no topo) e um botão
+**Selecionar** que entra no *modo de seleção*: aparece um checkbox em cada card e uma barra com
+"Selecionar todos"/"Limpar", o contador e **Imprimir selecionados (N)** (estados `selectMode` e
+`selectedIds: Set<string>`; `printSelected` filtra os visíveis marcados). Os três caminhos chamam
 `printReceipts()` em [src/app/dashboard/pedidos/page.tsx](src/app/dashboard/pedidos/page.tsx),
 que abre uma janela `window.open` com um recibo montado em HTML/CSS próprios (string em
 `PRINT_STYLES` + `buildReceiptHtml`), independente do tema escuro do painel. A janela mostra uma
