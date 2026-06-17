@@ -242,6 +242,7 @@ export function StoreVisualEditor({
   removeBullet,
   catalogPreview = [],
   storeId = null,
+  onAutoSaveStorefront,
 }: {
   storeName: string;
   storeSlug: string;
@@ -272,6 +273,11 @@ export function StoreVisualEditor({
   removeBullet: (i: number) => void;
   /** Produtos reais (até ~32 na prévia); no fim aparece sempre um slot “Adicione aqui”. */
   catalogPreview?: CatalogPreviewProduct[];
+  /**
+   * Persiste a vitrine no banco imediatamente (sem esperar “Salvar loja”).
+   * Usado ao salvar/excluir uma categoria pelo modal.
+   */
+  onAutoSaveStorefront?: (next: StorefrontSettings) => void;
 }) {
   const [panel, setPanel] = useState<EditorPanel>(null);
   const [storeCategoryModal, setStoreCategoryModal] = useState<{
@@ -1564,36 +1570,36 @@ export function StoreVisualEditor({
           };
           const pl = d.parentLabel?.trim();
           if (pl) item.parentLabel = pl;
-          setSf((s) => {
-            const next = [...s.categories];
-            if (editIdx !== null && editIdx >= 0 && editIdx < next.length) {
-              next[editIdx] = item;
-              return { ...s, categories: next };
-            }
-            if (next.length >= 8) return s;
-            return {
-              ...s,
-              categories: [...next, item],
-            };
-          });
+          const next = [...sf.categories];
+          let nextSf: StorefrontSettings | null = null;
+          if (editIdx !== null && editIdx >= 0 && editIdx < next.length) {
+            next[editIdx] = item;
+            nextSf = { ...sf, categories: next };
+          } else if (next.length < 8) {
+            nextSf = { ...sf, categories: [...next, item] };
+          }
+          if (nextSf) {
+            setSf(nextSf);
+            onAutoSaveStorefront?.(nextSf);
+          }
         }}
         onDelete={
           storeCategoryModal.editIndex !== null
             ? () => {
                 const editIdx = storeCategoryModal.editIndex;
-                setSf((s) => {
-                  if (
-                    editIdx === null ||
-                    editIdx < 0 ||
-                    editIdx >= s.categories.length
-                  ) {
-                    return s;
-                  }
-                  return {
-                    ...s,
-                    categories: s.categories.filter((_, j) => j !== editIdx),
-                  };
-                });
+                if (
+                  editIdx === null ||
+                  editIdx < 0 ||
+                  editIdx >= sf.categories.length
+                ) {
+                  return;
+                }
+                const nextSf: StorefrontSettings = {
+                  ...sf,
+                  categories: sf.categories.filter((_, j) => j !== editIdx),
+                };
+                setSf(nextSf);
+                onAutoSaveStorefront?.(nextSf);
               }
             : undefined
         }

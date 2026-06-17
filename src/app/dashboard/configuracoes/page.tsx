@@ -271,6 +271,33 @@ export default function ConfiguracoesLojaPage() {
     }));
   }
 
+  /**
+   * Persiste a vitrine no banco na hora (sem esperar o “Salvar loja”).
+   * Usado ao salvar/excluir uma categoria pelo editor — o modal já mostra o
+   * toast “Categoria salva!”, então aqui só avisamos em caso de erro.
+   */
+  async function autoSaveStorefront(next: StorefrontSettings) {
+    if (!storeId) return;
+    try {
+      const supabase = createClient();
+      const payload = storefrontToDb(next);
+      const { error: up } = await supabase
+        .from("stores")
+        .update({
+          storefront: payload,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", storeId);
+      if (up) {
+        showToast("Não foi possível salvar a categoria. Tente de novo.", "error");
+        return;
+      }
+      await loadCatalogPreview(storeId);
+    } catch {
+      showToast("Erro de conexão ao salvar a categoria.", "error");
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!storeId) return;
@@ -457,6 +484,7 @@ export default function ConfiguracoesLojaPage() {
           addBullet={addBullet}
           removeBullet={removeBullet}
           catalogPreview={catalogPreview}
+          onAutoSaveStorefront={autoSaveStorefront}
         />
 
         <div className="flex gap-3 pt-2">
