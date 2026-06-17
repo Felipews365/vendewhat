@@ -68,7 +68,10 @@ Orientações para o Claude Code trabalhar neste repositório.
   `stores` na hora e recarrega a prévia). O toast "Categoria salva!" vem do modal; o auto-save só
   avisa em caso de erro. O resto da vitrine (banner, cores, logo, rodapé…) continua só no "Salvar
   loja". Produtos têm página própria (`/dashboard/produtos/[id]` e `/novo`) com seu próprio Salvar,
-  independente disso.
+  independente disso. A **ordem** das categorias = ordem do array `storefront.categories` (vale na
+  prévia e na loja pública); no painel "Categorias" cada item tem setas **▲/▼** (`moveStoreCategory`
+  em [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)) que trocam a posição e
+  **salvam na hora** (via `onAutoSaveStorefront`, igual salvar/excluir).
 - **Banner da loja (um carrossel só):** o banner é **uma lista única de fotos**
   (`storefront.heroImages: string[]` em [src/lib/storefront.ts](src/lib/storefront.ts)) que
   passam **uma atrás da outra** (1→2→…) no mesmo lugar — não há faixas empilhadas. Renderizado por

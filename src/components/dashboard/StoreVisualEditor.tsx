@@ -332,6 +332,17 @@ export function StoreVisualEditor({
     4 - Math.min(labeledStoreCategories.length, 4)
   );
 
+  /** Troca a categoria de posição (−1 = sobe, +1 = desce) e salva na hora. */
+  const moveStoreCategory = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= sf.categories.length) return;
+    const next = [...sf.categories];
+    [next[i], next[j]] = [next[j]!, next[i]!];
+    const nextSf: StorefrontSettings = { ...sf, categories: next };
+    setSf(nextSf);
+    onAutoSaveStorefront?.(nextSf);
+  };
+
   const displayLogo =
     logoPreviewObjectUrl ||
     (!logoRemoved && storeLogoUrl ? storeLogoUrl : null);
@@ -1242,18 +1253,40 @@ export function StoreVisualEditor({
                 <span className="text-xs font-semibold text-slate-600">
                   Categoria {i + 1}
                 </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSf((s) => ({
-                      ...s,
-                      categories: s.categories.filter((_, j) => j !== i),
-                    }))
-                  }
-                  className="text-xs text-red-600 hover:underline shrink-0"
-                >
-                  Remover
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    disabled={i === 0}
+                    title="Mover para cima"
+                    aria-label="Mover categoria para cima"
+                    onClick={() => moveStoreCategory(i, -1)}
+                    className="px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    disabled={i === sf.categories.length - 1}
+                    title="Mover para baixo"
+                    aria-label="Mover categoria para baixo"
+                    onClick={() => moveStoreCategory(i, 1)}
+                    className="px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSf((s) => ({
+                        ...s,
+                        categories: s.categories.filter((_, j) => j !== i),
+                      }))
+                    }
+                    className="text-xs text-red-600 hover:underline ml-1"
+                  >
+                    Remover
+                  </button>
+                </div>
               </div>
               <label className="block text-[11px] font-medium text-slate-600">
                 Nome
