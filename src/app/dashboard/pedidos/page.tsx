@@ -755,6 +755,24 @@ export default function PedidosPage() {
               }}
               className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-slate-200 text-sm cursor-pointer"
             />
+            {(() => {
+              const today = dayKey(new Date().toISOString());
+              const isToday = dayFilter === today;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setDayFilter(isToday ? "" : today)}
+                  className={
+                    "px-3 py-1.5 rounded-lg border text-sm font-medium transition " +
+                    (isToday
+                      ? "bg-landing-primary text-white border-landing-primary"
+                      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800")
+                  }
+                >
+                  Hoje
+                </button>
+              );
+            })()}
             {dayFilter && (
               <button
                 type="button"
