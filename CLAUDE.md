@@ -213,8 +213,13 @@ uma instância Evolution e uma config de IA por loja.
 - **Libs:** [src/lib/evolution.ts](src/lib/evolution.ts) (wrapper REST da Evolution),
   [src/lib/whatsappConfig.ts](src/lib/whatsappConfig.ts) (config/histórico),
   [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts) (OpenAI).
-- **Rotas:** `src/app/api/whatsapp/{connect,status,disconnect,config,webhook}/route.ts`.
+- **Rotas:** `src/app/api/whatsapp/{connect,status,disconnect,config,webhook,pause}/route.ts`.
   O `webhook` é público e validado por um `token` por loja (query string).
+- **Apresentação no 1º contato:** na primeira mensagem de cada cliente a IA se apresenta com o
+  **nome do atendente** (`ai_name`) + **nome da loja** e depois não repete. O webhook detecta o
+  primeiro contato por `getRecentHistory(...).length === 0` (lido **antes** de gravar a mensagem
+  nova) e passa `isFirstContact` para `buildSystemPrompt` em
+  [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts).
 - **Variáveis de ambiente extras** (`.env` local / Vercel):
   - `EVOLUTION_API_URL` — base da Evolution (ex.: `https://evo.seudominio.com`)
   - `EVOLUTION_API_KEY` — apikey global da Evolution
@@ -223,6 +228,35 @@ uma instância Evolution e uma config de IA por loja.
   - `APP_BASE_URL` — URL pública do app (monta o link da loja e a URL do webhook;
     o webhook roda no servidor, então não dá pra usar `window.location`). Em dev, use
     um túnel (cloudflared/ngrok) pois a Evolution precisa alcançar o app.
+
+### Pausar o atendimento da IA (assumir a conversa)
+
+O lojista pode pausar a IA quando quiser, em `/dashboard/whatsapp` (seção **Pausar atendimento**).
+Tudo por loja. **Migration:** rode
+[supabase-migration-whatsapp-pause.sql](supabase-migration-whatsapp-pause.sql) (adiciona
+`ai_paused`, `ai_paused_until`, `ai_handoff_minutes` em `store_whatsapp` e cria a tabela
+`whatsapp_pauses` — chave `(store_id, customer_phone)`).
+
+- **Pausa global** (todos os clientes): `store_whatsapp.ai_paused` + `ai_paused_until` (ISO; `null`
+  = até a loja reativar). `globalPauseActive()` em
+  [src/lib/whatsappConfig.ts](src/lib/whatsappConfig.ts) considera a expiração.
+- **Pausa por cliente**: linha em `whatsapp_pauses` (`paused_until` `null` = indefinido). A simples
+  existência da linha = pausado; `isCustomerPaused()` **limpa a linha** quando expira, então o
+  retorno acontece no tempo certo **sem job agendado** (lazy cleanup no próximo evento). Também há
+  limpeza preguiçosa no `GET /api/whatsapp/pause` (lista) e da pausa global.
+- **Handoff ("quando a loja fala, a IA pausa")**: `ai_handoff_minutes` (0 = desativado). No
+  [webhook](src/app/api/whatsapp/webhook/route.ts), uma mensagem `fromMe` que **não** seja o eco da
+  própria IA (comparada com `getLastAssistantMessages`) é tratada como o dono respondendo → cria
+  uma pausa `reason='handoff'` daquele cliente por X minutos. Necessário porque a Evolution assina
+  `MESSAGES_UPSERT` e reflete também as mensagens enviadas pela API.
+- **Onde o webhook checa**: só responde se a IA está ligada (`aiEnabled`), **não** há pausa global
+  ativa e **não** há pausa do cliente.
+- **API/UI:** `src/app/api/whatsapp/pause/route.ts` (`GET` lista estado; `POST` com
+  `{action: pause|resume, scope: global|customer, phone?, minutes?}` — `minutes` `null`/0 =
+  indefinido, com teto de 7 dias). O `ai_handoff_minutes` é salvo junto do resto da config IA
+  (`saveAiConfig` + `POST /api/whatsapp/config`). A UI fica em
+  [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) (botões de duração: 15min/30min/1h/3h/
+  "até eu reativar"; lista de clientes pausados com **Reativar**).
 
 ### Keep-alive (evitar pausa do plano Free)
 

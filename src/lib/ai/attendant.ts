@@ -75,8 +75,10 @@ export function buildSystemPrompt(args: {
   aiTone: AiTone;
   products: AttendantProduct[];
   baseUrl: string;
+  isFirstContact: boolean;
 }): string {
-  const { storeName, slug, faq, aiName, aiTone, products, baseUrl } = args;
+  const { storeName, slug, faq, aiName, aiTone, products, baseUrl, isFirstContact } =
+    args;
   const storeUrl = `${baseUrl.replace(/\/+$/, "")}/loja/${slug}`;
 
   return [
@@ -87,6 +89,9 @@ export function buildSystemPrompt(args: {
     `Sempre que o cliente demonstrar interesse em comprar, ou pedir o link, envie o link da loja para ele finalizar o pedido pelo site: ${storeUrl}`,
     "",
     "Regras:",
+    isFirstContact
+      ? `- Esta é a PRIMEIRA mensagem deste cliente. Comece a resposta se apresentando: diga que você é ${aiName}, da loja "${storeName}", e só depois responda o que ele perguntou. Apresente-se apenas uma vez, neste primeiro contato.`
+      : "- Você já se apresentou antes nesta conversa. NÃO repita a apresentação; vá direto ao ponto.",
     "- Responda APENAS sobre esta loja, seus produtos e o atendimento. Recuse educadamente assuntos não relacionados.",
     "- Baseie preços e disponibilidade na lista de produtos e nas informações abaixo. Não invente produtos, preços ou políticas.",
     "- Se não souber algo, diga que vai verificar com a loja em vez de inventar.",

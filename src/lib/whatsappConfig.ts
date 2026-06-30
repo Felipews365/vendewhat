@@ -25,6 +25,12 @@ export type WhatsAppConfig = {
   aiName: string;
   aiTone: AiTone;
   faq: string;
+  /** Pausa global da IA (não responde ninguém enquanto ativa). */
+  aiPaused: boolean;
+  /** Quando a pausa global expira (ISO). null = pausada até a loja reativar. */
+  aiPausedUntil: string | null;
+  /** Minutos que a IA fica pausada para um cliente após a loja responder. 0 = desativado. */
+  aiHandoffMinutes: number;
 };
 
 const TABLE = "store_whatsapp";
@@ -59,11 +65,20 @@ function rowToConfig(row: Record<string, unknown>): WhatsAppConfig {
         : "Atendente",
     aiTone: normalizeTone(row.ai_tone),
     faq: typeof row.faq === "string" ? row.faq : "",
+    aiPaused: row.ai_paused === true,
+    aiPausedUntil:
+      typeof row.ai_paused_until === "string" && row.ai_paused_until
+        ? row.ai_paused_until
+        : null,
+    aiHandoffMinutes:
+      typeof row.ai_handoff_minutes === "number"
+        ? row.ai_handoff_minutes
+        : Number(row.ai_handoff_minutes ?? 30) || 0,
   };
 }
 
 const SELECT =
-  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq";
+  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes";
 
 /** Lê a config da loja (ou null se ainda não existe). */
 export async function getConfig(
@@ -135,8 +150,18 @@ export async function updateConnection(
 export async function saveAiConfig(
   db: SupabaseClient,
   storeId: string,
-  cfg: { aiEnabled: boolean; aiName: string; aiTone: AiTone; faq: string }
+  cfg: {
+    aiEnabled: boolean;
+    aiName: string;
+    aiTone: AiTone;
+    faq: string;
+    aiHandoffMinutes: number;
+  }
 ): Promise<void> {
+  const handoff = Math.max(
+    0,
+    Math.min(720, Math.round(Number.isFinite(cfg.aiHandoffMinutes) ? cfg.aiHandoffMinutes : 30))
+  );
   await db
     .from(TABLE)
     .update({
@@ -144,9 +169,141 @@ export async function saveAiConfig(
       ai_name: cfg.aiName.trim().slice(0, 60) || "Atendente",
       ai_tone: normalizeTone(cfg.aiTone),
       faq: cfg.faq.trim().slice(0, 4000),
+      ai_handoff_minutes: handoff,
       updated_at: new Date().toISOString(),
     })
     .eq("store_id", storeId);
+}
+
+// --- Pausas ------------------------------------------------------------------
+
+/** True se a pausa global está ativa agora (considera expiração). */
+export function globalPauseActive(
+  cfg: Pick<WhatsAppConfig, "aiPaused" | "aiPausedUntil">,
+  now: number = Date.now()
+): boolean {
+  if (!cfg.aiPaused) return false;
+  if (!cfg.aiPausedUntil) return true; // pausa indefinida
+  return new Date(cfg.aiPausedUntil).getTime() > now;
+}
+
+/** Pausa a IA globalmente. untilIso null = até a loja reativar. */
+export async function setGlobalPause(
+  db: SupabaseClient,
+  storeId: string,
+  untilIso: string | null
+): Promise<void> {
+  await db
+    .from(TABLE)
+    .update({
+      ai_paused: true,
+      ai_paused_until: untilIso,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("store_id", storeId);
+}
+
+/** Reativa a IA globalmente. */
+export async function clearGlobalPause(
+  db: SupabaseClient,
+  storeId: string
+): Promise<void> {
+  await db
+    .from(TABLE)
+    .update({
+      ai_paused: false,
+      ai_paused_until: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("store_id", storeId);
+}
+
+export type CustomerPause = {
+  customerPhone: string;
+  pausedUntil: string | null;
+  reason: string;
+};
+
+const PAUSES = "whatsapp_pauses";
+
+/** Pausa a IA para um cliente específico. untilIso null = até a loja reativar. */
+export async function setCustomerPause(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string,
+  untilIso: string | null,
+  reason: "manual" | "handoff" = "manual"
+): Promise<void> {
+  await db.from(PAUSES).upsert(
+    {
+      store_id: storeId,
+      customer_phone: customerPhone,
+      paused_until: untilIso,
+      reason,
+      created_at: new Date().toISOString(),
+    },
+    { onConflict: "store_id,customer_phone" }
+  );
+}
+
+/** Reativa a IA para um cliente específico. */
+export async function clearCustomerPause(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string
+): Promise<void> {
+  await db
+    .from(PAUSES)
+    .delete()
+    .eq("store_id", storeId)
+    .eq("customer_phone", customerPhone);
+}
+
+/** Lista as pausas de cliente ainda ativas (descarta as expiradas). */
+export async function listCustomerPauses(
+  db: SupabaseClient,
+  storeId: string
+): Promise<CustomerPause[]> {
+  const { data } = await db
+    .from(PAUSES)
+    .select("customer_phone, paused_until, reason")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false });
+  const now = Date.now();
+  return ((data ?? []) as Record<string, unknown>[])
+    .filter(
+      (r) =>
+        !r.paused_until ||
+        new Date(String(r.paused_until)).getTime() > now
+    )
+    .map((r) => ({
+      customerPhone: String(r.customer_phone),
+      pausedUntil:
+        typeof r.paused_until === "string" && r.paused_until
+          ? r.paused_until
+          : null,
+      reason: String(r.reason ?? "manual"),
+    }));
+}
+
+/** True se a IA está pausada para este cliente agora (limpa a pausa se expirou). */
+export async function isCustomerPaused(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string
+): Promise<boolean> {
+  const { data } = await db
+    .from(PAUSES)
+    .select("paused_until")
+    .eq("store_id", storeId)
+    .eq("customer_phone", customerPhone)
+    .maybeSingle();
+  if (!data) return false;
+  const until = (data as Record<string, unknown>).paused_until;
+  if (!until) return true; // pausa indefinida
+  if (new Date(String(until)).getTime() > Date.now()) return true;
+  await clearCustomerPause(db, storeId, customerPhone);
+  return false;
 }
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
@@ -172,6 +329,26 @@ export async function getRecentHistory(
       role: r.role === "assistant" ? "assistant" : "user",
       content: String(r.content ?? ""),
     }));
+}
+
+/** Conteúdo das últimas respostas da IA (para reconhecer o eco da própria loja). */
+export async function getLastAssistantMessages(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string,
+  limit = 3
+): Promise<string[]> {
+  const { data } = await db
+    .from("whatsapp_messages")
+    .select("content")
+    .eq("store_id", storeId)
+    .eq("customer_phone", customerPhone)
+    .eq("role", "assistant")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return ((data ?? []) as { content: string }[]).map((r) =>
+    String(r.content ?? "")
+  );
 }
 
 /** Registra uma mensagem da conversa. */

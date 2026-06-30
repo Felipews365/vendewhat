@@ -25,6 +25,39 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
   disconnected: "Desconectado",
 };
 
+type GlobalPause = { paused: boolean; until: string | null };
+type CustomerPause = { customerPhone: string; pausedUntil: string | null; reason: string };
+
+// Opções de duração da pausa. minutes null = "até eu reativar".
+const PAUSE_DURATIONS: { label: string; minutes: number | null }[] = [
+  { label: "15 min", minutes: 15 },
+  { label: "30 min", minutes: 30 },
+  { label: "1 hora", minutes: 60 },
+  { label: "3 horas", minutes: 180 },
+  { label: "Até eu reativar", minutes: null },
+];
+
+// Opções do tempo de pausa quando a loja responde (handoff).
+const HANDOFF_OPTIONS: { label: string; value: number }[] = [
+  { label: "Não pausar", value: 0 },
+  { label: "15 minutos", value: 15 },
+  { label: "30 minutos", value: 30 },
+  { label: "1 hora", value: 60 },
+  { label: "3 horas", value: 180 },
+];
+
+function formatUntil(until: string | null): string {
+  if (!until) return "até você reativar";
+  const d = new Date(until);
+  if (Number.isNaN(d.getTime())) return "";
+  return `até ${d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
 export default function WhatsAppIaPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -42,8 +75,17 @@ export default function WhatsAppIaPage() {
   const [aiName, setAiName] = useState("Atendente");
   const [aiTone, setAiTone] = useState<AiTone>("simpatico");
   const [faq, setFaq] = useState("");
+  const [handoffMinutes, setHandoffMinutes] = useState(30);
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
+
+  const [globalPause, setGlobalPause] = useState<GlobalPause>({
+    paused: false,
+    until: null,
+  });
+  const [customerPauses, setCustomerPauses] = useState<CustomerPause[]>([]);
+  const [pauseBusy, setPauseBusy] = useState(false);
+  const [newPausePhone, setNewPausePhone] = useState("");
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -72,6 +114,24 @@ export default function WhatsAppIaPage() {
     }
   }, [stopPolling]);
 
+  const loadPauses = useCallback(async () => {
+    try {
+      const res = await fetch("/api/whatsapp/pause", { cache: "no-store" });
+      const data = await res.json();
+      if (data?.ok) {
+        setGlobalPause(
+          data.global ?? { paused: false, until: null }
+        );
+        setCustomerPauses(Array.isArray(data.customers) ? data.customers : []);
+        if (typeof data.handoffMinutes === "number") {
+          setHandoffMinutes(data.handoffMinutes);
+        }
+      }
+    } catch {
+      /* silencioso */
+    }
+  }, []);
+
   useEffect(() => {
     async function load() {
       const supabase = createClient();
@@ -96,7 +156,7 @@ export default function WhatsAppIaPage() {
       const { data: cfg } = await supabase
         .from("store_whatsapp")
         .select(
-          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq"
+          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes"
         )
         .eq("store_id", store.id)
         .maybeSingle();
@@ -113,14 +173,18 @@ export default function WhatsAppIaPage() {
             : "simpatico"
         );
         setFaq(typeof cfg.faq === "string" ? cfg.faq : "");
+        if (typeof cfg.ai_handoff_minutes === "number") {
+          setHandoffMinutes(cfg.ai_handoff_minutes);
+        }
       }
       setLoading(false);
       // Sincroniza com a Evolution em segundo plano.
       refreshStatus();
+      loadPauses();
     }
     load();
     return () => stopPolling();
-  }, [router, refreshStatus, stopPolling]);
+  }, [router, refreshStatus, stopPolling, loadPauses]);
 
   async function handleConnect() {
     setError("");
@@ -168,7 +232,13 @@ export default function WhatsAppIaPage() {
       const res = await fetch("/api/whatsapp/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ aiEnabled, aiName, aiTone, faq }),
+        body: JSON.stringify({
+          aiEnabled,
+          aiName,
+          aiTone,
+          faq,
+          aiHandoffMinutes: handoffMinutes,
+        }),
       });
       const data = await res.json();
       if (!data?.ok) {
@@ -183,6 +253,63 @@ export default function WhatsAppIaPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function sendPause(payload: {
+    action: "pause" | "resume";
+    scope: "global" | "customer";
+    phone?: string;
+    minutes?: number | null;
+  }) {
+    setPauseBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/whatsapp/pause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data?.ok) {
+        setError(data?.error || "Não foi possível atualizar a pausa.");
+        return false;
+      }
+      await loadPauses();
+      return true;
+    } catch {
+      setError("Falha de rede ao atualizar a pausa.");
+      return false;
+    } finally {
+      setPauseBusy(false);
+    }
+  }
+
+  async function pauseGlobal(minutes: number | null) {
+    const ok = await sendPause({ action: "pause", scope: "global", minutes });
+    if (ok) showToast("IA pausada.");
+  }
+
+  async function resumeGlobal() {
+    const ok = await sendPause({ action: "resume", scope: "global" });
+    if (ok) showToast("IA reativada!");
+  }
+
+  async function pauseCustomer(minutes: number | null) {
+    const phone = newPausePhone.replace(/\D/g, "");
+    if (!phone) {
+      setError("Informe o número do cliente (com DDD).");
+      return;
+    }
+    const ok = await sendPause({ action: "pause", scope: "customer", phone, minutes });
+    if (ok) {
+      setNewPausePhone("");
+      showToast("Cliente pausado.");
+    }
+  }
+
+  async function resumeCustomer(phone: string) {
+    const ok = await sendPause({ action: "resume", scope: "customer", phone });
+    if (ok) showToast("Cliente reativado!");
   }
 
   if (loading || !storeId) {
@@ -343,6 +470,27 @@ export default function WhatsAppIaPage() {
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+            Quando você responder um cliente pelo WhatsApp
+          </label>
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+            Assim que você mandar uma mensagem para um cliente, a IA pausa o
+            atendimento dele e só volta quando esse tempo terminar.
+          </p>
+          <select
+            value={handoffMinutes}
+            onChange={(e) => setHandoffMinutes(Number(e.target.value))}
+            className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 sm:w-64"
+          >
+            {HANDOFF_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.value === 0 ? o.label : `Pausar a IA por ${o.label}`}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex items-center gap-3">
           <button
             onClick={handleSaveConfig}
@@ -353,6 +501,121 @@ export default function WhatsAppIaPage() {
           </button>
           {savedOk && (
             <span className="text-sm font-medium text-green-600">Salvo!</span>
+          )}
+        </div>
+      </section>
+
+      {/* Pausar atendimento */}
+      <section className="rounded-2xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm space-y-5">
+        <div>
+          <h2 className="font-semibold text-stone-800 dark:text-slate-100">
+            Pausar atendimento
+          </h2>
+          <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">
+            Assuma a conversa quando quiser. Você pode pausar a IA para todos os
+            clientes ou só para um número específico.
+          </p>
+        </div>
+
+        {/* Pausa global */}
+        <div className="rounded-xl border border-stone-200 dark:border-slate-700 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-stone-700 dark:text-slate-200">
+              IA para todos os clientes
+            </span>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                globalPause.paused
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                  : "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300"
+              }`}
+            >
+              {globalPause.paused
+                ? `Pausada (${formatUntil(globalPause.until)})`
+                : "Ativa"}
+            </span>
+          </div>
+
+          {globalPause.paused ? (
+            <button
+              onClick={resumeGlobal}
+              disabled={pauseBusy}
+              className="mt-3 rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
+            >
+              Reativar a IA agora
+            </button>
+          ) : (
+            <div className="mt-3">
+              <p className="mb-2 text-xs text-stone-500 dark:text-slate-400">
+                Pausar a IA por:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {PAUSE_DURATIONS.map((d) => (
+                  <button
+                    key={d.label}
+                    onClick={() => pauseGlobal(d.minutes)}
+                    disabled={pauseBusy}
+                    className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Pausa por cliente */}
+        <div className="rounded-xl border border-stone-200 dark:border-slate-700 p-4 space-y-3">
+          <span className="text-sm font-medium text-stone-700 dark:text-slate-200">
+            Pausar um cliente específico
+          </span>
+          <input
+            type="tel"
+            value={newPausePhone}
+            onChange={(e) => setNewPausePhone(e.target.value)}
+            placeholder="Número com DDD (ex.: 11 99999-9999)"
+            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+          />
+          <div className="flex flex-wrap gap-2">
+            {PAUSE_DURATIONS.map((d) => (
+              <button
+                key={d.label}
+                onClick={() => pauseCustomer(d.minutes)}
+                disabled={pauseBusy}
+                className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+
+          {customerPauses.length > 0 && (
+            <ul className="mt-2 divide-y divide-stone-100 dark:divide-slate-800">
+              {customerPauses.map((c) => (
+                <li
+                  key={c.customerPhone}
+                  className="flex items-center justify-between gap-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-stone-800 dark:text-slate-100">
+                      {c.customerPhone}
+                    </p>
+                    <p className="text-xs text-stone-500 dark:text-slate-400">
+                      Pausado {formatUntil(c.pausedUntil)}
+                      {c.reason === "handoff" ? " · você respondeu" : ""}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => resumeCustomer(c.customerPhone)}
+                    disabled={pauseBusy}
+                    className="shrink-0 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    Reativar
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </section>

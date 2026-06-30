@@ -3,7 +3,11 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import {
   appendMessage,
   getConfigByInstance,
+  getLastAssistantMessages,
   getRecentHistory,
+  globalPauseActive,
+  isCustomerPaused,
+  setCustomerPause,
   updateConnection,
 } from "@/lib/whatsappConfig";
 import { sendText } from "@/lib/evolution";
@@ -85,18 +89,44 @@ export async function POST(req: Request) {
   if (!msg) return ok();
 
   const key = asObj(msg.key);
-  if (!key || key.fromMe === true) return ok(); // ignora mensagens da própria loja
+  if (!key) return ok();
 
   const remoteJid = typeof key.remoteJid === "string" ? key.remoteJid : "";
   if (!remoteJid || remoteJid.endsWith("@g.us")) return ok(); // ignora grupos
 
-  const text = extractText(asObj(msg.message)).trim();
-  if (!text) return ok(); // só atende texto
-
   const customerPhone = remoteJid.split("@")[0];
+  const text = extractText(asObj(msg.message)).trim();
+
+  // Mensagem enviada pelo próprio número da loja.
+  if (key.fromMe === true) {
+    // Pode ser o eco da própria IA (ignora) ou o dono respondendo manualmente.
+    // Quando é o dono, pausa a IA para esse cliente pelo tempo de "handoff".
+    if (text && cfg.aiHandoffMinutes > 0) {
+      const recentAi = await getLastAssistantMessages(
+        admin,
+        cfg.storeId,
+        customerPhone,
+        3
+      );
+      const isEcho = recentAi.some((c) => c.trim() === text);
+      if (!isEcho) {
+        const until = new Date(
+          Date.now() + cfg.aiHandoffMinutes * 60_000
+        ).toISOString();
+        await setCustomerPause(admin, cfg.storeId, customerPhone, until, "handoff");
+      }
+    }
+    return ok();
+  }
+
+  if (!text) return ok(); // só atende texto
 
   // Se a IA está desligada, não responde (mas a loja ainda recebe a mensagem normalmente).
   if (!cfg.aiEnabled || !isAiConfigured()) return ok();
+
+  // Atendimento pausado — globalmente ou só para este cliente.
+  if (globalPauseActive(cfg)) return ok();
+  if (await isCustomerPaused(admin, cfg.storeId, customerPhone)) return ok();
 
   try {
     // Dados da loja + catálogo
@@ -138,6 +168,8 @@ export async function POST(req: Request) {
       };
     });
 
+    const history = await getRecentHistory(admin, cfg.storeId, customerPhone, 10);
+
     const systemPrompt = buildSystemPrompt({
       storeName: typeof store.name === "string" ? store.name : "Loja",
       slug: String(store.slug),
@@ -146,9 +178,9 @@ export async function POST(req: Request) {
       aiTone: cfg.aiTone,
       products,
       baseUrl: process.env.APP_BASE_URL || "",
+      isFirstContact: history.length === 0,
     });
 
-    const history = await getRecentHistory(admin, cfg.storeId, customerPhone, 10);
     await appendMessage(admin, cfg.storeId, customerPhone, "user", text);
 
     const reply = await generateReply(systemPrompt, history, text);
