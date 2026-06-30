@@ -216,6 +216,16 @@ uma instância Evolution e uma config de IA por loja.
 - **Rotas:** `src/app/api/whatsapp/{connect,status,disconnect,config,webhook,pause,followups}/route.ts`.
   O `webhook` é público e validado por um `token` por loja (query string); o `followups` (cron) é
   protegido por `CRON_SECRET`.
+- **Mensagens de erro da Evolution v2:** o wrapper (`call()` em
+  [evolution.ts](src/lib/evolution.ts)) extrai o texto de erro de `response.message` (que pode vir
+  como **array**), não só de `message` no topo. Isso é essencial porque ao (re)conectar uma
+  instância **já existente** a Evolution responde **403** com `{response:{message:["...already in
+  use..."]}}`; sem ler o aninhado, `createInstance` acha que é erro fatal e o painel mostra
+  "Evolution API erro 403" no botão Conectar (em vez de seguir para o QR).
+- **Selo de conexão:** [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) deriva
+  `displayStatus` — um estado preso em `connecting` no servidor (instância criada mas nunca
+  escaneada) é exibido como **"Desconectado"** numa página recém-aberta (sem QR na tela nem clique
+  em andamento); "Conectando…" só aparece durante uma conexão ativa.
 - **Apresentação no 1º contato:** na primeira mensagem de cada cliente a IA se apresenta com o
   **nome do atendente** (`ai_name`) + **nome da loja** e depois não repete. O webhook detecta o
   primeiro contato por `getRecentHistory(...).length === 0` (lido **antes** de gravar a mensagem
