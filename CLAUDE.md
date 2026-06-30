@@ -213,8 +213,9 @@ uma instância Evolution e uma config de IA por loja.
 - **Libs:** [src/lib/evolution.ts](src/lib/evolution.ts) (wrapper REST da Evolution),
   [src/lib/whatsappConfig.ts](src/lib/whatsappConfig.ts) (config/histórico),
   [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts) (OpenAI).
-- **Rotas:** `src/app/api/whatsapp/{connect,status,disconnect,config,webhook,pause}/route.ts`.
-  O `webhook` é público e validado por um `token` por loja (query string).
+- **Rotas:** `src/app/api/whatsapp/{connect,status,disconnect,config,webhook,pause,followups}/route.ts`.
+  O `webhook` é público e validado por um `token` por loja (query string); o `followups` (cron) é
+  protegido por `CRON_SECRET`.
 - **Apresentação no 1º contato:** na primeira mensagem de cada cliente a IA se apresenta com o
   **nome do atendente** (`ai_name`) + **nome da loja** e depois não repete. O webhook detecta o
   primeiro contato por `getRecentHistory(...).length === 0` (lido **antes** de gravar a mensagem
@@ -228,6 +229,8 @@ uma instância Evolution e uma config de IA por loja.
   - `APP_BASE_URL` — URL pública do app (monta o link da loja e a URL do webhook;
     o webhook roda no servidor, então não dá pra usar `window.location`). Em dev, use
     um túnel (cloudflared/ngrok) pois a Evolution precisa alcançar o app.
+  - `CRON_SECRET` — segredo que protege o endpoint de follow-up (ver subseção abaixo). Também
+    precisa estar nos **secrets do GitHub** (junto de `APP_BASE_URL`) para o workflow do cron.
 
 ### Pausar o atendimento da IA (assumir a conversa)
 
