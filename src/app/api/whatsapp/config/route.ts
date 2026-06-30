@@ -13,6 +13,8 @@ type Body = {
   aiHandoffMinutes?: number;
   aiFollowupMinutes?: number;
   aiFollowupMessage?: string;
+  aiPostsaleDays?: number;
+  aiPostsaleMessage?: string;
 };
 
 export async function POST(req: Request) {
@@ -60,6 +62,10 @@ export async function POST(req: Request) {
       typeof body.aiFollowupMinutes === "number" ? body.aiFollowupMinutes : 0,
     aiFollowupMessage:
       typeof body.aiFollowupMessage === "string" ? body.aiFollowupMessage : "",
+    aiPostsaleDays:
+      typeof body.aiPostsaleDays === "number" ? body.aiPostsaleDays : 0,
+    aiPostsaleMessage:
+      typeof body.aiPostsaleMessage === "string" ? body.aiPostsaleMessage : "",
   });
 
   return NextResponse.json({ ok: true });

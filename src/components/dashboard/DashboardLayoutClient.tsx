@@ -60,7 +60,7 @@ function isImmersiveRoute(pathname: string) {
 function TopNav({ pathname }: { pathname: string }) {
   return (
     <nav
-      className="hidden lg:flex items-center gap-1"
+      className="hidden lg:flex items-center gap-0.5 xl:gap-1"
       aria-label="Áreas do painel"
     >
       {DASH_NAV.map(({ href, short, label, icon }) => {
@@ -74,7 +74,7 @@ function TopNav({ pathname }: { pathname: string }) {
             aria-label={label}
             aria-current={active ? "page" : undefined}
             className={[
-              "group relative flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-200",
+              "group relative flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 xl:px-3.5",
               active
                 ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
                 : "text-slate-600 hover:bg-violet-50 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-violet-300",
@@ -203,8 +203,8 @@ export function DashboardLayoutClient({
 
       <div className="flex min-h-screen flex-col">
         <header className="sticky top-0 z-30 border-b border-slate-200/90 bg-white/85 backdrop-blur-md shadow-sm shadow-slate-200/40 dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-black/20">
-          <div className="mx-auto flex max-w-6xl flex-nowrap items-center justify-between gap-3 px-4 py-3">
-            <div className="flex items-center gap-6 min-w-0">
+          <div className="mx-auto flex max-w-6xl flex-nowrap items-center justify-between gap-4 px-4 py-3">
+            <div className="flex items-center gap-4 min-w-0 lg:gap-6">
               <Link
                 href="/dashboard"
                 className="shrink-0 truncate text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100"
@@ -214,13 +214,17 @@ export function DashboardLayoutClient({
               <TopNav pathname={pathname} />
             </div>
 
-            <div className="flex flex-none items-center gap-1.5 sm:gap-3">
-              <span className="hidden truncate max-w-[160px] text-sm text-slate-600 dark:text-slate-300 sm:block">
+            <div className="flex flex-none items-center gap-1.5 sm:gap-2.5">
+              <span className="hidden truncate max-w-[160px] text-sm text-slate-600 dark:text-slate-300 xl:block">
                 Olá,{" "}
                 <strong className="text-slate-800 dark:text-slate-100">
                   {userName.split(" ")[0]}
                 </strong>
               </span>
+              <span
+                className="hidden h-6 w-px bg-slate-200 dark:bg-slate-700 xl:block"
+                aria-hidden
+              />
               <ThemeToggle />
               <button
                 type="button"

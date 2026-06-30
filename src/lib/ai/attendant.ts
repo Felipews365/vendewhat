@@ -151,3 +151,55 @@ export async function generateFollowupReply(
   const text = completion.choices[0]?.message?.content;
   return text ? text.trim() : null;
 }
+
+/** Primeiro nome do cliente (para personalizar a mensagem). */
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? "";
+}
+
+/**
+ * Mensagem padrão de pós-venda, usada quando a loja não escreveu uma fixa e a
+ * IA não está configurada (ou a geração falhou). Não depende da OpenAI.
+ */
+export function defaultPostsaleMessage(
+  storeName: string,
+  customerName: string,
+  orderNumber: number | null
+): string {
+  const nome = firstName(customerName);
+  const ola = nome ? `Oi, ${nome}!` : "Oi!";
+  const pedido = orderNumber ? ` (pedido #${orderNumber})` : "";
+  return `${ola} Aqui é da ${storeName} 😊 Passando para saber se o seu pedido${pedido} chegou certinho e se está tudo bem. Qualquer coisa, é só me chamar!`;
+}
+
+/**
+ * Gera, via IA, uma mensagem curta de pós-venda perguntando se o pedido chegou
+ * certinho. Não usa o histórico da conversa (é sobre o pedido já entregue).
+ */
+export async function generatePostsaleReply(
+  systemPrompt: string,
+  customerName: string,
+  orderNumber: number | null
+): Promise<string | null> {
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const nome = firstName(customerName);
+  const completion = await getClient().chat.completions.create({
+    model,
+    max_tokens: 160,
+    messages: [
+      { role: "system", content: systemPrompt },
+      {
+        role: "system",
+        content: [
+          `O cliente${nome ? ` (${nome})` : ""} fez um pedido${
+            orderNumber ? ` (#${orderNumber})` : ""
+          } há alguns dias e já deve tê-lo recebido.`,
+          "Envie UMA mensagem curta, gentil e natural perguntando se o pedido chegou certinho e se está tudo bem com ele.",
+          "Coloque-se à disposição para qualquer problema. Não tente empurrar novos produtos nem repita uma saudação de primeiro contato.",
+        ].join(" "),
+      },
+    ],
+  });
+  const text = completion.choices[0]?.message?.content;
+  return text ? text.trim() : null;
+}

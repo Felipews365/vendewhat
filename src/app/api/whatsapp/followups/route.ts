@@ -7,15 +7,21 @@ import {
   getFollowupTimes,
   getRecentHistory,
   globalPauseActive,
+  listDuePostsaleOrders,
   listFollowupConfigs,
+  listPostsaleConfigs,
   markFollowup,
+  markPostsaleSent,
   type WhatsAppConfig,
 } from "@/lib/whatsappConfig";
+import { toWhatsAppNumber } from "@/lib/customerPhone";
 import { isEvolutionConfigured, sendText } from "@/lib/evolution";
 import {
   type AttendantProduct,
   buildSystemPrompt,
+  defaultPostsaleMessage,
   generateFollowupReply,
+  generatePostsaleReply,
   isAiConfigured,
 } from "@/lib/ai/attendant";
 
@@ -53,7 +59,7 @@ function mapProducts(rows: AnyObj[]): AttendantProduct[] {
 async function buildStorePrompt(
   admin: ReturnType<typeof createAdminSupabase>,
   cfg: WhatsAppConfig
-): Promise<{ slug: string; systemPrompt: string } | null> {
+): Promise<{ slug: string; storeName: string; systemPrompt: string } | null> {
   if (!admin) return null;
   const { data: store } = await admin
     .from("stores")
@@ -62,6 +68,7 @@ async function buildStorePrompt(
     .maybeSingle();
   if (!store?.slug) return null;
 
+  const storeName = typeof store.name === "string" ? store.name : "Loja";
   const { data: productRows } = await admin
     .from("products")
     .select("name, price, stock, description, category, is_promotion, compare_at_price")
@@ -71,7 +78,7 @@ async function buildStorePrompt(
     .limit(60);
 
   const systemPrompt = buildSystemPrompt({
-    storeName: typeof store.name === "string" ? store.name : "Loja",
+    storeName,
     slug: String(store.slug),
     faq: cfg.faq,
     aiName: cfg.aiName,
@@ -80,24 +87,27 @@ async function buildStorePrompt(
     baseUrl: process.env.APP_BASE_URL || "",
     isFirstContact: false,
   });
-  return { slug: String(store.slug), systemPrompt };
+  return { slug: String(store.slug), storeName, systemPrompt };
 }
 
-/** Roda o cron de follow-up. Protegido por CRON_SECRET (query ?key= ou header x-cron-key). */
-async function run(req: Request) {
-  const url = new URL(req.url);
-  const key =
-    url.searchParams.get("key") ?? req.headers.get("x-cron-key") ?? "";
-  const secret = process.env.CRON_SECRET || "";
-  if (!secret || key !== secret) {
-    return NextResponse.json({ ok: false, error: "Não autorizado." }, { status: 401 });
-  }
+/** Nome da loja (para a mensagem de pós-venda sem IA). */
+async function getStoreName(
+  admin: ReturnType<typeof createAdminSupabase>,
+  storeId: string
+): Promise<string> {
+  if (!admin) return "Loja";
+  const { data } = await admin
+    .from("stores")
+    .select("name")
+    .eq("id", storeId)
+    .maybeSingle();
+  return typeof data?.name === "string" && data.name.trim() ? data.name : "Loja";
+}
 
-  const admin = createAdminSupabase();
-  if (!admin || !isAiConfigured() || !isEvolutionConfigured()) {
-    return NextResponse.json({ ok: true, skipped: true, sent: 0 });
-  }
-
+/** Cutuca clientes que ficaram em silêncio. Precisa da IA configurada. */
+async function runSilenceFollowups(
+  admin: NonNullable<ReturnType<typeof createAdminSupabase>>
+): Promise<number> {
   const configs = await listFollowupConfigs(admin);
   const now = Date.now();
   let sent = 0;
@@ -154,6 +164,102 @@ async function run(req: Request) {
       }
     }
   }
+  return sent;
+}
+
+/**
+ * Pós-venda: dias após o pedido, pergunta se chegou tudo certinho.
+ * Usa mensagem fixa quando a loja escreveu uma; senão gera com a IA (e, se a IA
+ * não estiver disponível, cai numa mensagem padrão).
+ */
+async function runPostsale(
+  admin: NonNullable<ReturnType<typeof createAdminSupabase>>
+): Promise<number> {
+  const configs = await listPostsaleConfigs(admin);
+  const aiOn = isAiConfigured();
+  let sent = 0;
+
+  for (const cfg of configs) {
+    if (sent >= MAX_TOTAL) break;
+    if (globalPauseActive(cfg)) continue;
+
+    const [orders, pausedSet] = await Promise.all([
+      listDuePostsaleOrders(admin, cfg.storeId, cfg.aiPostsaleDays, MAX_PER_STORE),
+      getActivePausedPhones(admin, cfg.storeId),
+    ]);
+    if (orders.length === 0) continue;
+
+    const custom = cfg.aiPostsaleMessage.trim();
+    // Só monta o prompt da IA quando vai realmente gerar a mensagem.
+    let prompt: Awaited<ReturnType<typeof buildStorePrompt>> = null;
+    let storeName = "";
+    if (!custom) {
+      if (aiOn) prompt = await buildStorePrompt(admin, cfg);
+      storeName = prompt?.storeName ?? (await getStoreName(admin, cfg.storeId));
+    }
+
+    for (const order of orders) {
+      if (sent >= MAX_TOTAL) break;
+      const phone = toWhatsAppNumber(order.customerPhone);
+      if (!phone) {
+        await markPostsaleSent(admin, order.id); // telefone inválido: não tenta de novo
+        continue;
+      }
+      if (pausedSet.has(phone)) continue; // loja assumiu este cliente
+      try {
+        let message = custom;
+        if (!message) {
+          if (prompt) {
+            const reply = await generatePostsaleReply(
+              prompt.systemPrompt,
+              order.customerName,
+              order.orderNumber
+            );
+            message = reply ?? "";
+          }
+          if (!message) {
+            message = defaultPostsaleMessage(
+              storeName,
+              order.customerName,
+              order.orderNumber
+            );
+          }
+        }
+        if (!message) continue;
+
+        await sendText(cfg.evolutionInstance, phone, message);
+        await appendMessage(admin, cfg.storeId, phone, "assistant", message);
+        await markPostsaleSent(admin, order.id);
+        sent += 1;
+      } catch (err) {
+        console.error("[whatsapp/postsale]", cfg.storeId, order.id, err);
+      }
+    }
+  }
+  return sent;
+}
+
+/** Roda o cron de follow-up. Protegido por CRON_SECRET (query ?key= ou header x-cron-key). */
+async function run(req: Request) {
+  const url = new URL(req.url);
+  const key =
+    url.searchParams.get("key") ?? req.headers.get("x-cron-key") ?? "";
+  const secret = process.env.CRON_SECRET || "";
+  if (!secret || key !== secret) {
+    return NextResponse.json({ ok: false, error: "Não autorizado." }, { status: 401 });
+  }
+
+  const admin = createAdminSupabase();
+  if (!admin || !isEvolutionConfigured()) {
+    return NextResponse.json({ ok: true, skipped: true, sent: 0 });
+  }
+
+  let sent = 0;
+  // Follow-up de silêncio depende da IA; pós-venda funciona com mensagem fixa.
+  if (isAiConfigured()) {
+    sent += await runSilenceFollowups(admin);
+  }
+  sent += await runPostsale(admin);
 
   return NextResponse.json({ ok: true, sent });
 }

@@ -290,6 +290,27 @@ tempo é por loja. **Migration:** rode
 - **Variável de ambiente extra:** `CRON_SECRET` (segredo que protege o endpoint; sem ele o endpoint
   recusa). **Secrets do GitHub** para o workflow: `APP_BASE_URL` e `CRON_SECRET`.
 
+### Pós-venda automático (perguntar se chegou certinho)
+
+Alguns **dias** depois do pedido, a IA manda uma mensagem perguntando se chegou tudo certo. O prazo
+é por loja. **Migration:** rode
+[supabase-migration-whatsapp-postsale.sql](supabase-migration-whatsapp-postsale.sql) (adiciona
+`ai_postsale_days` (0 = desativado) e `ai_postsale_message` em `store_whatsapp`; adiciona
+`orders.postsale_sent_at` + índice parcial dos pedidos pendentes).
+
+- **Configuração:** no painel (aba Atendente de IA), o lojista escolhe o prazo em dias e,
+  opcionalmente, uma **mensagem fixa**; vazio = a IA gera (`generatePostsaleReply`, com fallback
+  `defaultPostsaleMessage` quando a OpenAI não está configurada) — ambos em
+  [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts).
+- **Mesmo cron do follow-up:** o endpoint [followups/route.ts](src/app/api/whatsapp/followups/route.ts)
+  roda `runPostsale` junto. Varre as lojas com pós-venda ligado (`listPostsaleConfigs`) e os pedidos
+  elegíveis (`listDuePostsaleOrders`: `postsale_sent_at IS NULL`, com `customer_phone`, criados entre
+  o prazo e um teto de idade). Pula clientes pausados, envia para o telefone do pedido
+  (`toWhatsAppNumber` em [src/lib/customerPhone.ts](src/lib/customerPhone.ts) prefixa o DDI 55) e
+  grava `postsale_sent_at` (`markPostsaleSent`) para **não repetir**. Usa `orders.customer_phone`,
+  `customer_name` e `order_number`.
+- Usa o mesmo `CRON_SECRET` e o mesmo GitHub Action (a cada 15 min) do follow-up.
+
 ### Keep-alive (evitar pausa do plano Free)
 
 O Supabase Free pausa o projeto após **7 dias** de inatividade. Para evitar isso há um

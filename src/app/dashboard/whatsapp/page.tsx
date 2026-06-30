@@ -60,6 +60,18 @@ const FOLLOWUP_OPTIONS: { label: string; value: number }[] = [
   { label: "1 dia", value: 1440 },
 ];
 
+// Opções de prazo (em dias) para a mensagem de pós-venda.
+const POSTSALE_OPTIONS: { label: string; value: number }[] = [
+  { label: "Desativado", value: 0 },
+  { label: "1 dia", value: 1 },
+  { label: "2 dias", value: 2 },
+  { label: "3 dias", value: 3 },
+  { label: "5 dias", value: 5 },
+  { label: "7 dias", value: 7 },
+  { label: "10 dias", value: 10 },
+  { label: "15 dias", value: 15 },
+];
+
 function formatUntil(until: string | null): string {
   if (!until) return "até você reativar";
   const d = new Date(until);
@@ -92,6 +104,8 @@ export default function WhatsAppIaPage() {
   const [handoffMinutes, setHandoffMinutes] = useState(30);
   const [followupMinutes, setFollowupMinutes] = useState(0);
   const [followupMessage, setFollowupMessage] = useState("");
+  const [postsaleDays, setPostsaleDays] = useState(0);
+  const [postsaleMessage, setPostsaleMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
 
@@ -180,7 +194,7 @@ export default function WhatsAppIaPage() {
       const { data: cfg } = await supabase
         .from("store_whatsapp")
         .select(
-          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message"
+          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message"
         )
         .eq("store_id", store.id)
         .maybeSingle();
@@ -205,6 +219,12 @@ export default function WhatsAppIaPage() {
         }
         setFollowupMessage(
           typeof cfg.ai_followup_message === "string" ? cfg.ai_followup_message : ""
+        );
+        if (typeof cfg.ai_postsale_days === "number") {
+          setPostsaleDays(cfg.ai_postsale_days);
+        }
+        setPostsaleMessage(
+          typeof cfg.ai_postsale_message === "string" ? cfg.ai_postsale_message : ""
         );
       }
       setLoading(false);
@@ -270,6 +290,8 @@ export default function WhatsAppIaPage() {
           aiHandoffMinutes: handoffMinutes,
           aiFollowupMinutes: followupMinutes,
           aiFollowupMessage: followupMessage,
+          aiPostsaleDays: postsaleDays,
+          aiPostsaleMessage: postsaleMessage,
         }),
       });
       const data = await res.json();
@@ -626,6 +648,37 @@ export default function WhatsAppIaPage() {
               rows={3}
               className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
               placeholder="Mensagem fixa (opcional). Deixe vazio para a IA escrever sozinha com base na conversa. Ex.: Oi! Ainda quer fechar seu pedido? Posso te ajudar 😊"
+            />
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+            Pós-venda: saber se o pedido chegou
+          </label>
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+            Esse tempo depois de cada pedido, a IA manda uma mensagem no WhatsApp
+            do cliente perguntando se chegou tudo certinho.
+          </p>
+          <select
+            value={postsaleDays}
+            onChange={(e) => setPostsaleDays(Number(e.target.value))}
+            className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 sm:w-64"
+          >
+            {POSTSALE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.value === 0 ? o.label : `${o.label} após o pedido`}
+              </option>
+            ))}
+          </select>
+          {postsaleDays > 0 && (
+            <textarea
+              value={postsaleMessage}
+              maxLength={1000}
+              onChange={(e) => setPostsaleMessage(e.target.value)}
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+              placeholder="Mensagem fixa (opcional). Deixe vazio para a IA escrever sozinha. Ex.: Oi! Aqui é da loja 😊 Seu pedido chegou certinho? Qualquer coisa é só chamar!"
             />
           )}
         </div>

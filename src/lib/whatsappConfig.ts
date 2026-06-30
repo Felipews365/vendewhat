@@ -35,6 +35,10 @@ export type WhatsAppConfig = {
   aiFollowupMinutes: number;
   /** Mensagem fixa de follow-up. Vazio = a IA gera com base na conversa. */
   aiFollowupMessage: string;
+  /** Dias após o pedido até a IA mandar a mensagem de pós-venda. 0 = desativado. */
+  aiPostsaleDays: number;
+  /** Mensagem fixa de pós-venda. Vazio = a IA gera. */
+  aiPostsaleMessage: string;
 };
 
 const TABLE = "store_whatsapp";
@@ -84,11 +88,17 @@ function rowToConfig(row: Record<string, unknown>): WhatsAppConfig {
         : Number(row.ai_followup_minutes ?? 0) || 0,
     aiFollowupMessage:
       typeof row.ai_followup_message === "string" ? row.ai_followup_message : "",
+    aiPostsaleDays:
+      typeof row.ai_postsale_days === "number"
+        ? row.ai_postsale_days
+        : Number(row.ai_postsale_days ?? 0) || 0,
+    aiPostsaleMessage:
+      typeof row.ai_postsale_message === "string" ? row.ai_postsale_message : "",
   };
 }
 
 const SELECT =
-  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message";
+  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message";
 
 /** Lê a config da loja (ou null se ainda não existe). */
 export async function getConfig(
@@ -168,6 +178,8 @@ export async function saveAiConfig(
     aiHandoffMinutes: number;
     aiFollowupMinutes: number;
     aiFollowupMessage: string;
+    aiPostsaleDays: number;
+    aiPostsaleMessage: string;
   }
 ): Promise<void> {
   const handoff = Math.max(
@@ -181,6 +193,10 @@ export async function saveAiConfig(
       Math.round(Number.isFinite(cfg.aiFollowupMinutes) ? cfg.aiFollowupMinutes : 0)
     )
   );
+  const postsaleDays = Math.max(
+    0,
+    Math.min(90, Math.round(Number.isFinite(cfg.aiPostsaleDays) ? cfg.aiPostsaleDays : 0))
+  );
   await db
     .from(TABLE)
     .update({
@@ -191,6 +207,8 @@ export async function saveAiConfig(
       ai_handoff_minutes: handoff,
       ai_followup_minutes: followup,
       ai_followup_message: cfg.aiFollowupMessage.trim().slice(0, 1000),
+      ai_postsale_days: postsaleDays,
+      ai_postsale_message: cfg.aiPostsaleMessage.trim().slice(0, 1000),
       updated_at: new Date().toISOString(),
     })
     .eq("store_id", storeId);
@@ -417,6 +435,73 @@ export async function markFollowup(
     },
     { onConflict: "store_id,customer_phone" }
   );
+}
+
+// --- Pós-venda (cron) --------------------------------------------------------
+
+/** Lojas com pós-venda ligado e WhatsApp conectado (para o cron). */
+export async function listPostsaleConfigs(
+  db: SupabaseClient
+): Promise<WhatsAppConfig[]> {
+  const { data } = await db
+    .from(TABLE)
+    .select(SELECT)
+    .gt("ai_postsale_days", 0)
+    .eq("connection_status", "connected");
+  return ((data ?? []) as Record<string, unknown>[]).map(rowToConfig);
+}
+
+export type DuePostsaleOrder = {
+  id: string;
+  customerPhone: string;
+  customerName: string;
+  orderNumber: number | null;
+};
+
+/**
+ * Pedidos prontos para o pós-venda: já passou o prazo (em dias), ainda não
+ * receberam a mensagem e não são antigos demais (janela de 3 dias para evitar
+ * cutucar pedidos que ficaram para trás após uma queda do cron).
+ */
+export async function listDuePostsaleOrders(
+  db: SupabaseClient,
+  storeId: string,
+  days: number,
+  limit = 30
+): Promise<DuePostsaleOrder[]> {
+  const now = Date.now();
+  const dueBefore = new Date(now - days * 86_400_000).toISOString();
+  const tooOld = new Date(now - (days + 3) * 86_400_000).toISOString();
+  const { data } = await db
+    .from("orders")
+    .select("id, customer_phone, customer_name, order_number, created_at")
+    .eq("store_id", storeId)
+    .is("postsale_sent_at", null)
+    .not("customer_phone", "is", null)
+    .lte("created_at", dueBefore)
+    .gte("created_at", tooOld)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  return ((data ?? []) as Record<string, unknown>[])
+    .map((r) => ({
+      id: String(r.id),
+      customerPhone: String(r.customer_phone ?? ""),
+      customerName: typeof r.customer_name === "string" ? r.customer_name : "",
+      orderNumber:
+        typeof r.order_number === "number" ? r.order_number : null,
+    }))
+    .filter((o) => o.customerPhone);
+}
+
+/** Marca que o pós-venda do pedido já foi enviado. */
+export async function markPostsaleSent(
+  db: SupabaseClient,
+  orderId: string
+): Promise<void> {
+  await db
+    .from("orders")
+    .update({ postsale_sent_at: new Date().toISOString() })
+    .eq("id", orderId);
 }
 
 export type ConversationTimes = {
