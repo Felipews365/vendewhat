@@ -31,6 +31,10 @@ export type WhatsAppConfig = {
   aiPausedUntil: string | null;
   /** Minutos que a IA fica pausada para um cliente após a loja responder. 0 = desativado. */
   aiHandoffMinutes: number;
+  /** Minutos de silêncio do cliente até a IA enviar o follow-up. 0 = desativado. */
+  aiFollowupMinutes: number;
+  /** Mensagem fixa de follow-up. Vazio = a IA gera com base na conversa. */
+  aiFollowupMessage: string;
 };
 
 const TABLE = "store_whatsapp";
@@ -74,11 +78,17 @@ function rowToConfig(row: Record<string, unknown>): WhatsAppConfig {
       typeof row.ai_handoff_minutes === "number"
         ? row.ai_handoff_minutes
         : Number(row.ai_handoff_minutes ?? 30) || 0,
+    aiFollowupMinutes:
+      typeof row.ai_followup_minutes === "number"
+        ? row.ai_followup_minutes
+        : Number(row.ai_followup_minutes ?? 0) || 0,
+    aiFollowupMessage:
+      typeof row.ai_followup_message === "string" ? row.ai_followup_message : "",
   };
 }
 
 const SELECT =
-  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes";
+  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message";
 
 /** Lê a config da loja (ou null se ainda não existe). */
 export async function getConfig(
@@ -156,11 +166,20 @@ export async function saveAiConfig(
     aiTone: AiTone;
     faq: string;
     aiHandoffMinutes: number;
+    aiFollowupMinutes: number;
+    aiFollowupMessage: string;
   }
 ): Promise<void> {
   const handoff = Math.max(
     0,
     Math.min(1440, Math.round(Number.isFinite(cfg.aiHandoffMinutes) ? cfg.aiHandoffMinutes : 30))
+  );
+  const followup = Math.max(
+    0,
+    Math.min(
+      10080,
+      Math.round(Number.isFinite(cfg.aiFollowupMinutes) ? cfg.aiFollowupMinutes : 0)
+    )
   );
   await db
     .from(TABLE)
@@ -170,6 +189,8 @@ export async function saveAiConfig(
       ai_tone: normalizeTone(cfg.aiTone),
       faq: cfg.faq.trim().slice(0, 4000),
       ai_handoff_minutes: handoff,
+      ai_followup_minutes: followup,
+      ai_followup_message: cfg.aiFollowupMessage.trim().slice(0, 1000),
       updated_at: new Date().toISOString(),
     })
     .eq("store_id", storeId);
@@ -336,6 +357,102 @@ export async function isCustomerPaused(
   if (new Date(String(until)).getTime() > Date.now()) return true;
   await clearCustomerPause(db, storeId, customerPhone);
   return false;
+}
+
+// --- Follow-up (cron) --------------------------------------------------------
+
+const FOLLOWUPS = "whatsapp_followups";
+
+/** Lojas com follow-up ligado, IA ativa e WhatsApp conectado (para o cron). */
+export async function listFollowupConfigs(
+  db: SupabaseClient
+): Promise<WhatsAppConfig[]> {
+  const { data } = await db
+    .from(TABLE)
+    .select(SELECT)
+    .gt("ai_followup_minutes", 0)
+    .eq("ai_enabled", true)
+    .eq("connection_status", "connected");
+  return ((data ?? []) as Record<string, unknown>[]).map(rowToConfig);
+}
+
+/** Telefones com pausa ativa para a loja (handoff ou manual). */
+export async function getActivePausedPhones(
+  db: SupabaseClient,
+  storeId: string
+): Promise<Set<string>> {
+  const pauses = await listCustomerPauses(db, storeId);
+  return new Set(pauses.map((p) => p.customerPhone));
+}
+
+/** Mapa telefone -> timestamp (ms) do último follow-up enviado. */
+export async function getFollowupTimes(
+  db: SupabaseClient,
+  storeId: string
+): Promise<Map<string, number>> {
+  const { data } = await db
+    .from(FOLLOWUPS)
+    .select("customer_phone, last_followup_at")
+    .eq("store_id", storeId);
+  const map = new Map<string, number>();
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const phone = String(r.customer_phone ?? "");
+    const at = r.last_followup_at ? new Date(String(r.last_followup_at)).getTime() : 0;
+    if (phone) map.set(phone, at);
+  }
+  return map;
+}
+
+/** Registra que a loja já cutucou este cliente agora. */
+export async function markFollowup(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string
+): Promise<void> {
+  await db.from(FOLLOWUPS).upsert(
+    {
+      store_id: storeId,
+      customer_phone: customerPhone,
+      last_followup_at: new Date().toISOString(),
+    },
+    { onConflict: "store_id,customer_phone" }
+  );
+}
+
+export type ConversationTimes = {
+  /** ms da última mensagem (qualquer lado). */
+  lastAnyAt: number;
+  /** ms da última mensagem do cliente (role=user), ou 0 se nunca. */
+  lastUserAt: number;
+};
+
+/** Por cliente: quando foi a última mensagem (qualquer lado) e a última do cliente. */
+export async function getConversationTimes(
+  db: SupabaseClient,
+  storeId: string,
+  limit = 500
+): Promise<Map<string, ConversationTimes>> {
+  const { data } = await db
+    .from("whatsapp_messages")
+    .select("customer_phone, role, created_at")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const map = new Map<string, ConversationTimes>();
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const phone = String(r.customer_phone ?? "");
+    if (!phone) continue;
+    const at = r.created_at ? new Date(String(r.created_at)).getTime() : 0;
+    const isUser = r.role !== "assistant";
+    const cur = map.get(phone);
+    if (!cur) {
+      // Como vem em ordem decrescente, a 1ª ocorrência é a mais recente.
+      map.set(phone, { lastAnyAt: at, lastUserAt: isUser ? at : 0 });
+    } else if (isUser && cur.lastUserAt === 0) {
+      cur.lastUserAt = at;
+    }
+  }
+  return map;
 }
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };

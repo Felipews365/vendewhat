@@ -1,0 +1,31 @@
+name: WhatsApp Follow-ups
+
+# Cutuca clientes que ficaram um tempo sem responder (cada loja escolhe o tempo
+# no painel). Chama um endpoint protegido que decide quem cutucar.
+
+on:
+  schedule:
+    # A cada 15 minutos. O endpoint respeita o tempo configurado por loja.
+    - cron: "*/15 * * * *"
+  workflow_dispatch: # permite rodar manualmente pelo botão "Run workflow"
+
+jobs:
+  followups:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar endpoint de follow-up
+        run: |
+          echo "Disparando follow-ups..."
+          HTTP_CODE=$(curl -s -o /tmp/resp.txt -w "%{http_code}" -X POST \
+            "${APP_BASE_URL%/}/api/whatsapp/followups?key=${CRON_SECRET}")
+          echo "Status HTTP: $HTTP_CODE"
+          cat /tmp/resp.txt; echo
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
+            echo "OK."
+          else
+            echo "Falha (HTTP $HTTP_CODE)."
+            exit 1
+          fi
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

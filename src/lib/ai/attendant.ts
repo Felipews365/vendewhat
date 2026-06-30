@@ -125,3 +125,29 @@ export async function generateReply(
   const text = completion.choices[0]?.message?.content;
   return text ? text.trim() : null;
 }
+
+/**
+ * Gera uma mensagem de follow-up (o cliente parou de responder) puxando para
+ * fechar o pedido, com base no contexto da conversa.
+ */
+export async function generateFollowupReply(
+  systemPrompt: string,
+  history: ChatTurn[]
+): Promise<string | null> {
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const completion = await getClient().chat.completions.create({
+    model,
+    max_tokens: 200,
+    messages: [
+      { role: "system", content: systemPrompt },
+      ...history.map((t) => ({ role: t.role, content: t.content })),
+      {
+        role: "system",
+        content:
+          "O cliente parou de responder. Envie UMA mensagem curta, gentil e natural retomando a conversa e perguntando se ele quer finalizar o pedido. Não repita a saudação inicial. Se ajudar, ofereça tirar dúvidas ou mande o link da loja.",
+      },
+    ],
+  });
+  const text = completion.choices[0]?.message?.content;
+  return text ? text.trim() : null;
+}

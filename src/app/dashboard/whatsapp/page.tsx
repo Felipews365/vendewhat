@@ -49,6 +49,17 @@ const HANDOFF_OPTIONS: { label: string; value: number }[] = [
   { label: "1 dia", value: 1440 },
 ];
 
+// Opções de tempo de silêncio até a IA mandar o follow-up.
+const FOLLOWUP_OPTIONS: { label: string; value: number }[] = [
+  { label: "Desativado", value: 0 },
+  { label: "30 minutos", value: 30 },
+  { label: "1 hora", value: 60 },
+  { label: "2 horas", value: 120 },
+  { label: "3 horas", value: 180 },
+  { label: "6 horas", value: 360 },
+  { label: "1 dia", value: 1440 },
+];
+
 function formatUntil(until: string | null): string {
   if (!until) return "até você reativar";
   const d = new Date(until);
@@ -79,6 +90,8 @@ export default function WhatsAppIaPage() {
   const [aiTone, setAiTone] = useState<AiTone>("simpatico");
   const [faq, setFaq] = useState("");
   const [handoffMinutes, setHandoffMinutes] = useState(30);
+  const [followupMinutes, setFollowupMinutes] = useState(0);
+  const [followupMessage, setFollowupMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
 
@@ -167,7 +180,7 @@ export default function WhatsAppIaPage() {
       const { data: cfg } = await supabase
         .from("store_whatsapp")
         .select(
-          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes"
+          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message"
         )
         .eq("store_id", store.id)
         .maybeSingle();
@@ -187,6 +200,12 @@ export default function WhatsAppIaPage() {
         if (typeof cfg.ai_handoff_minutes === "number") {
           setHandoffMinutes(cfg.ai_handoff_minutes);
         }
+        if (typeof cfg.ai_followup_minutes === "number") {
+          setFollowupMinutes(cfg.ai_followup_minutes);
+        }
+        setFollowupMessage(
+          typeof cfg.ai_followup_message === "string" ? cfg.ai_followup_message : ""
+        );
       }
       setLoading(false);
       // Sincroniza com a Evolution em segundo plano.
@@ -249,6 +268,8 @@ export default function WhatsAppIaPage() {
           aiTone,
           faq,
           aiHandoffMinutes: handoffMinutes,
+          aiFollowupMinutes: followupMinutes,
+          aiFollowupMessage: followupMessage,
         }),
       });
       const data = await res.json();
@@ -363,6 +384,28 @@ export default function WhatsAppIaPage() {
       .filter((c) => !conversations.some((v) => v.customerPhone === c.customerPhone))
       .map((c) => ({ phone: c.customerPhone, lastMessage: "", pause: c })),
   ];
+
+  // Status de atendimento de um cliente (IA atendendo × assumido por você).
+  function customerStatus(pause: CustomerPause | null): {
+    label: string;
+    cls: string;
+  } {
+    const amber =
+      "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300";
+    const green =
+      "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300";
+    const gray =
+      "bg-stone-100 text-stone-600 dark:bg-slate-800 dark:text-slate-300";
+    if (pause) {
+      return {
+        label: pause.reason === "handoff" ? "Você assumiu" : "Pausado por você",
+        cls: amber,
+      };
+    }
+    if (!aiEnabled) return { label: "IA desligada", cls: gray };
+    if (globalPause.paused) return { label: "IA pausada", cls: gray };
+    return { label: "IA atendendo", cls: green };
+  }
 
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-6">
@@ -556,6 +599,37 @@ export default function WhatsAppIaPage() {
           </select>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+            Cutucar quem ficou sem responder
+          </label>
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+            Se o cliente ficar esse tempo sem responder, a IA manda uma mensagem
+            puxando para fechar o pedido.
+          </p>
+          <select
+            value={followupMinutes}
+            onChange={(e) => setFollowupMinutes(Number(e.target.value))}
+            className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 sm:w-64"
+          >
+            {FOLLOWUP_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.value === 0 ? o.label : `Após ${o.label} sem resposta`}
+              </option>
+            ))}
+          </select>
+          {followupMinutes > 0 && (
+            <textarea
+              value={followupMessage}
+              maxLength={1000}
+              onChange={(e) => setFollowupMessage(e.target.value)}
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+              placeholder="Mensagem fixa (opcional). Deixe vazio para a IA escrever sozinha com base na conversa. Ex.: Oi! Ainda quer fechar seu pedido? Posso te ajudar 😊"
+            />
+          )}
+        </div>
+
         <div className="flex items-center gap-3">
           <button
             onClick={handleSaveConfig}
@@ -666,9 +740,18 @@ export default function WhatsAppIaPage() {
                   className="flex items-center justify-between gap-3 py-2"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-stone-800 dark:text-slate-100">
-                      {c.phone}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium text-stone-800 dark:text-slate-100">
+                        {c.phone}
+                      </p>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                          customerStatus(c.pause).cls
+                        }`}
+                      >
+                        {customerStatus(c.pause).label}
+                      </span>
+                    </div>
                     {c.pause ? (
                       <p className="text-xs text-amber-600 dark:text-amber-400">
                         Pausado {formatUntil(c.pause.pausedUntil)}

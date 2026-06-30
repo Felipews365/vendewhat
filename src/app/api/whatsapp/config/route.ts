@@ -11,6 +11,8 @@ type Body = {
   aiTone?: string;
   faq?: string;
   aiHandoffMinutes?: number;
+  aiFollowupMinutes?: number;
+  aiFollowupMessage?: string;
 };
 
 export async function POST(req: Request) {
@@ -54,6 +56,10 @@ export async function POST(req: Request) {
     faq: typeof body.faq === "string" ? body.faq : "",
     aiHandoffMinutes:
       typeof body.aiHandoffMinutes === "number" ? body.aiHandoffMinutes : 30,
+    aiFollowupMinutes:
+      typeof body.aiFollowupMinutes === "number" ? body.aiFollowupMinutes : 0,
+    aiFollowupMessage:
+      typeof body.aiFollowupMessage === "string" ? body.aiFollowupMessage : "",
   });
 
   return NextResponse.json({ ok: true });

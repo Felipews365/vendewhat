@@ -251,12 +251,41 @@ Tudo por loja. **Migration:** rode
   `MESSAGES_UPSERT` e reflete também as mensagens enviadas pela API.
 - **Onde o webhook checa**: só responde se a IA está ligada (`aiEnabled`), **não** há pausa global
   ativa e **não** há pausa do cliente.
-- **API/UI:** `src/app/api/whatsapp/pause/route.ts` (`GET` lista estado; `POST` com
-  `{action: pause|resume, scope: global|customer, phone?, minutes?}` — `minutes` `null`/0 =
-  indefinido, com teto de 7 dias). O `ai_handoff_minutes` é salvo junto do resto da config IA
-  (`saveAiConfig` + `POST /api/whatsapp/config`). A UI fica em
-  [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) (botões de duração: 15min/30min/1h/3h/
-  "até eu reativar"; lista de clientes pausados com **Reativar**).
+- **API/UI:** `src/app/api/whatsapp/pause/route.ts` (`GET` lista estado **+ conversas recentes**;
+  `POST` com `{action: pause|resume, scope: global|customer, phone?, minutes?}` — `minutes` `null`/0
+  = indefinido, com teto de 7 dias). O `ai_handoff_minutes` é salvo junto do resto da config IA
+  (`saveAiConfig` + `POST /api/whatsapp/config`).
+
+A tela [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) é dividida em **abas**
+(`tab`: Conexão · Atendente de IA · Pausar). A aba **Pausar** lista os clientes que já conversaram
+(`listRecentCustomers` em [whatsappConfig.ts](src/lib/whatsappConfig.ts), das `whatsapp_messages`)
+mesclados com os pausados; cada linha mostra um **selo de status** — "IA atendendo" (verde),
+"Você assumiu" (handoff) / "Pausado por você" (manual), "IA pausada"/"IA desligada" — e um botão
+**Pausar** (usa a duração escolhida no seletor) ou **Reativar**. Durações: 15min/30min/1h/3h/1 dia/
+"até eu reativar". Há ainda um campo para pausar um número que ainda não apareceu.
+
+### Follow-up automático (cutucar quem sumiu)
+
+Se o cliente fica um tempo sem responder, a IA manda uma mensagem puxando para fechar o pedido. O
+tempo é por loja. **Migration:** rode
+[supabase-migration-whatsapp-followup.sql](supabase-migration-whatsapp-followup.sql) (adiciona
+`ai_followup_minutes` (0 = desativado) e `ai_followup_message` em `store_whatsapp`; cria a tabela
+`whatsapp_followups` que guarda `last_followup_at` por cliente para não repetir).
+
+- **Configuração:** no painel (aba Atendente de IA), o lojista escolhe o tempo de silêncio
+  (30min/1h/2h/3h/6h/1 dia) e, opcionalmente, uma **mensagem fixa**; vazio = a IA gera com base na
+  conversa (`generateFollowupReply` em [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts)).
+- **Cron:** o GitHub Action
+  [.github/workflows/whatsapp-followups.yml](.github/workflows/whatsapp-followups.yml) chama
+  `POST /api/whatsapp/followups?key=<CRON_SECRET>` **a cada 15 min**. O endpoint
+  ([followups/route.ts](src/app/api/whatsapp/followups/route.ts)) varre as lojas com follow-up
+  ligado (`listFollowupConfigs`), e para cada cliente cutuca se: tem mensagem do cliente,
+  `idle ∈ [minutos, minutos×3]` (não ressuscita conversas muito antigas), **não** está pausado
+  (global/handoff/manual) e ainda não foi cutucado desde a última fala dele
+  (`whatsapp_followups.last_followup_at >= lastUserAt`). Tetos de envio por loja/execução evitam
+  timeout. Depois de enviar, grava a mensagem como `assistant` e atualiza `last_followup_at`.
+- **Variável de ambiente extra:** `CRON_SECRET` (segredo que protege o endpoint; sem ele o endpoint
+  recusa). **Secrets do GitHub** para o workflow: `APP_BASE_URL` e `CRON_SECRET`.
 
 ### Keep-alive (evitar pausa do plano Free)
 
