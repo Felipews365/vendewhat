@@ -203,7 +203,7 @@ export function DashboardLayoutClient({
 
       <div className="flex min-h-screen flex-col">
         <header className="sticky top-0 z-30 border-b border-slate-200/90 bg-white/85 backdrop-blur-md shadow-sm shadow-slate-200/40 dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-black/20">
-          <div className="mx-auto flex max-w-6xl flex-nowrap items-center justify-between gap-4 px-4 py-3">
+          <div className="mx-auto flex max-w-7xl flex-nowrap items-center justify-between gap-4 px-4 py-3">
             <div className="flex items-center gap-4 min-w-0 lg:gap-6">
               <Link
                 href="/dashboard"
