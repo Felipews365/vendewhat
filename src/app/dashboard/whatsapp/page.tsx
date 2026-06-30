@@ -383,10 +383,16 @@ export default function WhatsAppIaPage() {
     );
   }
 
+  // "Conectando…" só faz sentido durante uma conexão ativa (QR na tela ou logo
+  // após clicar). Numa página recém-aberta, um estado preso em "connecting" do
+  // servidor é mostrado como "Desconectado" para não confundir.
+  const displayStatus: ConnectionStatus =
+    status === "connecting" && !qr && !connecting ? "disconnected" : status;
+
   const statusColor =
-    status === "connected"
+    displayStatus === "connected"
       ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300"
-      : status === "connecting"
+      : displayStatus === "connecting"
       ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
       : "bg-stone-100 text-stone-600 dark:bg-slate-800 dark:text-slate-300";
 
@@ -476,11 +482,11 @@ export default function WhatsAppIaPage() {
           <span
             className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColor}`}
           >
-            {STATUS_LABEL[status]}
+            {STATUS_LABEL[displayStatus]}
           </span>
         </div>
 
-        {status === "connected" ? (
+        {displayStatus === "connected" ? (
           <div className="mt-4 space-y-3">
             <p className="text-sm text-stone-600 dark:text-slate-300">
               Número conectado:{" "}
