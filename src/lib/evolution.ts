@@ -25,6 +25,30 @@ export function isEvolutionConfigured(): boolean {
   return Boolean(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY);
 }
 
+/**
+ * Extrai a mensagem de erro da resposta da Evolution. A v2 costuma aninhar em
+ * `response.message` (que pode ser um array), além do `message`/`error` no topo.
+ */
+function extractErrorMessage(parsed: unknown, status: number): string {
+  const fallback = `Evolution API erro ${status}`;
+  if (!parsed || typeof parsed !== "object") {
+    return typeof parsed === "string" && parsed ? parsed : fallback;
+  }
+  const obj = parsed as Record<string, unknown>;
+  const response = obj.response as Record<string, unknown> | undefined;
+  const candidates: unknown[] = [
+    obj.message,
+    response?.message,
+    response?.error,
+    obj.error,
+  ];
+  for (const c of candidates) {
+    if (Array.isArray(c) && c.length) return c.map((x) => String(x)).join(" ");
+    if (typeof c === "string" && c.trim()) return c;
+  }
+  return fallback;
+}
+
 async function call<T>(
   method: "GET" | "POST" | "DELETE",
   path: string,
@@ -49,12 +73,7 @@ async function call<T>(
   }
 
   if (!res.ok) {
-    let msg = `Evolution API erro ${res.status}`;
-    if (parsed && typeof parsed === "object" && "message" in parsed) {
-      const m = (parsed as { message: unknown }).message;
-      if (m) msg = String(m);
-    }
-    throw new Error(msg);
+    throw new Error(extractErrorMessage(parsed, res.status));
   }
   return parsed as T;
 }
