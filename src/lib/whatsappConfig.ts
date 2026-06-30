@@ -160,7 +160,7 @@ export async function saveAiConfig(
 ): Promise<void> {
   const handoff = Math.max(
     0,
-    Math.min(720, Math.round(Number.isFinite(cfg.aiHandoffMinutes) ? cfg.aiHandoffMinutes : 30))
+    Math.min(1440, Math.round(Number.isFinite(cfg.aiHandoffMinutes) ? cfg.aiHandoffMinutes : 30))
   );
   await db
     .from(TABLE)
@@ -284,6 +284,38 @@ export async function listCustomerPauses(
           : null,
       reason: String(r.reason ?? "manual"),
     }));
+}
+
+export type RecentCustomer = {
+  customerPhone: string;
+  lastMessage: string;
+  lastAt: string;
+};
+
+/** Clientes que já conversaram com a loja, do mais recente para o mais antigo. */
+export async function listRecentCustomers(
+  db: SupabaseClient,
+  storeId: string,
+  limit = 30
+): Promise<RecentCustomer[]> {
+  const { data } = await db
+    .from("whatsapp_messages")
+    .select("customer_phone, content, created_at")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  const seen = new Map<string, RecentCustomer>();
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const phone = String(r.customer_phone ?? "");
+    if (!phone || seen.has(phone)) continue; // 1ª ocorrência = mensagem mais recente
+    seen.set(phone, {
+      customerPhone: phone,
+      lastMessage: String(r.content ?? ""),
+      lastAt: typeof r.created_at === "string" ? r.created_at : "",
+    });
+    if (seen.size >= limit) break;
+  }
+  return Array.from(seen.values());
 }
 
 /** True se a IA está pausada para este cliente agora (limpa a pausa se expirou). */

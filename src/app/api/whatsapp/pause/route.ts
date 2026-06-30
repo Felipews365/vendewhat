@@ -7,6 +7,7 @@ import {
   getConfig,
   globalPauseActive,
   listCustomerPauses,
+  listRecentCustomers,
   setCustomerPause,
   setGlobalPause,
 } from "@/lib/whatsappConfig";
@@ -71,7 +72,10 @@ export async function GET() {
   const { storeId, admin } = ctx;
 
   const cfg = await getConfig(admin, storeId);
-  const customers = await listCustomerPauses(admin, storeId);
+  const [customers, conversations] = await Promise.all([
+    listCustomerPauses(admin, storeId),
+    listRecentCustomers(admin, storeId, 30),
+  ]);
 
   // Se a pausa global expirou, limpa de forma preguiçosa.
   if (cfg?.aiPaused && !globalPauseActive(cfg)) {
@@ -84,6 +88,7 @@ export async function GET() {
     global: { paused: active, until: active ? cfg?.aiPausedUntil ?? null : null },
     handoffMinutes: cfg?.aiHandoffMinutes ?? 30,
     customers,
+    conversations,
   });
 }
 

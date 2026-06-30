@@ -27,6 +27,7 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 
 type GlobalPause = { paused: boolean; until: string | null };
 type CustomerPause = { customerPhone: string; pausedUntil: string | null; reason: string };
+type RecentCustomer = { customerPhone: string; lastMessage: string; lastAt: string };
 
 // Opções de duração da pausa. minutes null = "até eu reativar".
 const PAUSE_DURATIONS: { label: string; minutes: number | null }[] = [
@@ -34,6 +35,7 @@ const PAUSE_DURATIONS: { label: string; minutes: number | null }[] = [
   { label: "30 min", minutes: 30 },
   { label: "1 hora", minutes: 60 },
   { label: "3 horas", minutes: 180 },
+  { label: "1 dia", minutes: 1440 },
   { label: "Até eu reativar", minutes: null },
 ];
 
@@ -44,6 +46,7 @@ const HANDOFF_OPTIONS: { label: string; value: number }[] = [
   { label: "30 minutos", value: 30 },
   { label: "1 hora", value: 60 },
   { label: "3 horas", value: 180 },
+  { label: "1 dia", value: 1440 },
 ];
 
 function formatUntil(until: string | null): string {
@@ -84,8 +87,13 @@ export default function WhatsAppIaPage() {
     until: null,
   });
   const [customerPauses, setCustomerPauses] = useState<CustomerPause[]>([]);
+  const [conversations, setConversations] = useState<RecentCustomer[]>([]);
   const [pauseBusy, setPauseBusy] = useState(false);
   const [newPausePhone, setNewPausePhone] = useState("");
+  // Duração escolhida ao pausar um cliente da lista (minutes; null = até reativar).
+  const [customerDuration, setCustomerDuration] = useState<number | null>(30);
+
+  const [tab, setTab] = useState<"conexao" | "ia" | "pausar">("conexao");
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -123,6 +131,9 @@ export default function WhatsAppIaPage() {
           data.global ?? { paused: false, until: null }
         );
         setCustomerPauses(Array.isArray(data.customers) ? data.customers : []);
+        setConversations(
+          Array.isArray(data.conversations) ? data.conversations : []
+        );
         if (typeof data.handoffMinutes === "number") {
           setHandoffMinutes(data.handoffMinutes);
         }
@@ -294,17 +305,28 @@ export default function WhatsAppIaPage() {
     if (ok) showToast("IA reativada!");
   }
 
-  async function pauseCustomer(minutes: number | null) {
-    const phone = newPausePhone.replace(/\D/g, "");
-    if (!phone) {
+  async function pauseCustomer(phone: string, minutes: number | null) {
+    const clean = phone.replace(/\D/g, "");
+    if (!clean) {
       setError("Informe o número do cliente (com DDD).");
       return;
     }
-    const ok = await sendPause({ action: "pause", scope: "customer", phone, minutes });
-    if (ok) {
-      setNewPausePhone("");
-      showToast("Cliente pausado.");
+    const ok = await sendPause({
+      action: "pause",
+      scope: "customer",
+      phone: clean,
+      minutes,
+    });
+    if (ok) showToast("Cliente pausado.");
+  }
+
+  async function pauseManualCustomer() {
+    if (!newPausePhone.replace(/\D/g, "")) {
+      setError("Informe o número do cliente (com DDD).");
+      return;
     }
+    await pauseCustomer(newPausePhone, customerDuration);
+    setNewPausePhone("");
   }
 
   async function resumeCustomer(phone: string) {
@@ -325,6 +347,23 @@ export default function WhatsAppIaPage() {
       ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
       : "bg-stone-100 text-stone-600 dark:bg-slate-800 dark:text-slate-300";
 
+  // Clientes que já conversaram + pausados (mesmo que ainda não tenham mensagem).
+  const pauseByPhone = new Map(customerPauses.map((c) => [c.customerPhone, c]));
+  const customerRows: {
+    phone: string;
+    lastMessage: string;
+    pause: CustomerPause | null;
+  }[] = [
+    ...conversations.map((c) => ({
+      phone: c.customerPhone,
+      lastMessage: c.lastMessage,
+      pause: pauseByPhone.get(c.customerPhone) ?? null,
+    })),
+    ...customerPauses
+      .filter((c) => !conversations.some((v) => v.customerPhone === c.customerPhone))
+      .map((c) => ({ phone: c.customerPhone, lastMessage: "", pause: c })),
+  ];
+
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-6">
       <header>
@@ -341,7 +380,31 @@ export default function WhatsAppIaPage() {
         </div>
       )}
 
+      {/* Abas */}
+      <div className="flex gap-1 rounded-xl border border-stone-200 bg-stone-100 p-1 dark:border-slate-800 dark:bg-slate-900/60">
+        {(
+          [
+            ["conexao", "Conexão"],
+            ["ia", "Atendente de IA"],
+            ["pausar", "Pausar"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+              tab === key
+                ? "bg-white text-violet-700 shadow-sm dark:bg-slate-800 dark:text-violet-300"
+                : "text-stone-600 hover:text-stone-800 dark:text-slate-400 dark:hover:text-slate-200"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Conexão */}
+      {tab === "conexao" && (
       <section className="rounded-2xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-semibold text-stone-800 dark:text-slate-100">Conexão do WhatsApp</h2>
@@ -401,8 +464,10 @@ export default function WhatsAppIaPage() {
           </div>
         )}
       </section>
+      )}
 
       {/* Configuração da IA */}
+      {tab === "ia" && (
       <section className="rounded-2xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm space-y-4">
         <h2 className="font-semibold text-stone-800 dark:text-slate-100">Atendente de IA</h2>
 
@@ -504,8 +569,10 @@ export default function WhatsAppIaPage() {
           )}
         </div>
       </section>
+      )}
 
       {/* Pausar atendimento */}
+      {tab === "pausar" && (
       <section className="rounded-2xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm space-y-5">
         <div>
           <h2 className="font-semibold text-stone-800 dark:text-slate-100">
@@ -567,58 +634,104 @@ export default function WhatsAppIaPage() {
 
         {/* Pausa por cliente */}
         <div className="rounded-xl border border-stone-200 dark:border-slate-700 p-4 space-y-3">
-          <span className="text-sm font-medium text-stone-700 dark:text-slate-200">
-            Pausar um cliente específico
-          </span>
-          <input
-            type="tel"
-            value={newPausePhone}
-            onChange={(e) => setNewPausePhone(e.target.value)}
-            placeholder="Número com DDD (ex.: 11 99999-9999)"
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-          />
-          <div className="flex flex-wrap gap-2">
-            {PAUSE_DURATIONS.map((d) => (
-              <button
-                key={d.label}
-                onClick={() => pauseCustomer(d.minutes)}
-                disabled={pauseBusy}
-                className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium text-stone-700 dark:text-slate-200">
+              Clientes
+            </span>
+            <label className="flex items-center gap-2 text-xs text-stone-500 dark:text-slate-400">
+              Pausar por:
+              <select
+                value={customerDuration ?? ""}
+                onChange={(e) =>
+                  setCustomerDuration(
+                    e.target.value === "" ? null : Number(e.target.value)
+                  )
+                }
+                className="rounded-lg border border-stone-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               >
-                {d.label}
-              </button>
-            ))}
+                {PAUSE_DURATIONS.map((d) => (
+                  <option key={d.label} value={d.minutes ?? ""}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
-          {customerPauses.length > 0 && (
-            <ul className="mt-2 divide-y divide-stone-100 dark:divide-slate-800">
-              {customerPauses.map((c) => (
+          {customerRows.length > 0 ? (
+            <ul className="divide-y divide-stone-100 dark:divide-slate-800">
+              {customerRows.map((c) => (
                 <li
-                  key={c.customerPhone}
+                  key={c.phone}
                   className="flex items-center justify-between gap-3 py-2"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-stone-800 dark:text-slate-100">
-                      {c.customerPhone}
+                      {c.phone}
                     </p>
-                    <p className="text-xs text-stone-500 dark:text-slate-400">
-                      Pausado {formatUntil(c.pausedUntil)}
-                      {c.reason === "handoff" ? " · você respondeu" : ""}
-                    </p>
+                    {c.pause ? (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Pausado {formatUntil(c.pause.pausedUntil)}
+                        {c.pause.reason === "handoff" ? " · você respondeu" : ""}
+                      </p>
+                    ) : c.lastMessage ? (
+                      <p className="truncate text-xs text-stone-500 dark:text-slate-400">
+                        {c.lastMessage}
+                      </p>
+                    ) : null}
                   </div>
-                  <button
-                    onClick={() => resumeCustomer(c.customerPhone)}
-                    disabled={pauseBusy}
-                    className="shrink-0 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                  >
-                    Reativar
-                  </button>
+                  {c.pause ? (
+                    <button
+                      onClick={() => resumeCustomer(c.phone)}
+                      disabled={pauseBusy}
+                      className="shrink-0 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      Reativar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => pauseCustomer(c.phone, customerDuration)}
+                      disabled={pauseBusy}
+                      className="shrink-0 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
+                    >
+                      Pausar
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
+          ) : (
+            <p className="text-sm text-stone-500 dark:text-slate-400">
+              Nenhuma conversa ainda. Quando um cliente falar com a loja, ele
+              aparece aqui para você pausar.
+            </p>
           )}
+
+          {/* Pausar um número que ainda não apareceu */}
+          <div className="border-t border-stone-100 pt-3 dark:border-slate-800">
+            <p className="mb-2 text-xs text-stone-500 dark:text-slate-400">
+              Pausar um número que ainda não apareceu na lista:
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="tel"
+                value={newPausePhone}
+                onChange={(e) => setNewPausePhone(e.target.value)}
+                placeholder="Número com DDD"
+                className="flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+              />
+              <button
+                onClick={pauseManualCustomer}
+                disabled={pauseBusy}
+                className="shrink-0 rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Pausar
+              </button>
+            </div>
+          </div>
         </div>
       </section>
+      )}
     </div>
   );
 }
