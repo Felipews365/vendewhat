@@ -67,6 +67,13 @@ function formatCatalog(products: AttendantProduct[]): string {
     .join("\n");
 }
 
+/** Monta um link do Google Maps a partir de um endereço em texto. */
+function mapsLink(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    address
+  )}`;
+}
+
 export function buildSystemPrompt(args: {
   storeName: string;
   slug: string;
@@ -76,10 +83,28 @@ export function buildSystemPrompt(args: {
   products: AttendantProduct[];
   baseUrl: string;
   isFirstContact: boolean;
+  /** Endereço/localização da loja; vazio = não informado. */
+  storeAddress?: string;
+  /** A loja tem coordenadas: a IA pode enviar o pino do mapa do WhatsApp. */
+  hasLocationPin?: boolean;
+  /** A loja tem foto da fachada: a IA pode enviar a imagem. */
+  hasStorePhoto?: boolean;
 }): string {
-  const { storeName, slug, faq, aiName, aiTone, products, baseUrl, isFirstContact } =
-    args;
+  const {
+    storeName,
+    slug,
+    faq,
+    aiName,
+    aiTone,
+    products,
+    baseUrl,
+    isFirstContact,
+    storeAddress,
+    hasLocationPin,
+    hasStorePhoto,
+  } = args;
   const storeUrl = `${baseUrl.replace(/\/+$/, "")}/loja/${slug}`;
+  const address = (storeAddress ?? "").trim();
 
   return [
     `Você é ${aiName}, atendente virtual da loja "${storeName}" no WhatsApp.`,
@@ -97,6 +122,22 @@ export function buildSystemPrompt(args: {
     "- Se não souber algo, diga que vai verificar com a loja em vez de inventar.",
     "- Seja objetivo: respostas curtas, próprias para WhatsApp.",
     "- Não prometa descontos ou condições que não estejam nas informações fornecidas.",
+    address
+      ? "- Se o cliente pedir a localização, o endereço ou como chegar na loja, informe o endereço abaixo. Não invente endereço."
+      : "- A loja não cadastrou um endereço. Se o cliente pedir a localização, diga que vai verificar com a loja; não invente endereço.",
+    hasLocationPin
+      ? "- Você PODE enviar a localização no mapa do WhatsApp (o pino). Quando o cliente pedir a localização/endereço/como chegar, responda com uma frase curta e inclua, no final da mensagem, o marcador [[ENVIAR_LOCALIZACAO]]. O sistema envia o pino do mapa automaticamente em seguida."
+      : "",
+    hasStorePhoto
+      ? "- Você PODE enviar uma foto da loja. Quando o cliente pedir para ver a loja, a fachada ou o estabelecimento, responda com uma frase curta e inclua, no final, o marcador [[ENVIAR_FOTO]]. O sistema envia a foto automaticamente."
+      : "",
+    hasLocationPin || hasStorePhoto
+      ? "- Os marcadores [[...]] são comandos internos: use-os só quando fizer sentido, nunca os explique ao cliente e nunca os escreva em outro contexto."
+      : "",
+    "",
+    address
+      ? `LOCALIZAÇÃO DA LOJA:\n${address}\nMapa: ${mapsLink(address)}`
+      : "LOCALIZAÇÃO DA LOJA:\n(Endereço não cadastrado.)",
     "",
     "PRODUTOS DA LOJA:",
     formatCatalog(products),
@@ -104,6 +145,31 @@ export function buildSystemPrompt(args: {
     "INFORMAÇÕES / POLÍTICAS DA LOJA (FAQ):",
     faq.trim() ? faq.trim() : "(Sem informações adicionais cadastradas.)",
   ].join("\n");
+}
+
+export type ReplyDirectives = {
+  /** Texto a enviar, já sem os marcadores internos. */
+  text: string;
+  /** A IA pediu para mandar o pino da localização. */
+  sendLocation: boolean;
+  /** A IA pediu para mandar a foto da loja. */
+  sendPhoto: boolean;
+};
+
+/**
+ * Separa a resposta da IA dos marcadores internos ([[ENVIAR_LOCALIZACAO]],
+ * [[ENVIAR_FOTO]]) que pedem o envio do pino do mapa / da foto da loja.
+ */
+export function parseReplyDirectives(reply: string): ReplyDirectives {
+  const sendLocation = /\[\[\s*ENVIAR_LOCALIZACAO\s*\]\]/i.test(reply);
+  const sendPhoto = /\[\[\s*ENVIAR_FOTO\s*\]\]/i.test(reply);
+  const text = reply
+    .replace(/\[\[\s*ENVIAR_LOCALIZACAO\s*\]\]/gi, "")
+    .replace(/\[\[\s*ENVIAR_FOTO\s*\]\]/gi, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text, sendLocation, sendPhoto };
 }
 
 /** Gera a resposta do atendente. Retorna o texto, ou null se não houver conteúdo. */

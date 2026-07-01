@@ -242,6 +242,38 @@ uma instância Evolution e uma config de IA por loja.
   - `CRON_SECRET` — segredo que protege o endpoint de follow-up (ver subseção abaixo). Também
     precisa estar nos **secrets do GitHub** (junto de `APP_BASE_URL`) para o workflow do cron.
 
+### Localização e foto da loja (a IA envia quando pedem)
+
+Quando o cliente pede a localização ou para ver a loja, a IA pode mandar o **pino
+nativo do mapa do WhatsApp** (igual uma pessoa) e a **foto da fachada**. Tudo por
+loja, configurado na aba **Atendente de IA** (seção "Localização e foto da loja").
+**Migration:** rode
+[supabase-migration-whatsapp-location.sql](supabase-migration-whatsapp-location.sql)
+(adiciona `ai_location_address`, `ai_location_lat`, `ai_location_lng`,
+`ai_location_url`, `ai_store_photo_url` em `store_whatsapp`).
+
+- **Endereço:** `ai_location_address` (onde a loja fica — pode ser igual ou
+  diferente do `storefront.pickupAddress` de retirada). No webhook, se vazio, cai
+  no endereço de retirada (`cfg.aiLocationAddress.trim() || pickupAddress`).
+- **Pino do mapa:** o lojista cola um **link do Google Maps** (ou `lat,lng`); a rota
+  [config](src/app/api/whatsapp/config/route.ts) extrai as coordenadas com
+  `parseLatLng` ([src/lib/geoLocation.ts](src/lib/geoLocation.ts)) e grava
+  `ai_location_lat/lng`. Links encurtados `maps.app.goo.gl` não têm o ponto na URL,
+  então o servidor **segue o redirecionamento** com `resolveMapsLatLng` (fetch no
+  runtime nodejs) e, quando resolve, guarda em `ai_location_url` uma URL canônica
+  `…/maps/search/?api=1&query=lat,lng` (devolvida ao painel em `resolvedUrl` para
+  reexibir já reconhecida). O painel tem um passo a passo (`<details>` "Como pego o
+  link do mapa?") ensinando a copiar o link no app/site do Maps.
+- **Foto:** upload para o bucket `product-images` (igual às fotos do banner),
+  guarda a URL pública em `ai_store_photo_url`.
+- **Como a IA dispara:** o `buildSystemPrompt`
+  ([src/lib/ai/attendant.ts](src/lib/ai/attendant.ts)) recebe `hasLocationPin` /
+  `hasStorePhoto` e instrui a IA a incluir os marcadores `[[ENVIAR_LOCALIZACAO]]` /
+  `[[ENVIAR_FOTO]]` no fim da resposta. O webhook usa `parseReplyDirectives` para
+  separar o texto dos marcadores e então chama `sendLocation` / `sendMedia`
+  ([src/lib/evolution.ts](src/lib/evolution.ts)) — endpoints `sendLocation` e
+  `sendMedia` da Evolution. O texto (sem marcadores) vai pelo `sendText` normal.
+
 ### Pausar o atendimento da IA (assumir a conversa)
 
 O lojista pode pausar a IA quando quiser, em `/dashboard/whatsapp` (seção **Pausar atendimento**).

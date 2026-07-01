@@ -206,3 +206,36 @@ export async function sendText(
     text,
   });
 }
+
+/** Envia a localização nativa do WhatsApp (o pino do mapa). */
+export async function sendLocation(
+  instance: string,
+  number: string,
+  loc: { latitude: number; longitude: number; name?: string; address?: string }
+): Promise<void> {
+  await call("POST", `/message/sendLocation/${encodeURIComponent(instance)}`, {
+    number: number.replace(/\D/g, ""),
+    name: loc.name ?? "",
+    address: loc.address ?? "",
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+  });
+}
+
+/** Envia uma mídia por URL (foto, por padrão) com legenda opcional. */
+export async function sendMedia(
+  instance: string,
+  number: string,
+  media: {
+    url: string;
+    caption?: string;
+    mediatype?: "image" | "video" | "document";
+  }
+): Promise<void> {
+  await call("POST", `/message/sendMedia/${encodeURIComponent(instance)}`, {
+    number: number.replace(/\D/g, ""),
+    mediatype: media.mediatype ?? "image",
+    media: media.url,
+    caption: media.caption ?? "",
+  });
+}

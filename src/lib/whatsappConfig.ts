@@ -39,6 +39,15 @@ export type WhatsAppConfig = {
   aiPostsaleDays: number;
   /** Mensagem fixa de pós-venda. Vazio = a IA gera. */
   aiPostsaleMessage: string;
+  /** Endereço de onde a loja fica (a IA informa quando perguntam). Vazio = usa o de retirada. */
+  aiLocationAddress: string;
+  /** Coordenadas para o pino do mapa do WhatsApp. null = sem pino. */
+  aiLocationLat: number | null;
+  aiLocationLng: number | null;
+  /** Link do Google Maps colado pelo lojista (para reexibir no editor). */
+  aiLocationUrl: string;
+  /** Foto da loja/fachada que a IA envia quando o cliente pede. Vazio = sem foto. */
+  aiStorePhotoUrl: string;
 };
 
 const TABLE = "store_whatsapp";
@@ -94,11 +103,21 @@ function rowToConfig(row: Record<string, unknown>): WhatsAppConfig {
         : Number(row.ai_postsale_days ?? 0) || 0,
     aiPostsaleMessage:
       typeof row.ai_postsale_message === "string" ? row.ai_postsale_message : "",
+    aiLocationAddress:
+      typeof row.ai_location_address === "string" ? row.ai_location_address : "",
+    aiLocationLat:
+      typeof row.ai_location_lat === "number" ? row.ai_location_lat : null,
+    aiLocationLng:
+      typeof row.ai_location_lng === "number" ? row.ai_location_lng : null,
+    aiLocationUrl:
+      typeof row.ai_location_url === "string" ? row.ai_location_url : "",
+    aiStorePhotoUrl:
+      typeof row.ai_store_photo_url === "string" ? row.ai_store_photo_url : "",
   };
 }
 
 const SELECT =
-  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message";
+  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_location_address, ai_location_lat, ai_location_lng, ai_location_url, ai_store_photo_url";
 
 /** Lê a config da loja (ou null se ainda não existe). */
 export async function getConfig(
@@ -180,6 +199,11 @@ export async function saveAiConfig(
     aiFollowupMessage: string;
     aiPostsaleDays: number;
     aiPostsaleMessage: string;
+    aiLocationAddress: string;
+    aiLocationLat: number | null;
+    aiLocationLng: number | null;
+    aiLocationUrl: string;
+    aiStorePhotoUrl: string;
   }
 ): Promise<void> {
   const handoff = Math.max(
@@ -209,6 +233,17 @@ export async function saveAiConfig(
       ai_followup_message: cfg.aiFollowupMessage.trim().slice(0, 1000),
       ai_postsale_days: postsaleDays,
       ai_postsale_message: cfg.aiPostsaleMessage.trim().slice(0, 1000),
+      ai_location_address: cfg.aiLocationAddress.trim().slice(0, 300),
+      ai_location_lat:
+        cfg.aiLocationLat != null && Number.isFinite(cfg.aiLocationLat)
+          ? cfg.aiLocationLat
+          : null,
+      ai_location_lng:
+        cfg.aiLocationLng != null && Number.isFinite(cfg.aiLocationLng)
+          ? cfg.aiLocationLng
+          : null,
+      ai_location_url: cfg.aiLocationUrl.trim().slice(0, 500),
+      ai_store_photo_url: cfg.aiStorePhotoUrl.trim().slice(0, 500),
       updated_at: new Date().toISOString(),
     })
     .eq("store_id", storeId);

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
+import { parseLatLng, isShortMapsLink } from "@/lib/geoLocation";
+import { storefrontFromDb } from "@/lib/storefront";
 
 // Constantes locais (client-safe) — não importar de whatsappConfig.ts, que usa `crypto`.
 type AiTone = "simpatico" | "formal" | "descontraido";
@@ -106,6 +108,11 @@ export default function WhatsAppIaPage() {
   const [followupMessage, setFollowupMessage] = useState("");
   const [postsaleDays, setPostsaleDays] = useState(0);
   const [postsaleMessage, setPostsaleMessage] = useState("");
+  const [locationAddress, setLocationAddress] = useState("");
+  const [locationUrl, setLocationUrl] = useState("");
+  const [storePhotoUrl, setStorePhotoUrl] = useState("");
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [pickupAddress, setPickupAddress] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
 
@@ -182,7 +189,7 @@ export default function WhatsAppIaPage() {
       }
       const { data: store } = await supabase
         .from("stores")
-        .select("id")
+        .select("id, storefront")
         .eq("user_id", user.id)
         .single();
       if (!store) {
@@ -190,11 +197,12 @@ export default function WhatsAppIaPage() {
         return;
       }
       setStoreId(store.id);
+      setPickupAddress(storefrontFromDb(store.storefront).pickupAddress);
 
       const { data: cfg } = await supabase
         .from("store_whatsapp")
         .select(
-          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message"
+          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_location_address, ai_location_url, ai_store_photo_url"
         )
         .eq("store_id", store.id)
         .maybeSingle();
@@ -225,6 +233,15 @@ export default function WhatsAppIaPage() {
         }
         setPostsaleMessage(
           typeof cfg.ai_postsale_message === "string" ? cfg.ai_postsale_message : ""
+        );
+        setLocationAddress(
+          typeof cfg.ai_location_address === "string" ? cfg.ai_location_address : ""
+        );
+        setLocationUrl(
+          typeof cfg.ai_location_url === "string" ? cfg.ai_location_url : ""
+        );
+        setStorePhotoUrl(
+          typeof cfg.ai_store_photo_url === "string" ? cfg.ai_store_photo_url : ""
         );
       }
       setLoading(false);
@@ -292,6 +309,9 @@ export default function WhatsAppIaPage() {
           aiFollowupMessage: followupMessage,
           aiPostsaleDays: postsaleDays,
           aiPostsaleMessage: postsaleMessage,
+          aiLocationAddress: locationAddress,
+          aiLocationUrl: locationUrl,
+          aiStorePhotoUrl: storePhotoUrl,
         }),
       });
       const data = await res.json();
@@ -300,12 +320,52 @@ export default function WhatsAppIaPage() {
         return;
       }
       setSavedOk(true);
-      showToast("Configurações do WhatsApp salvas!");
+      // Sincroniza com a URL canônica quando o servidor resolveu um link encurtado.
+      if (
+        typeof data.resolvedUrl === "string" &&
+        data.resolvedUrl &&
+        data.resolvedUrl !== locationUrl
+      ) {
+        setLocationUrl(data.resolvedUrl);
+      }
+      if (data.locationParsed === false) {
+        showToast(
+          "Configurações salvas, mas não consegui ler o ponto do link do mapa. Cole o link completo do Google Maps (ou as coordenadas).",
+          "error"
+        );
+      } else {
+        showToast("Configurações do WhatsApp salvas!");
+      }
       setTimeout(() => setSavedOk(false), 2500);
     } catch {
       setError("Falha de rede ao salvar.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handlePhotoUpload(file: File) {
+    if (!storeId || !file) return;
+    setPhotoUploading(true);
+    setError("");
+    try {
+      const supabase = createClient();
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `${storeId}/store-photo-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("product-images")
+        .upload(fileName, file, { upsert: true });
+      if (upErr) {
+        showToast("Erro ao enviar foto: " + upErr.message, "error");
+        return;
+      }
+      const { data } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(fileName);
+      setStorePhotoUrl(data.publicUrl);
+      showToast("Foto enviada! Clique em Salvar para confirmar.");
+    } finally {
+      setPhotoUploading(false);
     }
   }
 
@@ -604,6 +664,154 @@ export default function WhatsAppIaPage() {
               "Ex.:\n- Frete grátis acima de R$ 200.\n- Pagamento: Pix e cartão.\n- Trocas em até 7 dias.\n- Atendemos de seg a sex, 9h às 18h."
             }
           />
+        </div>
+
+        {/* Localização e foto da loja */}
+        <div className="rounded-xl border border-stone-200 dark:border-slate-700 p-4 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-stone-800 dark:text-slate-100">
+              Localização e foto da loja
+            </h3>
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+              Quando o cliente pedir, a IA manda o endereço, o ponto no mapa
+              (igual uma pessoa manda) e a foto da loja.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+              Endereço de onde a loja fica
+            </label>
+            <textarea
+              value={locationAddress}
+              maxLength={300}
+              onChange={(e) => setLocationAddress(e.target.value)}
+              rows={2}
+              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+              placeholder="Ex.: Rua das Flores, 123 - Centro, Cidade/UF"
+            />
+            {pickupAddress && pickupAddress.trim() !== locationAddress.trim() && (
+              <button
+                type="button"
+                onClick={() => setLocationAddress(pickupAddress)}
+                className="mt-1 text-xs font-medium text-violet-700 hover:underline dark:text-violet-300"
+              >
+                Usar o mesmo endereço de retirada
+              </button>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+              Ponto no mapa (link do Google Maps)
+            </label>
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+              Cole aqui o link do Google Maps da sua loja. Assim a IA envia o pino
+              do mapa do WhatsApp, igual uma pessoa manda.
+            </p>
+
+            <details className="mt-2 rounded-lg bg-stone-50 px-3 py-2 text-xs text-stone-600 dark:bg-slate-800/60 dark:text-slate-300">
+              <summary className="cursor-pointer font-medium text-stone-700 dark:text-slate-200">
+                Como pego o link do mapa?
+              </summary>
+              <div className="mt-2 space-y-2">
+                <div>
+                  <p className="font-medium text-stone-700 dark:text-slate-200">
+                    No celular (app Google Maps):
+                  </p>
+                  <ol className="ml-4 list-decimal space-y-0.5">
+                    <li>Procure a sua loja (ou segure o dedo no ponto exato no mapa).</li>
+                    <li>Toque em <strong>Compartilhar</strong>.</li>
+                    <li>Toque em <strong>Copiar link</strong>.</li>
+                    <li>Volte aqui e cole no campo abaixo.</li>
+                  </ol>
+                </div>
+                <div>
+                  <p className="font-medium text-stone-700 dark:text-slate-200">
+                    No computador (maps.google.com):
+                  </p>
+                  <ol className="ml-4 list-decimal space-y-0.5">
+                    <li>Procure a sua loja no mapa.</li>
+                    <li>Clique em <strong>Compartilhar</strong> → <strong>Copiar link</strong>.</li>
+                    <li>Cole no campo abaixo.</li>
+                  </ol>
+                </div>
+                <p className="text-stone-500 dark:text-slate-400">
+                  Pode colar o link curto (maps.app.goo.gl) — a gente resolve o
+                  ponto ao salvar. Também dá para colar as coordenadas no formato{" "}
+                  <strong>-23.55, -46.63</strong>.
+                </p>
+              </div>
+            </details>
+
+            <input
+              type="url"
+              value={locationUrl}
+              onChange={(e) => setLocationUrl(e.target.value)}
+              className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+              placeholder="Cole o link do Google Maps aqui"
+            />
+            {locationUrl.trim() &&
+              (parseLatLng(locationUrl) ? (
+                <p className="mt-1 text-xs font-medium text-green-600 dark:text-green-400">
+                  Ponto do mapa detectado ✓
+                </p>
+              ) : isShortMapsLink(locationUrl) ? (
+                <p className="mt-1 text-xs text-stone-500 dark:text-slate-400">
+                  Link curto reconhecido. Ao salvar, vou buscar o ponto
+                  automaticamente.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Não consegui ler o ponto desse link. Cole o link completo do
+                  Google Maps ou as coordenadas (ex.: -23.55, -46.63).
+                </p>
+              ))}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+              Foto da loja
+            </label>
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+              A IA envia esta foto quando o cliente pede para ver a loja.
+            </p>
+            {storePhotoUrl && (
+              <div className="mt-2 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={storePhotoUrl}
+                  alt="Foto da loja"
+                  className="h-20 w-20 rounded-lg border border-stone-200 object-cover dark:border-slate-700"
+                />
+                <button
+                  type="button"
+                  onClick={() => setStorePhotoUrl("")}
+                  className="text-xs font-medium text-red-600 hover:underline dark:text-red-400"
+                >
+                  Remover
+                </button>
+              </div>
+            )}
+            <label className="mt-2 inline-flex cursor-pointer items-center rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+              {photoUploading
+                ? "Enviando…"
+                : storePhotoUrl
+                ? "Trocar foto"
+                : "Enviar foto"}
+              <input
+                type="file"
+                accept="image/*"
+                disabled={photoUploading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handlePhotoUpload(file);
+                  e.target.value = "";
+                }}
+                className="hidden"
+              />
+            </label>
+          </div>
         </div>
 
         <div>

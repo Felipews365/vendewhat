@@ -10,12 +10,14 @@ import {
   setCustomerPause,
   updateConnection,
 } from "@/lib/whatsappConfig";
-import { sendText } from "@/lib/evolution";
+import { sendLocation, sendMedia, sendText } from "@/lib/evolution";
+import { storefrontFromDb } from "@/lib/storefront";
 import {
   type AttendantProduct,
   buildSystemPrompt,
   generateReply,
   isAiConfigured,
+  parseReplyDirectives,
 } from "@/lib/ai/attendant";
 
 export const runtime = "nodejs";
@@ -132,10 +134,18 @@ export async function POST(req: Request) {
     // Dados da loja + catálogo
     const { data: store } = await admin
       .from("stores")
-      .select("name, slug")
+      .select("name, slug, storefront")
       .eq("id", cfg.storeId)
       .maybeSingle();
     if (!store?.slug) return ok();
+
+    const storeName = typeof store.name === "string" ? store.name : "Loja";
+    // Localização: usa o endereço próprio da IA; se vazio, cai no de retirada.
+    const pickupAddress = storefrontFromDb(store.storefront).pickupAddress;
+    const storeAddress = cfg.aiLocationAddress.trim() || pickupAddress;
+    const hasLocationPin =
+      cfg.aiLocationLat != null && cfg.aiLocationLng != null;
+    const hasStorePhoto = Boolean(cfg.aiStorePhotoUrl);
 
     const { data: productRows } = await admin
       .from("products")
@@ -171,7 +181,7 @@ export async function POST(req: Request) {
     const history = await getRecentHistory(admin, cfg.storeId, customerPhone, 10);
 
     const systemPrompt = buildSystemPrompt({
-      storeName: typeof store.name === "string" ? store.name : "Loja",
+      storeName,
       slug: String(store.slug),
       faq: cfg.faq,
       aiName: cfg.aiName,
@@ -179,14 +189,50 @@ export async function POST(req: Request) {
       products,
       baseUrl: process.env.APP_BASE_URL || "",
       isFirstContact: history.length === 0,
+      storeAddress,
+      hasLocationPin,
+      hasStorePhoto,
     });
 
     await appendMessage(admin, cfg.storeId, customerPhone, "user", text);
 
     const reply = await generateReply(systemPrompt, history, text);
     if (reply) {
-      await sendText(cfg.evolutionInstance, customerPhone, reply);
-      await appendMessage(admin, cfg.storeId, customerPhone, "assistant", reply);
+      const { text: replyText, sendLocation: wantLocation, sendPhoto } =
+        parseReplyDirectives(reply);
+      if (replyText) {
+        await sendText(cfg.evolutionInstance, customerPhone, replyText);
+        await appendMessage(
+          admin,
+          cfg.storeId,
+          customerPhone,
+          "assistant",
+          replyText
+        );
+      }
+      // Pino do mapa do WhatsApp.
+      if (wantLocation && hasLocationPin) {
+        try {
+          await sendLocation(cfg.evolutionInstance, customerPhone, {
+            latitude: cfg.aiLocationLat as number,
+            longitude: cfg.aiLocationLng as number,
+            name: storeName,
+            address: storeAddress,
+          });
+        } catch (e) {
+          console.error("[whatsapp/webhook] sendLocation", e);
+        }
+      }
+      // Foto da loja.
+      if (sendPhoto && hasStorePhoto) {
+        try {
+          await sendMedia(cfg.evolutionInstance, customerPhone, {
+            url: cfg.aiStorePhotoUrl,
+          });
+        } catch (e) {
+          console.error("[whatsapp/webhook] sendMedia", e);
+        }
+      }
     }
   } catch (err) {
     console.error("[whatsapp/webhook]", err);
