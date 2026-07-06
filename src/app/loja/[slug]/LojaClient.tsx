@@ -1651,6 +1651,40 @@ export function LojaClient({
     [items]
   );
 
+  // Recuperação de carrinho abandonado: assim que o cliente tem itens + nome +
+  // telefone válido, salvamos (com debounce) um rascunho no servidor. Se ele não
+  // finalizar, a IA cutuca depois pelo WhatsApp. O endpoint só grava se a loja
+  // ativou o recurso; aqui é fire-and-forget e nunca atrapalha o checkout.
+  const lastCartDraftRef = useRef("");
+  useEffect(() => {
+    const name = customerName.trim();
+    if (items.length === 0 || name.length < 2 || !isCustomerPhoneValid(customerPhone)) {
+      return;
+    }
+    const payload = {
+      slug: store.slug,
+      name,
+      phone: customerPhone.trim(),
+      items: items.map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        price: i.price,
+      })),
+    };
+    const signature = JSON.stringify(payload);
+    if (signature === lastCartDraftRef.current) return; // nada mudou
+    const timer = setTimeout(() => {
+      lastCartDraftRef.current = signature;
+      fetch("/api/loja/abandoned-cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: signature,
+        keepalive: true,
+      }).catch(() => {});
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [items, customerName, customerPhone, store.slug]);
+
   function setQty(cartKey: string, qty: number) {
     if (qty <= 0) {
       setCart((c) => {

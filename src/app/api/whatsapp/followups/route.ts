@@ -7,9 +7,12 @@ import {
   getFollowupTimes,
   getRecentHistory,
   globalPauseActive,
+  listAbandonedCartConfigs,
+  listDueAbandonedCarts,
   listDuePostsaleOrders,
   listFollowupConfigs,
   listPostsaleConfigs,
+  markCartRecovered,
   markFollowup,
   markPostsaleSent,
   type WhatsAppConfig,
@@ -20,6 +23,7 @@ import {
   type AttendantProduct,
   buildSystemPrompt,
   defaultPostsaleMessage,
+  generateAbandonedCartReply,
   generateFollowupReply,
   generatePostsaleReply,
   isAiConfigured,
@@ -239,6 +243,65 @@ async function runPostsale(
   return sent;
 }
 
+/**
+ * Recuperação de carrinho abandonado: cutuca quem montou o carrinho na loja
+ * (deixando nome + telefone) mas não finalizou. Depende da IA configurada
+ * quando a loja não escreveu uma mensagem fixa.
+ */
+async function runAbandonedCarts(
+  admin: NonNullable<ReturnType<typeof createAdminSupabase>>
+): Promise<number> {
+  const configs = await listAbandonedCartConfigs(admin);
+  const aiOn = isAiConfigured();
+  let sent = 0;
+
+  for (const cfg of configs) {
+    if (sent >= MAX_TOTAL) break;
+    if (globalPauseActive(cfg)) continue;
+
+    const [carts, pausedSet] = await Promise.all([
+      listDueAbandonedCarts(admin, cfg.storeId, cfg.aiCartMinutes, MAX_PER_STORE),
+      getActivePausedPhones(admin, cfg.storeId),
+    ]);
+    if (carts.length === 0) continue;
+
+    const custom = cfg.aiCartMessage.trim();
+    // Só monta o prompt da IA quando vai realmente gerar a mensagem.
+    let prompt: Awaited<ReturnType<typeof buildStorePrompt>> = null;
+    if (!custom) {
+      if (!aiOn) continue; // sem IA e sem mensagem fixa: não dá para cutucar
+      prompt = await buildStorePrompt(admin, cfg);
+      if (!prompt) continue;
+    }
+
+    for (const cart of carts) {
+      if (sent >= MAX_TOTAL) break;
+      const phone = cart.customerPhone; // já normalizado no upsert
+      if (pausedSet.has(phone)) continue; // loja assumiu este cliente
+      try {
+        let message = custom;
+        if (!message && prompt) {
+          const reply = await generateAbandonedCartReply(
+            prompt.systemPrompt,
+            cart.customerName,
+            cart.items
+          );
+          message = reply ?? "";
+        }
+        if (!message) continue;
+
+        await sendText(cfg.evolutionInstance, phone, message);
+        await appendMessage(admin, cfg.storeId, phone, "assistant", message);
+        await markCartRecovered(admin, cart.id);
+        sent += 1;
+      } catch (err) {
+        console.error("[whatsapp/abandoned-cart]", cfg.storeId, cart.id, err);
+      }
+    }
+  }
+  return sent;
+}
+
 /** Roda o cron de follow-up. Protegido por CRON_SECRET (query ?key= ou header x-cron-key). */
 async function run(req: Request) {
   const url = new URL(req.url);
@@ -260,6 +323,7 @@ async function run(req: Request) {
     sent += await runSilenceFollowups(admin);
   }
   sent += await runPostsale(admin);
+  sent += await runAbandonedCarts(admin);
 
   return NextResponse.json({ ok: true, sent });
 }

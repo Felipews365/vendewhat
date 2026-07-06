@@ -504,6 +504,37 @@ Alguns **dias** depois do pedido, a IA manda uma mensagem perguntando se chegou 
 - Usa o mesmo `CRON_SECRET` e o mesmo cron do n8n (~5 min) do follow-up — o endpoint
   [followups/route.ts](src/app/api/whatsapp/followups/route.ts) roda os dois na mesma chamada.
 
+### Recuperação de carrinho abandonado (cutucar quem não finalizou)
+
+Quando o cliente monta o carrinho na **loja pública**, informa **nome + WhatsApp**, mas **não
+finaliza** o pedido, a IA cutuca depois de X minutos lembrando os itens. **Restrição inerente:** só
+dá para recuperar quem deixou um telefone (sem contato, não há canal). O tempo é por loja.
+**Migration:** rode
+[supabase-migration-whatsapp-abandoned-cart.sql](supabase-migration-whatsapp-abandoned-cart.sql)
+(adiciona `ai_cart_minutes` (0 = desativado) e `ai_cart_message` em `store_whatsapp`; cria a tabela
+`whatsapp_abandoned_carts`, sem policies — só service role).
+
+- **Captura (auto-save):** a loja pública ([LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx))
+  salva um rascunho **com debounce (~2,5s)** assim que há **itens + nome (≥2) + telefone válido** no
+  carrinho, via `POST /api/loja/abandoned-cart`
+  ([route](src/app/api/loja/abandoned-cart/route.ts), service role). O endpoint só grava se a loja
+  **ativou** o recurso (`ai_cart_minutes > 0`) e normaliza o telefone para o formato WhatsApp
+  (`toWhatsAppNumber`, DDI 55) — mesma chave usada nas pausas. UPSERT por `(store_id,
+  customer_phone)`; **nova atividade re-arma** (`recovered_at`/`converted` voltam a zero).
+- **Conversão:** quando o pedido é criado ([/api/orders](src/app/api/orders/route.ts)), o rascunho
+  daquele telefone vira `converted = true` (`markCartConverted`) — não cutuca quem já comprou.
+- **Cron (mesmo do follow-up):** o endpoint [followups/route.ts](src/app/api/whatsapp/followups/route.ts)
+  roda `runAbandonedCarts` junto (n8n, ~5 min). Varre as lojas com o recurso ligado
+  (`listAbandonedCartConfigs`) e os rascunhos elegíveis (`listDueAbandonedCarts`: parados em
+  `updated_at ∈ [minutos, minutos×3]`, `recovered_at IS NULL`, `converted = false`). Pula clientes
+  pausados (global/handoff/manual), gera a mensagem com `generateAbandonedCartReply`
+  ([attendant.ts](src/lib/ai/attendant.ts) — cita os itens do carrinho; usa `ai_cart_message` fixa se
+  houver), envia via `sendText`, grava como `assistant` no histórico e marca `recovered_at`
+  (`markCartRecovered`) para **não repetir**.
+- **Painel** (aba Atendente de IA, [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx)): seletor
+  de tempo (`CART_OPTIONS`: 30min/1h/2h/3h/6h/1 dia). A mensagem é gerada pela IA citando os itens
+  (o `ai_cart_message` fixo existe no banco/cron, mas ainda não é exposto na UI).
+
 ### Keep-alive (evitar pausa do plano Free)
 
 O Supabase Free pausa o projeto após **7 dias** de inatividade. Para evitar isso há um

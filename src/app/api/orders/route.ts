@@ -6,7 +6,8 @@ import {
   validateOrderAgainstProducts,
 } from "@/lib/orderLines";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { isCustomerPhoneValid } from "@/lib/customerPhone";
+import { isCustomerPhoneValid, toWhatsAppNumber } from "@/lib/customerPhone";
+import { markCartConverted } from "@/lib/whatsappConfig";
 import { isMissingColumnError } from "@/lib/dbColumnErrors";
 import { isShippingModeId, shippingModeLabel } from "@/lib/shippingModes";
 
@@ -231,6 +232,15 @@ export async function POST(req: Request) {
       { ok: false, error: "Não foi possível salvar o pedido." },
       { status: 500 }
     );
+  }
+
+  // O pedido saiu: o carrinho não está mais abandonado — não cutuca esse cliente.
+  if (customerPhone) {
+    try {
+      await markCartConverted(admin, storeId, toWhatsAppNumber(customerPhone));
+    } catch (err) {
+      console.error("[api/orders] markCartConverted", err);
+    }
   }
 
   return NextResponse.json({

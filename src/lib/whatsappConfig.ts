@@ -39,6 +39,10 @@ export type WhatsAppConfig = {
   aiPostsaleDays: number;
   /** Mensagem fixa de pós-venda. Vazio = a IA gera. */
   aiPostsaleMessage: string;
+  /** Minutos de carrinho parado até a IA mandar a recuperação. 0 = desativado. */
+  aiCartMinutes: number;
+  /** Mensagem fixa de recuperação de carrinho. Vazio = a IA gera citando os itens. */
+  aiCartMessage: string;
   /** Endereço de onde a loja fica (a IA informa quando perguntam). Vazio = usa o de retirada. */
   aiLocationAddress: string;
   /** Coordenadas para o pino do mapa do WhatsApp. null = sem pino. */
@@ -105,6 +109,12 @@ function rowToConfig(row: Record<string, unknown>): WhatsAppConfig {
         : Number(row.ai_postsale_days ?? 0) || 0,
     aiPostsaleMessage:
       typeof row.ai_postsale_message === "string" ? row.ai_postsale_message : "",
+    aiCartMinutes:
+      typeof row.ai_cart_minutes === "number"
+        ? row.ai_cart_minutes
+        : Number(row.ai_cart_minutes ?? 0) || 0,
+    aiCartMessage:
+      typeof row.ai_cart_message === "string" ? row.ai_cart_message : "",
     aiLocationAddress:
       typeof row.ai_location_address === "string" ? row.ai_location_address : "",
     aiLocationLat:
@@ -121,7 +131,7 @@ function rowToConfig(row: Record<string, unknown>): WhatsAppConfig {
 }
 
 const SELECT =
-  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_location_address, ai_location_lat, ai_location_lng, ai_location_url, ai_store_photo_url, ai_store_video_url";
+  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_cart_minutes, ai_cart_message, ai_location_address, ai_location_lat, ai_location_lng, ai_location_url, ai_store_photo_url, ai_store_video_url";
 
 /** Lê a config da loja (ou null se ainda não existe). */
 export async function getConfig(
@@ -203,6 +213,8 @@ export async function saveAiConfig(
     aiFollowupMessage: string;
     aiPostsaleDays: number;
     aiPostsaleMessage: string;
+    aiCartMinutes: number;
+    aiCartMessage: string;
     aiLocationAddress: string;
     aiLocationLat: number | null;
     aiLocationLng: number | null;
@@ -226,6 +238,10 @@ export async function saveAiConfig(
     0,
     Math.min(90, Math.round(Number.isFinite(cfg.aiPostsaleDays) ? cfg.aiPostsaleDays : 0))
   );
+  const cartMinutes = Math.max(
+    0,
+    Math.min(10080, Math.round(Number.isFinite(cfg.aiCartMinutes) ? cfg.aiCartMinutes : 0))
+  );
   await db
     .from(TABLE)
     .update({
@@ -238,6 +254,8 @@ export async function saveAiConfig(
       ai_followup_message: cfg.aiFollowupMessage.trim().slice(0, 1000),
       ai_postsale_days: postsaleDays,
       ai_postsale_message: cfg.aiPostsaleMessage.trim().slice(0, 1000),
+      ai_cart_minutes: cartMinutes,
+      ai_cart_message: cfg.aiCartMessage.trim().slice(0, 1000),
       ai_location_address: cfg.aiLocationAddress.trim().slice(0, 300),
       ai_location_lat:
         cfg.aiLocationLat != null && Number.isFinite(cfg.aiLocationLat)
@@ -543,6 +561,131 @@ export async function markPostsaleSent(
     .from("orders")
     .update({ postsale_sent_at: new Date().toISOString() })
     .eq("id", orderId);
+}
+
+// --- Carrinho abandonado (cron) ---------------------------------------------
+
+const ABANDONED_CARTS = "whatsapp_abandoned_carts";
+
+export type AbandonedCartItem = { name: string; quantity: number; price: number };
+
+export type DueAbandonedCart = {
+  id: string;
+  customerPhone: string;
+  customerName: string;
+  items: AbandonedCartItem[];
+  subtotal: number;
+};
+
+/** Lojas com recuperação de carrinho ligada, IA ativa e WhatsApp conectado. */
+export async function listAbandonedCartConfigs(
+  db: SupabaseClient
+): Promise<WhatsAppConfig[]> {
+  const { data } = await db
+    .from(TABLE)
+    .select(SELECT)
+    .gt("ai_cart_minutes", 0)
+    .eq("ai_enabled", true)
+    .eq("connection_status", "connected");
+  return ((data ?? []) as Record<string, unknown>[]).map(rowToConfig);
+}
+
+/**
+ * Salva/atualiza o rascunho de carrinho do cliente. O telefone deve chegar já
+ * normalizado (formato WhatsApp). Nova atividade re-arma a recuperação
+ * (recovered_at/converted voltam a zero).
+ */
+export async function upsertAbandonedCart(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string,
+  customerName: string,
+  items: AbandonedCartItem[],
+  subtotal: number
+): Promise<void> {
+  await db.from(ABANDONED_CARTS).upsert(
+    {
+      store_id: storeId,
+      customer_phone: customerPhone,
+      customer_name: customerName.slice(0, 200) || null,
+      items: items.slice(0, 50),
+      subtotal: Number.isFinite(subtotal) ? subtotal : 0,
+      updated_at: new Date().toISOString(),
+      recovered_at: null,
+      converted: false,
+    },
+    { onConflict: "store_id,customer_phone" }
+  );
+}
+
+/**
+ * Carrinhos prontos para a recuperação: parados há pelo menos `minutes` e no
+ * máximo `minutes × 3` (não ressuscita carrinho muito antigo), ainda não
+ * recuperados e não convertidos.
+ */
+export async function listDueAbandonedCarts(
+  db: SupabaseClient,
+  storeId: string,
+  minutes: number,
+  limit = 30
+): Promise<DueAbandonedCart[]> {
+  const now = Date.now();
+  const dueBefore = new Date(now - minutes * 60_000).toISOString();
+  const tooOld = new Date(now - minutes * 3 * 60_000).toISOString();
+  const { data } = await db
+    .from(ABANDONED_CARTS)
+    .select("id, customer_phone, customer_name, items, subtotal")
+    .eq("store_id", storeId)
+    .is("recovered_at", null)
+    .eq("converted", false)
+    .lte("updated_at", dueBefore)
+    .gte("updated_at", tooOld)
+    .order("updated_at", { ascending: true })
+    .limit(limit);
+  return ((data ?? []) as Record<string, unknown>[])
+    .map((r) => ({
+      id: String(r.id),
+      customerPhone: String(r.customer_phone ?? ""),
+      customerName: typeof r.customer_name === "string" ? r.customer_name : "",
+      items: Array.isArray(r.items)
+        ? (r.items as unknown[])
+            .map((it) => {
+              const o = (it ?? {}) as Record<string, unknown>;
+              return {
+                name: typeof o.name === "string" ? o.name : "",
+                quantity: Number(o.quantity) || 0,
+                price: Number(o.price) || 0,
+              };
+            })
+            .filter((it) => it.name)
+        : [],
+      subtotal: Number(r.subtotal) || 0,
+    }))
+    .filter((c) => c.customerPhone);
+}
+
+/** Marca que a IA já mandou a recuperação deste carrinho. */
+export async function markCartRecovered(
+  db: SupabaseClient,
+  id: string
+): Promise<void> {
+  await db
+    .from(ABANDONED_CARTS)
+    .update({ recovered_at: new Date().toISOString() })
+    .eq("id", id);
+}
+
+/** Marca o carrinho como convertido (virou pedido) para não cutucar mais. */
+export async function markCartConverted(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string
+): Promise<void> {
+  await db
+    .from(ABANDONED_CARTS)
+    .update({ converted: true })
+    .eq("store_id", storeId)
+    .eq("customer_phone", customerPhone);
 }
 
 export type ConversationTimes = {

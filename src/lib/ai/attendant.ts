@@ -365,3 +365,40 @@ export async function generatePostsaleReply(
   const text = completion.choices[0]?.message?.content;
   return text ? text.trim() : null;
 }
+
+/**
+ * Gera, via IA, uma mensagem curta de recuperação de carrinho abandonado,
+ * lembrando os itens que o cliente deixou no carrinho sem finalizar.
+ */
+export async function generateAbandonedCartReply(
+  systemPrompt: string,
+  customerName: string,
+  items: { name: string; quantity: number }[]
+): Promise<string | null> {
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const nome = firstName(customerName);
+  const lista = items
+    .slice(0, 12)
+    .map((i) => (i.quantity > 1 ? `${i.quantity}x ${i.name}` : i.name))
+    .join(", ");
+  const completion = await getClient().chat.completions.create({
+    model,
+    max_tokens: 180,
+    messages: [
+      { role: "system", content: systemPrompt },
+      {
+        role: "system",
+        content: [
+          `O cliente${nome ? ` (${nome})` : ""} montou um carrinho na loja mas não finalizou o pedido.`,
+          lista ? `Itens que ficaram no carrinho: ${lista}.` : "",
+          "Envie UMA mensagem curta, gentil e natural lembrando o cliente do carrinho e se colocando à disposição para finalizar o pedido ou tirar dúvidas.",
+          "Cite os itens de forma leve (sem listar preço). Se ajudar, mande o link da loja. Não repita uma saudação de primeiro contato nem pressione.",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      },
+    ],
+  });
+  const text = completion.choices[0]?.message?.content;
+  return text ? text.trim() : null;
+}

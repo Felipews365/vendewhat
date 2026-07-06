@@ -74,6 +74,17 @@ const POSTSALE_OPTIONS: { label: string; value: number }[] = [
   { label: "15 dias", value: 15 },
 ];
 
+// Opções de tempo (em minutos) para a recuperação de carrinho abandonado.
+const CART_OPTIONS: { label: string; value: number }[] = [
+  { label: "Desativado", value: 0 },
+  { label: "30 minutos", value: 30 },
+  { label: "1 hora", value: 60 },
+  { label: "2 horas", value: 120 },
+  { label: "3 horas", value: 180 },
+  { label: "6 horas", value: 360 },
+  { label: "1 dia", value: 1440 },
+];
+
 function formatUntil(until: string | null): string {
   if (!until) return "até você reativar";
   const d = new Date(until);
@@ -109,6 +120,7 @@ export default function WhatsAppIaPage() {
   const [followupMessage, setFollowupMessage] = useState("");
   const [postsaleDays, setPostsaleDays] = useState(0);
   const [postsaleMessage, setPostsaleMessage] = useState("");
+  const [cartMinutes, setCartMinutes] = useState(0);
   const [locationAddress, setLocationAddress] = useState("");
   const [locationUrl, setLocationUrl] = useState("");
   // Campos de latitude/longitude (sincronizados com o link acima).
@@ -208,7 +220,7 @@ export default function WhatsAppIaPage() {
       const { data: cfg } = await supabase
         .from("store_whatsapp")
         .select(
-          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_location_address, ai_location_url, ai_store_photo_url, ai_store_video_url"
+          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_cart_minutes, ai_location_address, ai_location_url, ai_store_photo_url, ai_store_video_url"
         )
         .eq("store_id", store.id)
         .maybeSingle();
@@ -240,6 +252,9 @@ export default function WhatsAppIaPage() {
         setPostsaleMessage(
           typeof cfg.ai_postsale_message === "string" ? cfg.ai_postsale_message : ""
         );
+        if (typeof cfg.ai_cart_minutes === "number") {
+          setCartMinutes(cfg.ai_cart_minutes);
+        }
         setLocationAddress(
           typeof cfg.ai_location_address === "string" ? cfg.ai_location_address : ""
         );
@@ -326,6 +341,7 @@ export default function WhatsAppIaPage() {
           aiFollowupMessage: followupMessage,
           aiPostsaleDays: postsaleDays,
           aiPostsaleMessage: postsaleMessage,
+          aiCartMinutes: cartMinutes,
           aiLocationAddress: locationAddress,
           aiLocationUrl: locationUrl,
           aiStorePhotoUrl: storePhotoUrl,
@@ -1083,6 +1099,28 @@ export default function WhatsAppIaPage() {
               placeholder="Mensagem fixa (opcional). Deixe vazio para a IA escrever sozinha. Ex.: Oi! Aqui é da loja 😊 Seu pedido chegou certinho? Qualquer coisa é só chamar!"
             />
           )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+            Recuperar carrinho abandonado
+          </label>
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+            Se o cliente montar o carrinho na loja e informar nome + WhatsApp, mas
+            não finalizar, a IA cutuca depois desse tempo lembrando os itens.
+            Funciona só para quem deixou o WhatsApp.
+          </p>
+          <select
+            value={cartMinutes}
+            onChange={(e) => setCartMinutes(Number(e.target.value))}
+            className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 sm:w-64"
+          >
+            {CART_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.value === 0 ? o.label : `Após ${o.label} parado`}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex items-center gap-3">
