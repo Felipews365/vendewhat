@@ -81,7 +81,7 @@ export function ProductColorsEditor({
               }
             }}
             placeholder="Ex.: Azul marinho"
-            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-whatsapp focus:border-transparent"
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-whatsapp focus:border-transparent"
           />
         </div>
         <div className="flex flex-col gap-1 shrink-0">
@@ -165,7 +165,7 @@ export function ProductColorsEditor({
                     )
                   );
                 }}
-                className="flex-1 min-w-[120px] px-2 py-1.5 rounded border border-slate-200 text-sm bg-white"
+                className="flex-1 min-w-[120px] px-2 py-1.5 rounded border border-slate-300 text-sm bg-white text-slate-900"
                 aria-label="Nome da cor"
               />
               <span className="text-[10px] font-mono text-slate-400 hidden md:inline">

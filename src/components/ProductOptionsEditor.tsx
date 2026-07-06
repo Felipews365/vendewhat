@@ -66,7 +66,7 @@ export function ProductOptionsEditor({
             }
           }}
           placeholder={placeholder}
-          className="flex-1 min-w-0 px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-whatsapp focus:border-transparent"
+          className="flex-1 min-w-0 px-3 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-whatsapp focus:border-transparent"
         />
         <button
           type="button"
