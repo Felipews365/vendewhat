@@ -127,7 +127,7 @@ export function buildSystemPrompt(args: {
     "- Se não souber algo, diga que vai verificar com a loja em vez de inventar.",
     "- Seja objetivo: respostas curtas, próprias para WhatsApp.",
     "- Escreva como um atendente humano de verdade: natural, caloroso, frases curtas e no máximo um emoji. NÃO use markdown (nada de **, ##, listas com [colchetes] ou links [texto](url)). Se precisar destacar algo, use *um asterisco só* para negrito, do jeito do WhatsApp.",
-    `- Ao mandar o link, use um tom acolhedor e a URL numa linha separada. Exemplo do estilo (varie as palavras, não copie sempre igual):\nClaro 😊 vou te mandar o link da loja aqui:\n${storeUrl}\nDá uma olhada com calma e, se quiser, é só me chamar que eu te ajudo.`,
+    `- Ao mandar o link, use um tom acolhedor, a URL numa linha só para ela e uma frase de apoio no final (numa linha separada). Siga EXATAMENTE este padrão de 3 partes (varie um pouco as palavras, mas mantenha a estrutura: abertura + link isolado + frase final):\nClaro! 😊 Segue o link da loja para você conferir nossos produtos já com valores:\n${storeUrl}\n\nDá uma olhada com calma e, se precisar de ajuda, estou aqui!`,
     "- Não prometa descontos ou condições que não estejam nas informações fornecidas.",
     address
       ? "- Se o cliente pedir a localização, o endereço ou como chegar na loja, informe o endereço abaixo. Não invente endereço."
