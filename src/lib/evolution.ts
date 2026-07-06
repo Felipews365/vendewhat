@@ -216,16 +216,47 @@ export async function logoutInstance(instance: string): Promise<void> {
   }
 }
 
-/** Envia uma mensagem de texto. `number` deve conter DDI + DDD + número (só dígitos). */
+/**
+ * Envia uma mensagem de texto. `number` deve conter DDI + DDD + número (só dígitos).
+ * `delayMs` (opcional): a Evolution mostra "digitando…" (presence composing) por esse
+ * tempo antes de entregar a mensagem — deixa o atendimento com cara de humano.
+ */
 export async function sendText(
   instance: string,
   number: string,
-  text: string
+  text: string,
+  delayMs?: number
 ): Promise<void> {
   await call("POST", `/message/sendText/${encodeURIComponent(instance)}`, {
     number: number.replace(/\D/g, ""),
     text,
+    ...(delayMs && delayMs > 0 ? { delay: Math.round(delayMs) } : {}),
   });
+}
+
+/**
+ * Baixa o conteúdo de uma mensagem de mídia (imagem/áudio) como base64.
+ * `rawMessage` é o objeto `data.messages[0]` (ou `data`) recebido no webhook —
+ * a Evolution usa a `key.id` dele para localizar a mídia. Nunca lança: devolve
+ * null se não conseguir (mídia expirada, endpoint indisponível, etc.).
+ */
+export async function getMediaBase64(
+  instance: string,
+  rawMessage: unknown
+): Promise<{ base64: string; mimetype: string } | null> {
+  try {
+    const data = await call<Record<string, unknown>>(
+      "POST",
+      `/chat/getBase64FromMediaMessage/${encodeURIComponent(instance)}`,
+      { message: rawMessage, convertToMp4: false }
+    );
+    const base64 = typeof data?.base64 === "string" ? data.base64 : null;
+    const mimetype = typeof data?.mimetype === "string" ? data.mimetype : "";
+    return base64 ? { base64, mimetype } : null;
+  } catch (e) {
+    console.error("[evolution] getMediaBase64", e);
+    return null;
+  }
 }
 
 /** Envia a localização nativa do WhatsApp (o pino do mapa). */

@@ -4,7 +4,7 @@
  *   OPENAI_API_KEY  -> chave da OpenAI
  *   OPENAI_MODEL    -> opcional; default gpt-4o-mini
  */
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import type { AiTone, ChatTurn } from "@/lib/whatsappConfig";
 
 export type AttendantProduct = {
@@ -111,7 +111,8 @@ export function buildSystemPrompt(args: {
     TONE_INSTRUCTION[aiTone],
     "",
     "Seu objetivo é atender os clientes, tirar todas as dúvidas e incentivar a compra.",
-    `Sempre que o cliente demonstrar interesse em comprar, ou pedir o link, envie o link da loja para ele finalizar o pedido pelo site: ${storeUrl}`,
+    `O link da loja é o CATÁLOGO ONLINE da loja — é lá que o cliente vê todos os produtos, fotos e preços e finaliza o pedido: ${storeUrl}`,
+    `Sempre que o cliente pedir o catálogo, a lista/tabela de produtos, quiser ver o que a loja vende, pedir fotos/preços de forma geral, demonstrar interesse em comprar ou pedir o link, ENVIE esse link. Nunca diga que a loja "não tem catálogo": o catálogo é justamente esse link.`,
     "",
     "Regras:",
     isFirstContact
@@ -190,6 +191,78 @@ export async function generateReply(
   });
   const text = completion.choices[0]?.message?.content;
   return text ? text.trim() : null;
+}
+
+/**
+ * Descreve, em português, o conteúdo de uma foto que o cliente mandou (visão do
+ * gpt-4o-mini). Recebe a imagem como data URI base64. A descrição é gravada como
+ * texto no histórico para o atendente (que responde só com texto) ter o contexto.
+ * Nunca lança: null se falhar.
+ */
+export async function describeImage(
+  imageDataUrl: string,
+  caption: string
+): Promise<string | null> {
+  try {
+    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    const completion = await getClient().chat.completions.create({
+      model,
+      max_tokens: 160,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                "Descreva de forma objetiva, em português, o que aparece nesta foto que um cliente enviou para uma loja (produto, cor, modelo, texto visível, defeito, comprovante, etc.). Seja breve." +
+                (caption ? ` Legenda do cliente: "${caption}".` : ""),
+            },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        },
+      ],
+    });
+    const text = completion.choices[0]?.message?.content;
+    return text ? text.trim() : null;
+  } catch (e) {
+    console.error("[ai] describeImage", e);
+    return null;
+  }
+}
+
+/**
+ * Transcreve um áudio (nota de voz do WhatsApp) para texto via OpenAI Whisper.
+ * Recebe o conteúdo em base64 + o mimetype. Nunca lança: null se falhar.
+ */
+export async function transcribeAudio(
+  base64: string,
+  mimetype: string
+): Promise<string | null> {
+  try {
+    const buffer = Buffer.from(base64, "base64");
+    const ext = mimetype.includes("mp4")
+      ? "mp4"
+      : mimetype.includes("mpeg") || mimetype.includes("mp3")
+      ? "mp3"
+      : mimetype.includes("wav")
+      ? "wav"
+      : mimetype.includes("webm")
+      ? "webm"
+      : "ogg";
+    const file = await toFile(buffer, `audio.${ext}`, {
+      type: mimetype || "audio/ogg",
+    });
+    const res = await getClient().audio.transcriptions.create({
+      file,
+      model: "whisper-1",
+    });
+    const text = (res as { text?: string }).text;
+    return text ? text.trim() : null;
+  } catch (e) {
+    console.error("[ai] transcribeAudio", e);
+    return null;
+  }
 }
 
 /**

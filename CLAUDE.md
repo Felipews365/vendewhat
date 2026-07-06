@@ -303,9 +303,40 @@ uma instância Evolution e uma config de IA por loja.
   em andamento); "Conectando…" só aparece durante uma conexão ativa.
 - **Apresentação no 1º contato:** na primeira mensagem de cada cliente a IA se apresenta com o
   **nome do atendente** (`ai_name`) + **nome da loja** e depois não repete. O webhook detecta o
-  primeiro contato por `getRecentHistory(...).length === 0` (lido **antes** de gravar a mensagem
-  nova) e passa `isFirstContact` para `buildSystemPrompt` em
-  [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts).
+  primeiro contato quando **a IA ainda não falou** na conversa (`!full.some(t => t.role ===
+  "assistant")`, robusto ao agrupamento de mensagens) e passa `isFirstContact` para
+  `buildSystemPrompt` em [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts).
+- **Espera + agrupamento de mensagens (debounce por tabela + cron):** para o cliente que manda
+  várias mensagens seguidas, a IA espera ele parar de digitar e responde tudo de uma vez. O
+  [webhook](src/app/api/whatsapp/webhook/route.ts) **não gera resposta** — ele grava a mensagem e
+  **agenda** (`schedulePendingReply` em [whatsappConfig.ts](src/lib/whatsappConfig.ts)) uma linha em
+  `whatsapp_pending_replies` com `respond_after = agora + DEBOUNCE_SECONDS (15s)`. Cada nova mensagem
+  do mesmo cliente faz UPSERT e **empurra o `respond_after`** (o timer reinicia). Um **cron externo
+  (~1 min)** chama [/api/whatsapp/debounce](src/app/api/whatsapp/debounce/route.ts) (protegido por
+  `CRON_SECRET`, igual aos follow-ups), que pega os agendamentos vencidos (`listDuePendingReplies`),
+  **reserva** cada um com lock otimista (`claimPendingReply` empurra o `respond_after` para +5min e
+  só reserva se ainda vencido — evita resposta dupla de crons concorrentes e não interrompe quem
+  ainda digita) e chama `respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)).
+  Migration: [supabase-migration-whatsapp-debounce.sql](supabase-migration-whatsapp-debounce.sql)
+  (tabela sem policies — só service role). **Gatilho:** crontab no VPS da Evolution chamando o
+  endpoint a cada 1 min (o delay efetivo ao cliente é ~15-75s: os 15s de silêncio + o intervalo do
+  cron). O webhook precisa de `maxDuration = 30` (transcrição/descrição de mídia), o cron de `= 60`.
+- **`respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)):** monta o lote (mensagens
+  do cliente após a última fala da IA = `full.slice(splitIdx)`), o contexto anterior, detecta
+  primeiro contato (`!full.some(t => t.role === "assistant")`), gera com `generateReply` e envia. É a
+  lógica que antes ficava no webhook — agora vive aqui e roda no cron.
+- **"Digitando…" antes de enviar:** `sendText` ([evolution.ts](src/lib/evolution.ts)) aceita um
+  `delayMs` — a Evolution mostra o presence *composing* por esse tempo e só então entrega a
+  mensagem. `respondToCustomer` calcula o tempo proporcional ao tamanho da resposta
+  (`replyText.length * 45`, entre 1,5s e 8s).
+- **Entende imagem e áudio:** o webhook detecta `imageMessage`/`audioMessage` (desembrulhando
+  efêmeras/"ver uma vez" com `unwrapMessage`) e baixa o conteúdo via `getMediaBase64`
+  (`POST /chat/getBase64FromMediaMessage/{instance}` em [evolution.ts](src/lib/evolution.ts)). A
+  mídia é resolvida **para texto no webhook**, então o cron/`respondToCustomer` trabalha só com texto.
+  **Áudio** → transcrito com Whisper (`transcribeAudio` em [attendant.ts](src/lib/ai/attendant.ts),
+  `whisper-1`); a transcrição vira o texto da mensagem (se falhar, a IA pede para escrever, sem
+  agendar). **Imagem** → o webhook chama `describeImage` (visão do `gpt-4o-mini`) e grava a legenda +
+  a descrição da foto (`[Foto enviada pelo cliente — …]`) como texto no histórico.
 - **Variáveis de ambiente extras** (`.env` local / Vercel):
   - `EVOLUTION_API_URL` — base da Evolution (ex.: `https://evo.seudominio.com`)
   - `EVOLUTION_API_KEY` — apikey global da Evolution

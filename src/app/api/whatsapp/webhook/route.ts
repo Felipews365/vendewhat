@@ -4,23 +4,30 @@ import {
   appendMessage,
   getConfigByInstance,
   getLastAssistantMessages,
-  getRecentHistory,
   globalPauseActive,
   isCustomerPaused,
+  schedulePendingReply,
   setCustomerPause,
   updateConnection,
 } from "@/lib/whatsappConfig";
-import { sendLocation, sendMedia, sendText } from "@/lib/evolution";
-import { storefrontFromDb } from "@/lib/storefront";
+import { getMediaBase64, sendText } from "@/lib/evolution";
 import {
-  type AttendantProduct,
-  buildSystemPrompt,
-  generateReply,
+  describeImage,
   isAiConfigured,
-  parseReplyDirectives,
+  transcribeAudio,
 } from "@/lib/ai/attendant";
 
 export const runtime = "nodejs";
+// Transcrição de áudio / descrição de imagem podem levar alguns segundos.
+export const maxDuration = 30;
+
+/**
+ * Tempo de silêncio (segundos) antes de a IA responder. Serve para agrupar
+ * mensagens que o cliente manda uma atrás da outra: cada nova mensagem reagenda
+ * (empurra o respond_after), então só respondemos quando ele para de digitar.
+ * Quem realmente responde é o cron [/api/whatsapp/debounce].
+ */
+const DEBOUNCE_SECONDS = 15;
 
 /** Sempre responde 200 — a Evolution não deve reenviar por erro nosso de processamento. */
 function ok() {
@@ -33,12 +40,27 @@ function asObj(v: unknown): AnyObj | null {
   return v && typeof v === "object" ? (v as AnyObj) : null;
 }
 
-/** Extrai o texto de uma mensagem do WhatsApp (conversation / extendedText). */
+/** Desembrulha mensagens efêmeras / "ver uma vez" para chegar no conteúdo real. */
+function unwrapMessage(message: AnyObj | null): AnyObj | null {
+  if (!message) return null;
+  const eph = asObj(message.ephemeralMessage);
+  if (eph) return unwrapMessage(asObj(eph.message));
+  const vo =
+    asObj(message.viewOnceMessage) ??
+    asObj(message.viewOnceMessageV2) ??
+    asObj(message.viewOnceMessageV2Extension);
+  if (vo) return unwrapMessage(asObj(vo.message));
+  return message;
+}
+
+/** Extrai o texto de uma mensagem (conversation / extendedText / legenda de mídia). */
 function extractText(message: AnyObj | null): string {
   if (!message) return "";
   if (typeof message.conversation === "string") return message.conversation;
   const ext = asObj(message.extendedTextMessage);
   if (ext && typeof ext.text === "string") return ext.text;
+  const img = asObj(message.imageMessage);
+  if (img && typeof img.caption === "string") return img.caption;
   return "";
 }
 
@@ -97,7 +119,8 @@ export async function POST(req: Request) {
   if (!remoteJid || remoteJid.endsWith("@g.us")) return ok(); // ignora grupos
 
   const customerPhone = remoteJid.split("@")[0];
-  const text = extractText(asObj(msg.message)).trim();
+  const message = unwrapMessage(asObj(msg.message));
+  const text = extractText(message).trim();
 
   // Mensagem enviada pelo próprio número da loja.
   if (key.fromMe === true) {
@@ -121,12 +144,22 @@ export async function POST(req: Request) {
     return ok();
   }
 
-  if (!text) return ok(); // só atende texto
+  // Tipo de mídia (para tratar imagem/áudio além de texto).
+  const imageMsg = asObj(message?.imageMessage);
+  const audioMsg = asObj(message?.audioMessage);
+  const mediaKind: "none" | "image" | "audio" = imageMsg
+    ? "image"
+    : audioMsg
+    ? "audio"
+    : "none";
 
-  // Log de diagnóstico: confirma que o webhook chegou e o estado da IA.
+  // Nada que a gente saiba tratar (sticker, contato, etc.) e sem texto → ignora.
+  if (!text && mediaKind === "none") return ok();
+
   console.log("[whatsapp/webhook] msg recebida", {
     store: cfg.storeId,
     from: customerPhone,
+    kind: mediaKind === "none" ? "text" : mediaKind,
     aiEnabled: cfg.aiEnabled,
     aiConfigured: isAiConfigured(),
   });
@@ -137,9 +170,7 @@ export async function POST(req: Request) {
     return ok();
   }
   if (!isAiConfigured()) {
-    console.log(
-      "[whatsapp/webhook] ignorado: OPENAI_API_KEY ausente no servidor"
-    );
+    console.log("[whatsapp/webhook] ignorado: OPENAI_API_KEY ausente no servidor");
     return ok();
   }
 
@@ -154,112 +185,49 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Dados da loja + catálogo
-    const { data: store } = await admin
-      .from("stores")
-      .select("name, slug, storefront")
-      .eq("id", cfg.storeId)
-      .maybeSingle();
-    if (!store?.slug) return ok();
+    // --- Normaliza o conteúdo recebido (texto / áudio transcrito / imagem) ----
+    // A mídia é resolvida aqui (temos acesso fácil à Evolution); no histórico
+    // fica só texto, então o cron que responde trabalha apenas com texto.
+    let storedText = text;
 
-    const storeName = typeof store.name === "string" ? store.name : "Loja";
-    // Localização: usa o endereço próprio da IA; se vazio, cai no de retirada.
-    const pickupAddress = storefrontFromDb(store.storefront).pickupAddress;
-    const storeAddress = cfg.aiLocationAddress.trim() || pickupAddress;
-    const hasLocationPin =
-      cfg.aiLocationLat != null && cfg.aiLocationLng != null;
-    const hasStorePhoto = Boolean(cfg.aiStorePhotoUrl);
-
-    const { data: productRows } = await admin
-      .from("products")
-      .select("name, price, stock, description, category, is_promotion, compare_at_price")
-      .eq("store_id", cfg.storeId)
-      .eq("active", true)
-      .order("created_at", { ascending: false })
-      .limit(60);
-
-    const products: AttendantProduct[] = (productRows ?? []).map((p) => {
-      const row = p as AnyObj;
-      const price =
-        typeof row.price === "number"
-          ? row.price
-          : parseFloat(String(row.price ?? 0)) || 0;
-      const compare =
-        row.compare_at_price == null
-          ? null
-          : typeof row.compare_at_price === "number"
-          ? row.compare_at_price
-          : parseFloat(String(row.compare_at_price)) || null;
-      return {
-        name: typeof row.name === "string" ? row.name : "Produto",
-        price,
-        stock: typeof row.stock === "number" ? row.stock : 0,
-        description: typeof row.description === "string" ? row.description : null,
-        category: typeof row.category === "string" ? row.category : null,
-        isPromotion: row.is_promotion === true,
-        compareAtPrice: compare,
-      };
-    });
-
-    const history = await getRecentHistory(admin, cfg.storeId, customerPhone, 10);
-
-    const systemPrompt = buildSystemPrompt({
-      storeName,
-      slug: String(store.slug),
-      faq: cfg.faq,
-      aiName: cfg.aiName,
-      aiTone: cfg.aiTone,
-      products,
-      baseUrl: process.env.APP_BASE_URL || "",
-      isFirstContact: history.length === 0,
-      storeAddress,
-      hasLocationPin,
-      hasStorePhoto,
-    });
-
-    await appendMessage(admin, cfg.storeId, customerPhone, "user", text);
-
-    const reply = await generateReply(systemPrompt, history, text);
-    if (!reply) {
-      console.log("[whatsapp/webhook] IA retornou resposta vazia", cfg.storeId);
+    if (mediaKind === "audio") {
+      const media = await getMediaBase64(cfg.evolutionInstance, msg);
+      const transcript = media
+        ? await transcribeAudio(media.base64, media.mimetype)
+        : null;
+      if (!transcript) {
+        // Não deu para entender o áudio — pede para escrever, sem agendar resposta.
+        const aviso =
+          "Recebi seu áudio, mas não consegui ouvir direito 😅 Pode me mandar por escrito, por favor?";
+        await sendText(cfg.evolutionInstance, customerPhone, aviso, 1500);
+        await appendMessage(admin, cfg.storeId, customerPhone, "user", "[áudio]");
+        await appendMessage(admin, cfg.storeId, customerPhone, "assistant", aviso);
+        return ok();
+      }
+      storedText = transcript;
+    } else if (mediaKind === "image") {
+      const media = await getMediaBase64(cfg.evolutionInstance, msg);
+      const dataUrl = media
+        ? `data:${media.mimetype || "image/jpeg"};base64,${media.base64}`
+        : null;
+      const desc = dataUrl ? await describeImage(dataUrl, text) : null;
+      // Guarda a legenda + a descrição da foto para o atendente ter contexto.
+      storedText = [
+        text,
+        desc ? `[Foto enviada pelo cliente — ${desc}]` : "[Foto enviada pelo cliente]",
+      ]
+        .filter(Boolean)
+        .join("\n");
     }
-    if (reply) {
-      const { text: replyText, sendLocation: wantLocation, sendPhoto } =
-        parseReplyDirectives(reply);
-      if (replyText) {
-        await sendText(cfg.evolutionInstance, customerPhone, replyText);
-        await appendMessage(
-          admin,
-          cfg.storeId,
-          customerPhone,
-          "assistant",
-          replyText
-        );
-      }
-      // Pino do mapa do WhatsApp.
-      if (wantLocation && hasLocationPin) {
-        try {
-          await sendLocation(cfg.evolutionInstance, customerPhone, {
-            latitude: cfg.aiLocationLat as number,
-            longitude: cfg.aiLocationLng as number,
-            name: storeName,
-            address: storeAddress,
-          });
-        } catch (e) {
-          console.error("[whatsapp/webhook] sendLocation", e);
-        }
-      }
-      // Foto da loja.
-      if (sendPhoto && hasStorePhoto) {
-        try {
-          await sendMedia(cfg.evolutionInstance, customerPhone, {
-            url: cfg.aiStorePhotoUrl,
-          });
-        } catch (e) {
-          console.error("[whatsapp/webhook] sendMedia", e);
-        }
-      }
-    }
+
+    // Grava a mensagem do cliente e AGENDA a resposta (debounce). O cron responde.
+    await appendMessage(admin, cfg.storeId, customerPhone, "user", storedText);
+    await schedulePendingReply(
+      admin,
+      cfg.storeId,
+      customerPhone,
+      DEBOUNCE_SECONDS
+    );
   } catch (err) {
     console.error("[whatsapp/webhook]", err);
   }

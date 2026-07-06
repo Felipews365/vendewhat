@@ -79,6 +79,7 @@ function formatUntil(until: string | null): string {
   const d = new Date(until);
   if (Number.isNaN(d.getTime())) return "";
   return `até ${d.toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",

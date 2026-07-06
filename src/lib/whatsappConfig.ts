@@ -635,3 +635,96 @@ export async function appendMessage(
     content: content.slice(0, 4000),
   });
 }
+
+// --- Debounce (agrupamento de mensagens seguidas) ----------------------------
+// O webhook grava a mensagem e AGENDA uma resposta (respond_after = agora + Xs),
+// sem gerar nada na hora. Se o cliente manda outra mensagem, o agendamento é
+// empurrado para frente (o timer reinicia). Um cron externo (~1 min) chama o
+// endpoint de debounce, que responde às conversas cujo tempo de silêncio venceu —
+// juntando todas as mensagens do lote numa única resposta.
+
+const PENDING = "whatsapp_pending_replies";
+
+/** Agenda/reagenda a resposta para `delaySeconds` a partir de agora (debounce). */
+export async function schedulePendingReply(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string,
+  delaySeconds: number
+): Promise<void> {
+  const respondAfter = new Date(Date.now() + delaySeconds * 1000).toISOString();
+  await db.from(PENDING).upsert(
+    {
+      store_id: storeId,
+      customer_phone: customerPhone,
+      respond_after: respondAfter,
+    },
+    { onConflict: "store_id,customer_phone" }
+  );
+}
+
+export type PendingReply = {
+  storeId: string;
+  customerPhone: string;
+  respondAfter: string;
+  createdAt: string;
+};
+
+/** Conversas cujo silêncio já venceu (respond_after <= agora), da mais antiga. */
+export async function listDuePendingReplies(
+  db: SupabaseClient,
+  limit = 50
+): Promise<PendingReply[]> {
+  const nowIso = new Date().toISOString();
+  const { data } = await db
+    .from(PENDING)
+    .select("store_id, customer_phone, respond_after, created_at")
+    .lte("respond_after", nowIso)
+    .order("respond_after", { ascending: true })
+    .limit(limit);
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    storeId: String(r.store_id),
+    customerPhone: String(r.customer_phone),
+    respondAfter: String(r.respond_after),
+    createdAt: typeof r.created_at === "string" ? r.created_at : "",
+  }));
+}
+
+/**
+ * "Reserva" um pendente para esta execução do cron, empurrando o `respond_after`
+ * para daqui a `leaseSeconds` (lock otimista). Só reserva se ainda estiver
+ * vencido (`respond_after <= dueBeforeIso`) — assim dois crons simultâneos não
+ * respondem duas vezes, e se uma mensagem nova chegou (empurrou para o futuro),
+ * a reserva falha e o cliente que ainda digita não é interrompido.
+ * Retorna true se conseguiu reservar.
+ */
+export async function claimPendingReply(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string,
+  dueBeforeIso: string,
+  leaseSeconds = 300
+): Promise<boolean> {
+  const lease = new Date(Date.now() + leaseSeconds * 1000).toISOString();
+  const { data } = await db
+    .from(PENDING)
+    .update({ respond_after: lease })
+    .eq("store_id", storeId)
+    .eq("customer_phone", customerPhone)
+    .lte("respond_after", dueBeforeIso)
+    .select("customer_phone");
+  return Array.isArray(data) && data.length > 0;
+}
+
+/** Remove o agendamento (resposta enviada, ou conversa que não deve receber resposta). */
+export async function deletePendingReply(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string
+): Promise<void> {
+  await db
+    .from(PENDING)
+    .delete()
+    .eq("store_id", storeId)
+    .eq("customer_phone", customerPhone);
+}
