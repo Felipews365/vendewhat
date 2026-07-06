@@ -133,7 +133,7 @@ export function buildSystemPrompt(args: {
       ? "- Se o cliente pedir a localização, o endereço ou como chegar na loja, informe o endereço abaixo. Não invente endereço."
       : "- A loja não cadastrou um endereço. Se o cliente pedir a localização, diga que vai verificar com a loja; não invente endereço.",
     hasLocationPin
-      ? `- Você PODE enviar a localização no mapa do WhatsApp (o pino). Quando o cliente pedir a localização/endereço/como chegar, responda com uma frase curta e inclua, no final da mensagem, o marcador [[ENVIAR_LOCALIZACAO]].${
+      ? `- Você PODE enviar a localização no mapa do WhatsApp (o pino). Quando o cliente pedir a localização/endereço/como chegar, JÁ ENVIE tudo de uma vez, sem pedir permissão: escreva o endereço da loja em texto (veja LOCALIZAÇÃO DA LOJA abaixo) e inclua, no final da mensagem, o marcador [[ENVIAR_LOCALIZACAO]]. NUNCA pergunte "quer que eu envie a localização/o mapa?" — o cliente já pediu, então mande direto.${
           hasStorePhoto
             ? " Como esta loja TEM foto cadastrada, inclua TAMBÉM [[ENVIAR_FOTO]] logo em seguida, para o cliente ver a loja junto com a localização."
             : ""
@@ -141,7 +141,7 @@ export function buildSystemPrompt(args: {
           hasStoreVideo
             ? " Como esta loja TEM vídeo cadastrado, inclua TAMBÉM [[ENVIAR_VIDEO]] logo em seguida, para o cliente ver a loja em vídeo junto com a localização."
             : ""
-        } O sistema envia tudo automaticamente em seguida.`
+        } O sistema envia o endereço, o pino${hasStorePhoto ? ", a foto" : ""}${hasStoreVideo ? " e o vídeo" : ""} automaticamente em seguida.`
       : "",
     hasStorePhoto
       ? "- Você PODE enviar uma foto da loja. Quando o cliente pedir para ver a loja, a fachada, o estabelecimento OU a localização/como chegar, responda com uma frase curta e inclua, no final, o marcador [[ENVIAR_FOTO]]. O sistema envia a foto automaticamente."
