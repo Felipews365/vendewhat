@@ -158,6 +158,27 @@ usa os tokens `--store-primary`/`--store-secondary`.
   renderizam se existirem no JSONB. Expansão futura: formulário genérico guiado por
   `BLOCK_REGISTRY[type].fields`, upload de imagem (hoje é URL) e arrastar-e-soltar.
 
+## Formulário de produto (fotos, capa, vídeo)
+
+Páginas [/dashboard/produtos/novo](src/app/dashboard/produtos/novo/page.tsx) e
+[/dashboard/produtos/[id]](src/app/dashboard/produtos/[id]/page.tsx) (edição). As fotos usam o
+[ProductPhotosPicker.tsx](src/components/ProductPhotosPicker.tsx) (variant `editor`), que sobe as
+imagens ao bucket `product-images` e guarda a ordem em `products.images` + o foco por foto em
+`image_object_positions`.
+
+- **Foto de capa = 1.ª foto** (`images[0]`) em toda a loja (card, thumbnail, recorte 1:1). No picker,
+  a 1.ª foto mostra o selo **★ Capa** e as demais têm o botão **"Tornar capa"** (`makeCover` move o
+  item para o índice 0). Não há coluna de "capa" — é só a ordem do array.
+- **Vídeo do produto (`products.video_url`):** upload no formulário (MP4/MOV, teto `MAX_VIDEO_BYTES`
+  = 50MB) para o mesmo bucket `product-images` (pasta `videos/`), guarda a URL pública. O save inclui
+  `video_url` com **fallback de coluna ausente** (`isMissingColumnError`, igual a `images`). Exibido
+  no detalhe do produto na loja pública (`ProductDetailModal` em
+  [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx), abaixo da descrição), via
+  `CatalogProduct.videoUrl` (mapeado em [loja/[slug]/page.tsx](src/app/loja/[slug]/page.tsx) a partir
+  do `select("*")`). **Migration:** [supabase-migration-product-video.sql](supabase-migration-product-video.sql)
+  (só a coluna). O limite real de tamanho do arquivo depende do bucket no Supabase (Storage →
+  `product-images` → File size limit).
+
 ## Loja pública — carrinho e formas de envio
 
 O checkout fica no carrinho de [src/app/loja/[slug]/LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx).
