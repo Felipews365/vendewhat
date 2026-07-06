@@ -44,7 +44,10 @@ import {
   sumVariantStockRows,
   variantStockFromDb,
 } from "@/lib/productVariants";
-import { ProductOptionsEditor } from "@/components/ProductOptionsEditor";
+import {
+  ProductOptionsEditor,
+  SIZE_PRESET_GROUPS,
+} from "@/components/ProductOptionsEditor";
 import {
   ProductColorsEditor,
   type ColorOptionEntry,
@@ -1106,6 +1109,7 @@ export default function EditarProdutoPage() {
                   onItemsChange={setSizes}
                   placeholder="Tamanho"
                   addButtonLabel="Adicionar tamanho"
+                  presetGroups={SIZE_PRESET_GROUPS}
                 />
               </section>
               {hasVariantOptions && (

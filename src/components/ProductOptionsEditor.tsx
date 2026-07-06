@@ -13,6 +13,19 @@ function normalizeAdd(raw: string, existing: string[]): string | null {
 /**
  * Vendedor monta a lista de cores ou tamanhos; o cliente vê só listas na loja.
  */
+/** Grupo de opções prontas para adicionar com 1 clique (ex.: tamanhos comuns). */
+export type OptionPresetGroup = { label: string; values: string[] };
+
+/** Tamanhos prontos para o vendedor montar rápido (letras, números e único). */
+export const SIZE_PRESET_GROUPS: OptionPresetGroup[] = [
+  { label: "Letras", values: ["PP", "P", "M", "G", "GG", "XG", "XGG"] },
+  {
+    label: "Números",
+    values: ["36", "38", "40", "42", "44", "46", "48", "50"],
+  },
+  { label: "Único", values: ["Tamanho único"] },
+];
+
 export function ProductOptionsEditor({
   title,
   description,
@@ -20,6 +33,7 @@ export function ProductOptionsEditor({
   onItemsChange,
   placeholder = "Digite e adicione",
   addButtonLabel = "Adicionar",
+  presetGroups,
 }: {
   title: string;
   description: string;
@@ -27,6 +41,8 @@ export function ProductOptionsEditor({
   onItemsChange: (next: string[]) => void;
   placeholder?: string;
   addButtonLabel?: string;
+  /** Se informado, mostra chips prontos (clique adiciona/remove aquela opção). */
+  presetGroups?: OptionPresetGroup[];
 }) {
   const [draft, setDraft] = useState("");
 
@@ -43,6 +59,20 @@ export function ProductOptionsEditor({
   const remove = useCallback(
     (index: number) => {
       onItemsChange(items.filter((_, i) => i !== index));
+    },
+    [items, onItemsChange]
+  );
+
+  /** Adiciona (se não existe) ou remove (se já existe) uma opção pronta. */
+  const togglePreset = useCallback(
+    (value: string) => {
+      const lower = value.toLowerCase();
+      const existsAt = items.findIndex((x) => x.toLowerCase() === lower);
+      if (existsAt >= 0) {
+        onItemsChange(items.filter((_, i) => i !== existsAt));
+      } else {
+        onItemsChange([...items, value]);
+      }
     },
     [items, onItemsChange]
   );
@@ -76,6 +106,41 @@ export function ProductOptionsEditor({
           {addButtonLabel}
         </button>
       </div>
+
+      {presetGroups && presetGroups.length > 0 && (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-slate-500">
+            Ou toque em uma opção pronta para adicionar:
+          </p>
+          {presetGroups.map((group) => (
+            <div key={group.label} className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-medium text-slate-400 mr-1">
+                {group.label}:
+              </span>
+              {group.values.map((value) => {
+                const active = items.some(
+                  (x) => x.toLowerCase() === value.toLowerCase()
+                );
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => togglePreset(value)}
+                    aria-pressed={active}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      active
+                        ? "bg-whatsapp text-white border-whatsapp"
+                        : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    {value}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
 
       {items.length > 0 ? (
         <ul className="mt-3 flex flex-wrap gap-2">
