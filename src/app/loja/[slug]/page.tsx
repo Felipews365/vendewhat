@@ -14,6 +14,7 @@ import { storefrontFromDb } from "@/lib/storefront";
 import { normalizeImageObjectPosition } from "@/lib/productImagePosition";
 import { parseImageObjectPositionsDb } from "@/lib/productImageFocus";
 import { productSaleFromDb } from "@/lib/saleMode";
+import { StoreTrackingScripts } from "@/components/StoreTrackingScripts";
 import { LojaClient, type CatalogProduct } from "./LojaClient";
 
 type Props = { params: { slug: string } };
@@ -183,18 +184,26 @@ export default async function LojaPublicaPage({ params }: Props) {
     };
   });
 
+  const storefront = storefrontFromDb(store.storefront);
+
   return (
-    <LojaClient
-      store={{
-        slug: String(store.slug ?? slug),
-        name: String(store.name ?? ""),
-        description: store.description ? String(store.description) : null,
-        logo: store.logo ? String(store.logo) : null,
-        phone: store.phone ? String(store.phone) : null,
-      }}
-      storefront={storefrontFromDb(store.storefront)}
-      products={list}
-      paymentEnabled={paymentEnabled}
-    />
+    <>
+      <StoreTrackingScripts
+        facebookPixelId={storefront.facebookPixelId}
+        googleAnalyticsId={storefront.googleAnalyticsId}
+      />
+      <LojaClient
+        store={{
+          slug: String(store.slug ?? slug),
+          name: String(store.name ?? ""),
+          description: store.description ? String(store.description) : null,
+          logo: store.logo ? String(store.logo) : null,
+          phone: store.phone ? String(store.phone) : null,
+        }}
+        storefront={storefront}
+        products={list}
+        paymentEnabled={paymentEnabled}
+      />
+    </>
   );
 }

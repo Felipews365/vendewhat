@@ -346,6 +346,10 @@ export type StorefrontSettings = {
   pixKey: string;
   /** Nome do titular da conta Pix (mostrado junto da chave). */
   pixName: string;
+  /** ID do Pixel do Facebook/Meta (só números) — carrega o rastreamento na loja pública. */
+  facebookPixelId: string;
+  /** ID da tag do Google: GA4 "G-…", Google Ads "AW-…" ou Tag Manager "GTM-…". */
+  googleAnalyticsId: string;
   /**
    * Blocos de conteúdo extra (builder), renderizados abaixo dos produtos na
    * ordem do array. Ver `src/components/storefront/blocks`. Mora no mesmo JSONB.
@@ -386,8 +390,29 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   footerShowCash: false,
   pixKey: "",
   pixName: "",
+  facebookPixelId: "",
+  googleAnalyticsId: "",
   contentBlocks: [],
 };
+
+/** Só dígitos (ID do Pixel do Facebook). Evita injeção no `<script>`. */
+export function sanitizeFacebookPixelId(v: unknown): string {
+  if (typeof v !== "string") return "";
+  return v.replace(/\D/g, "").slice(0, 20);
+}
+
+/**
+ * ID de tag do Google (GA4 `G-…`, Ads `AW-…`, GTM `GTM-…`). Só letras,
+ * números e hífen — evita injeção no `<script>`; força maiúsculas.
+ */
+export function sanitizeGoogleTagId(v: unknown): string {
+  if (typeof v !== "string") return "";
+  return v
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, "")
+    .slice(0, 30);
+}
 
 /** Máximo de blocos de conteúdo guardados (defensivo). */
 const MAX_CONTENT_BLOCKS = 20;
@@ -631,6 +656,8 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     ),
     pixKey: strOrEmpty(o.pixKey),
     pixName: strOrEmpty(o.pixName),
+    facebookPixelId: sanitizeFacebookPixelId(o.facebookPixelId),
+    googleAnalyticsId: sanitizeGoogleTagId(o.googleAnalyticsId),
     contentBlocks: contentBlocksFromDb(o.contentBlocks),
   };
 }
@@ -668,6 +695,8 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     footerShowCash: s.footerShowCash,
     pixKey: s.pixKey.trim(),
     pixName: s.pixName.trim(),
+    facebookPixelId: sanitizeFacebookPixelId(s.facebookPixelId),
+    googleAnalyticsId: sanitizeGoogleTagId(s.googleAnalyticsId),
     contentBlocks: contentBlocksFromDb(s.contentBlocks).slice(
       0,
       MAX_CONTENT_BLOCKS

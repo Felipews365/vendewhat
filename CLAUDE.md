@@ -124,6 +124,20 @@ Orientações para o Claude Code trabalhar neste repositório.
   reaproveita os `categoryStripItems` (mesma fonte do strip de bolinhas) e o `categoryFilter`; item
   ativo usa `--store-primary`. Só aparece se houver categorias (logo, precisa de produtos). Toggle na
   página do banner. Sem migration (JSONB).
+- **Pixels e rastreamento (por loja):** cada lojista cola o **próprio** Pixel do Facebook/Meta
+  (`storefront.facebookPixelId`, só dígitos) e a **tag do Google** (`storefront.googleAnalyticsId` —
+  GA4 `G-…`, Google Ads `AW-…` ou Tag Manager `GTM-…`) no painel do editor
+  ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), atalho/painel
+  `marketing` "Pixels e rastreamento"). Os scripts carregam **só na loja pública**
+  (`/loja/[slug]`), renderizados por
+  [StoreTrackingScripts.tsx](src/components/StoreTrackingScripts.tsx) (via `next/script`) injetado no
+  server component [page.tsx](src/app/loja/[slug]/page.tsx) — só os IDs **daquela** loja (multi-tenant,
+  a loja A nunca carrega o pixel da B). O Meta dispara `PageView`; a tag do Google usa `gtag`
+  (GA4/Ads) ou carrega o `gtm.js` quando é `GTM-…`. **Segurança:** os IDs são sanitizados na entrada,
+  ao salvar/ler (`sanitizeFacebookPixelId`/`sanitizeGoogleTagId` em
+  [storefront.ts](src/lib/storefront.ts)) e de novo antes de entrar no `<script>` (só dígitos /
+  `[A-Z0-9-]`), impedindo injeção de código. Sem migration: mora no JSONB `stores.storefront`.
+
 - **Pendente:** os widgets internos compartilhados ainda estão só no tema claro — editor visual
   da loja ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), cuja
   pré-visualização da loja pública deve continuar clara de propósito), seletor de fotos,
@@ -336,6 +350,11 @@ uma instância Evolution e uma config de IA por loja.
   Segue o link…" / URL / "Dá uma olhada com calma…"). Combinado com a resposta em partes, cada bloco
   vira um balão; o balão do link ganha a **prévia rica** (card de Open Graph) que o WhatsApp gera da
   página `/loja/[slug]`.
+- **Fechamento assertivo (não deixa a venda no colo do cliente):** o `buildSystemPrompt` instrui a
+  IA a **conduzir para o fechamento** com pergunta direta ("Vamos fechar seu pedido?", "Bora fechar
+  seu pedido?", "Posso seguir com o fechamento?") depois que o cliente demonstra interesse, e
+  **proíbe** encerramentos passivos ("se quiser, é só avisar", "fico no aguardo"). O mesmo tom vale
+  no `generateFollowupReply` (cutucar quem sumiu). Fixo para todas as lojas (sem config no painel).
 - **Espera + agrupamento de mensagens (debounce por tabela + cron):** para o cliente que manda
   várias mensagens seguidas, a IA espera ele parar de digitar e responde tudo de uma vez. O
   [webhook](src/app/api/whatsapp/webhook/route.ts) **não gera resposta** — ele grava a mensagem e

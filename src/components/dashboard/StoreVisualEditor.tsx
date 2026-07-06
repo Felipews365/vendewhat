@@ -64,7 +64,8 @@ type EditorPanel =
   | "search"
   | "categories"
   | "blocks"
-  | "footer";
+  | "footer"
+  | "marketing";
 
 /** Mede a imagem (URL ou blob) e avisa se a proporção não combina com o formato. */
 function useHeroProportionWarning(
@@ -1135,6 +1136,14 @@ export function StoreVisualEditor({
         >
           Rodapé da vitrine
         </button>
+        <button
+          type="button"
+          id="passo-marketing"
+          onClick={() => setPanel("marketing")}
+          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
+        >
+          Pixels e rastreamento
+        </button>
       </div>
 
       {/* Painéis */}
@@ -2102,6 +2111,61 @@ export function StoreVisualEditor({
             Redes sociais
           </button>
           .
+        </p>
+      </EditorSheet>
+
+      <EditorSheet
+        open={panel === "marketing"}
+        title="Pixels e rastreamento"
+        onClose={() => setPanel(null)}
+      >
+        <p className="text-xs text-slate-500">
+          Cole os IDs de rastreamento para medir visitas e criar públicos de
+          anúncios. Os scripts carregam <strong>só na loja pública</strong>.
+          Deixe em branco se não usa.
+        </p>
+
+        <label className="block text-sm font-medium text-slate-700">
+          Pixel do Facebook / Meta
+        </label>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={sf.facebookPixelId}
+          onChange={(e) =>
+            setSf((s) => ({
+              ...s,
+              facebookPixelId: e.target.value.replace(/\D/g, "").slice(0, 20),
+            }))
+          }
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono"
+          placeholder="Ex.: 123456789012345"
+        />
+        <p className="text-[11px] text-slate-500">
+          É o número do Pixel no Gerenciador de Eventos do Meta (só dígitos).
+        </p>
+
+        <label className="block text-sm font-medium text-slate-700">
+          Tag do Google
+        </label>
+        <input
+          type="text"
+          value={sf.googleAnalyticsId}
+          onChange={(e) =>
+            setSf((s) => ({
+              ...s,
+              googleAnalyticsId: e.target.value
+                .toUpperCase()
+                .replace(/[^A-Z0-9-]/g, "")
+                .slice(0, 30),
+            }))
+          }
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono"
+          placeholder="Ex.: G-XXXXXXXXXX"
+        />
+        <p className="text-[11px] text-slate-500">
+          Aceita GA4 (<strong>G-…</strong>), Google Ads (<strong>AW-…</strong>)
+          ou Tag Manager (<strong>GTM-…</strong>).
         </p>
       </EditorSheet>
 

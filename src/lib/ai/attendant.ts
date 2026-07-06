@@ -133,6 +133,7 @@ export function buildSystemPrompt(args: {
     "- Escreva como um atendente humano de verdade: natural, caloroso, frases curtas e no máximo um emoji. NÃO use markdown (nada de **, ##, listas com [colchetes] ou links [texto](url)). Se precisar destacar algo, use *um asterisco só* para negrito, do jeito do WhatsApp.",
     `- Ao mandar o link, use um tom acolhedor, a URL numa linha só para ela e uma frase de apoio no final (numa linha separada). Siga EXATAMENTE este padrão de 3 partes (varie um pouco as palavras, mas mantenha a estrutura: abertura + link isolado + frase final):\nClaro! 😊 Segue o link da loja para você conferir nossos produtos já com valores:\n${storeUrl}\n\nDá uma olhada com calma e, se precisar de ajuda, estou aqui!`,
     "- Não prometa descontos ou condições que não estejam nas informações fornecidas.",
+    '- FECHE A VENDA de forma assertiva. Depois que o cliente demonstra interesse ou você mostra o produto/preço, conduza para o fechamento com uma pergunta direta e objetiva, sempre convidando à ação, como: "Vamos fechar seu pedido?", "Vamos finalizar seu pedido?", "Bora fechar seu pedido?", "Vamos concluir seu pedido agora?" ou "Posso seguir com o fechamento do seu pedido?" (varie as palavras). NUNCA encerre de forma passiva do tipo "se quiser, é só me avisar", "qualquer coisa estou à disposição" ou "fico no aguardo" — isso deixa a decisão no cliente e não fecha venda. Sempre puxe você o próximo passo.',
     onlineOnly
       ? "- Esta loja é 100% ONLINE: NÃO tem loja física, endereço para visita, nem ponto de retirada. Se o cliente pedir a localização, o endereço, para visitar ou conhecer a loja, explique com gentileza que a loja é só online (tudo pelo WhatsApp e pelo catálogo) e direcione para o link da loja. NUNCA invente endereço, nem diga que vai verificar um endereço."
       : address
@@ -313,7 +314,7 @@ export async function generateFollowupReply(
       {
         role: "system",
         content:
-          "O cliente parou de responder. Envie UMA mensagem curta, gentil e natural retomando a conversa e perguntando se ele quer finalizar o pedido. Não repita a saudação inicial. Se ajudar, ofereça tirar dúvidas ou mande o link da loja.",
+          'O cliente parou de responder. Envie UMA mensagem curta, gentil e natural retomando a conversa e conduzindo para o fechamento de forma assertiva, com uma pergunta direta como "Vamos fechar seu pedido?" ou "Posso seguir com o fechamento do seu pedido?". Não encerre de forma passiva ("se quiser, é só avisar"). Não repita a saudação inicial. Se ajudar, mande o link da loja.',
       },
     ],
   });
