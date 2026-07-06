@@ -67,6 +67,7 @@ export async function respondToCustomer(
   const storeAddress = cfg.aiLocationAddress.trim() || pickupAddress;
   const hasLocationPin = cfg.aiLocationLat != null && cfg.aiLocationLng != null;
   const hasStorePhoto = Boolean(cfg.aiStorePhotoUrl);
+  const hasStoreVideo = Boolean(cfg.aiStoreVideoUrl);
 
   const { data: productRows } = await admin
     .from("products")
@@ -103,12 +104,13 @@ export async function respondToCustomer(
     storeAddress,
     hasLocationPin,
     hasStorePhoto,
+    hasStoreVideo,
   });
 
   const reply = await generateReply(systemPrompt, contextHistory, combinedUserText);
   if (!reply) return false;
 
-  const { text: replyText, sendLocation: wantLocation, sendPhoto } =
+  const { text: replyText, sendLocation: wantLocation, sendPhoto, sendVideo } =
     parseReplyDirectives(reply);
   let sent = false;
   if (replyText) {
@@ -139,6 +141,17 @@ export async function respondToCustomer(
       sent = true;
     } catch (e) {
       console.error("[whatsappRespond] sendMedia", e);
+    }
+  }
+  if (sendVideo && hasStoreVideo) {
+    try {
+      await sendMedia(cfg.evolutionInstance, customerPhone, {
+        url: cfg.aiStoreVideoUrl,
+        mediatype: "video",
+      });
+      sent = true;
+    } catch (e) {
+      console.error("[whatsappRespond] sendMedia video", e);
     }
   }
   return sent;

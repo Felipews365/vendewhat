@@ -381,13 +381,20 @@ loja, configurado na aba **Atendente de IA** (seção "Localização e foto da l
   o endereço da loja (`ai_location_address`), se houver.
 - **Foto:** upload para o bucket `product-images` (igual às fotos do banner),
   guarda a URL pública em `ai_store_photo_url`.
+- **Vídeo:** mesmo esquema da foto — upload para `product-images`, URL pública em
+  `ai_store_video_url` (**migration:**
+  [supabase-migration-whatsapp-video.sql](supabase-migration-whatsapp-video.sql), só
+  adiciona a coluna). O painel limita a ~16 MB (limite prático do WhatsApp/Evolution). A
+  IA envia com `sendMedia` usando `mediatype: "video"`.
 - **Como a IA dispara:** o `buildSystemPrompt`
   ([src/lib/ai/attendant.ts](src/lib/ai/attendant.ts)) recebe `hasLocationPin` /
-  `hasStorePhoto` e instrui a IA a incluir os marcadores `[[ENVIAR_LOCALIZACAO]]` /
-  `[[ENVIAR_FOTO]]` no fim da resposta. O webhook usa `parseReplyDirectives` para
-  separar o texto dos marcadores e então chama `sendLocation` / `sendMedia`
-  ([src/lib/evolution.ts](src/lib/evolution.ts)) — endpoints `sendLocation` e
-  `sendMedia` da Evolution. O texto (sem marcadores) vai pelo `sendText` normal.
+  `hasStorePhoto` / `hasStoreVideo` e instrui a IA a incluir os marcadores
+  `[[ENVIAR_LOCALIZACAO]]` / `[[ENVIAR_FOTO]]` / `[[ENVIAR_VIDEO]]` no fim da resposta
+  (quando pedem a localização e há foto, a foto vai junto). O `respondToCustomer`
+  ([src/lib/whatsappRespond.ts](src/lib/whatsappRespond.ts)) usa `parseReplyDirectives`
+  para separar o texto dos marcadores e então chama `sendLocation` / `sendMedia`
+  ([src/lib/evolution.ts](src/lib/evolution.ts)). O texto (sem marcadores) vai pelo
+  `sendText` normal (com o `delayMs` do "digitando…").
 
 ### Pausar o atendimento da IA (assumir a conversa)
 

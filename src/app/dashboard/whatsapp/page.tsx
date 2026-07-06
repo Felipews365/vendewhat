@@ -116,6 +116,8 @@ export default function WhatsAppIaPage() {
   const [lngStr, setLngStr] = useState("");
   const [storePhotoUrl, setStorePhotoUrl] = useState("");
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [storeVideoUrl, setStoreVideoUrl] = useState("");
+  const [videoUploading, setVideoUploading] = useState(false);
   const [pickupAddress, setPickupAddress] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
@@ -206,7 +208,7 @@ export default function WhatsAppIaPage() {
       const { data: cfg } = await supabase
         .from("store_whatsapp")
         .select(
-          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_location_address, ai_location_url, ai_store_photo_url"
+          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_location_address, ai_location_url, ai_store_photo_url, ai_store_video_url"
         )
         .eq("store_id", store.id)
         .maybeSingle();
@@ -254,6 +256,9 @@ export default function WhatsAppIaPage() {
         }
         setStorePhotoUrl(
           typeof cfg.ai_store_photo_url === "string" ? cfg.ai_store_photo_url : ""
+        );
+        setStoreVideoUrl(
+          typeof cfg.ai_store_video_url === "string" ? cfg.ai_store_video_url : ""
         );
       }
       setLoading(false);
@@ -324,6 +329,7 @@ export default function WhatsAppIaPage() {
           aiLocationAddress: locationAddress,
           aiLocationUrl: locationUrl,
           aiStorePhotoUrl: storePhotoUrl,
+          aiStoreVideoUrl: storeVideoUrl,
         }),
       });
       const data = await res.json();
@@ -412,6 +418,36 @@ export default function WhatsAppIaPage() {
       showToast("Foto enviada! Clique em Salvar para confirmar.");
     } finally {
       setPhotoUploading(false);
+    }
+  }
+
+  async function handleVideoUpload(file: File) {
+    if (!storeId || !file) return;
+    // WhatsApp/Evolution têm limite prático de tamanho; avisa se passar de 16 MB.
+    if (file.size > 16 * 1024 * 1024) {
+      showToast("Vídeo muito grande (máx. 16 MB). Envie um vídeo mais curto.", "error");
+      return;
+    }
+    setVideoUploading(true);
+    setError("");
+    try {
+      const supabase = createClient();
+      const ext = file.name.split(".").pop() || "mp4";
+      const fileName = `${storeId}/store-video-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("product-images")
+        .upload(fileName, file, { upsert: true });
+      if (upErr) {
+        showToast("Erro ao enviar vídeo: " + upErr.message, "error");
+        return;
+      }
+      const { data } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(fileName);
+      setStoreVideoUrl(data.publicUrl);
+      showToast("Vídeo enviado! Clique em Salvar para confirmar.");
+    } finally {
+      setVideoUploading(false);
     }
   }
 
@@ -913,6 +949,50 @@ export default function WhatsAppIaPage() {
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) handlePhotoUpload(file);
+                  e.target.value = "";
+                }}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+              Vídeo da loja
+            </label>
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+              A IA envia este vídeo quando o cliente pede para ver a loja ou os
+              produtos. Use um vídeo curto (máx. 16 MB).
+            </p>
+            {storeVideoUrl && (
+              <div className="mt-2 flex items-center gap-3">
+                <video
+                  src={storeVideoUrl}
+                  controls
+                  className="h-24 w-40 rounded-lg border border-stone-200 object-cover dark:border-slate-700"
+                />
+                <button
+                  type="button"
+                  onClick={() => setStoreVideoUrl("")}
+                  className="text-xs font-medium text-red-600 hover:underline dark:text-red-400"
+                >
+                  Remover
+                </button>
+              </div>
+            )}
+            <label className="mt-2 inline-flex cursor-pointer items-center rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+              {videoUploading
+                ? "Enviando…"
+                : storeVideoUrl
+                ? "Trocar vídeo"
+                : "Enviar vídeo"}
+              <input
+                type="file"
+                accept="video/*"
+                disabled={videoUploading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleVideoUpload(file);
                   e.target.value = "";
                 }}
                 className="hidden"

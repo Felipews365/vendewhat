@@ -20,6 +20,7 @@ type Body = {
   /** Link do Google Maps (ou "lat,lng") de onde a loja fica. */
   aiLocationUrl?: string;
   aiStorePhotoUrl?: string;
+  aiStoreVideoUrl?: string;
 };
 
 export async function POST(req: Request) {
@@ -90,6 +91,8 @@ export async function POST(req: Request) {
     aiLocationLng: coords ? coords.lng : null,
     aiStorePhotoUrl:
       typeof body.aiStorePhotoUrl === "string" ? body.aiStorePhotoUrl : "",
+    aiStoreVideoUrl:
+      typeof body.aiStoreVideoUrl === "string" ? body.aiStoreVideoUrl : "",
   });
 
   return NextResponse.json({

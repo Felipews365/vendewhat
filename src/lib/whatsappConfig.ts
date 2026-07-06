@@ -48,6 +48,8 @@ export type WhatsAppConfig = {
   aiLocationUrl: string;
   /** Foto da loja/fachada que a IA envia quando o cliente pede. Vazio = sem foto. */
   aiStorePhotoUrl: string;
+  /** Vídeo curto da loja que a IA envia quando o cliente pede. Vazio = sem vídeo. */
+  aiStoreVideoUrl: string;
 };
 
 const TABLE = "store_whatsapp";
@@ -113,11 +115,13 @@ function rowToConfig(row: Record<string, unknown>): WhatsAppConfig {
       typeof row.ai_location_url === "string" ? row.ai_location_url : "",
     aiStorePhotoUrl:
       typeof row.ai_store_photo_url === "string" ? row.ai_store_photo_url : "",
+    aiStoreVideoUrl:
+      typeof row.ai_store_video_url === "string" ? row.ai_store_video_url : "",
   };
 }
 
 const SELECT =
-  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_location_address, ai_location_lat, ai_location_lng, ai_location_url, ai_store_photo_url";
+  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_location_address, ai_location_lat, ai_location_lng, ai_location_url, ai_store_photo_url, ai_store_video_url";
 
 /** Lê a config da loja (ou null se ainda não existe). */
 export async function getConfig(
@@ -204,6 +208,7 @@ export async function saveAiConfig(
     aiLocationLng: number | null;
     aiLocationUrl: string;
     aiStorePhotoUrl: string;
+    aiStoreVideoUrl: string;
   }
 ): Promise<void> {
   const handoff = Math.max(
@@ -244,6 +249,7 @@ export async function saveAiConfig(
           : null,
       ai_location_url: cfg.aiLocationUrl.trim().slice(0, 500),
       ai_store_photo_url: cfg.aiStorePhotoUrl.trim().slice(0, 500),
+      ai_store_video_url: cfg.aiStoreVideoUrl.trim().slice(0, 500),
       updated_at: new Date().toISOString(),
     })
     .eq("store_id", storeId);

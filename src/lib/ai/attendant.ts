@@ -89,6 +89,8 @@ export function buildSystemPrompt(args: {
   hasLocationPin?: boolean;
   /** A loja tem foto da fachada: a IA pode enviar a imagem. */
   hasStorePhoto?: boolean;
+  /** A loja tem vídeo: a IA pode enviar o vídeo. */
+  hasStoreVideo?: boolean;
 }): string {
   const {
     storeName,
@@ -102,6 +104,7 @@ export function buildSystemPrompt(args: {
     storeAddress,
     hasLocationPin,
     hasStorePhoto,
+    hasStoreVideo,
   } = args;
   const storeUrl = `${baseUrl.replace(/\/+$/, "")}/loja/${slug}`;
   const address = (storeAddress ?? "").trim();
@@ -139,7 +142,10 @@ export function buildSystemPrompt(args: {
     hasStorePhoto
       ? "- Você PODE enviar uma foto da loja. Quando o cliente pedir para ver a loja, a fachada, o estabelecimento OU a localização/como chegar, responda com uma frase curta e inclua, no final, o marcador [[ENVIAR_FOTO]]. O sistema envia a foto automaticamente."
       : "",
-    hasLocationPin || hasStorePhoto
+    hasStoreVideo
+      ? "- Você PODE enviar um vídeo da loja. Quando o cliente pedir para ver a loja, os produtos, quiser um vídeo ou conhecer o espaço, responda com uma frase curta e inclua, no final, o marcador [[ENVIAR_VIDEO]]. O sistema envia o vídeo automaticamente."
+      : "",
+    hasLocationPin || hasStorePhoto || hasStoreVideo
       ? "- Os marcadores [[...]] são comandos internos: use-os só quando fizer sentido, nunca os explique ao cliente e nunca os escreva em outro contexto."
       : "",
     "",
@@ -162,22 +168,27 @@ export type ReplyDirectives = {
   sendLocation: boolean;
   /** A IA pediu para mandar a foto da loja. */
   sendPhoto: boolean;
+  /** A IA pediu para mandar o vídeo da loja. */
+  sendVideo: boolean;
 };
 
 /**
  * Separa a resposta da IA dos marcadores internos ([[ENVIAR_LOCALIZACAO]],
- * [[ENVIAR_FOTO]]) que pedem o envio do pino do mapa / da foto da loja.
+ * [[ENVIAR_FOTO]], [[ENVIAR_VIDEO]]) que pedem o envio do pino do mapa / da foto
+ * / do vídeo da loja.
  */
 export function parseReplyDirectives(reply: string): ReplyDirectives {
   const sendLocation = /\[\[\s*ENVIAR_LOCALIZACAO\s*\]\]/i.test(reply);
   const sendPhoto = /\[\[\s*ENVIAR_FOTO\s*\]\]/i.test(reply);
+  const sendVideo = /\[\[\s*ENVIAR_VIDEO\s*\]\]/i.test(reply);
   const text = reply
     .replace(/\[\[\s*ENVIAR_LOCALIZACAO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_FOTO\s*\]\]/gi, "")
+    .replace(/\[\[\s*ENVIAR_VIDEO\s*\]\]/gi, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { text, sendLocation, sendPhoto };
+  return { text, sendLocation, sendPhoto, sendVideo };
 }
 
 /** Gera a resposta do atendente. Retorna o texto, ou null se não houver conteúdo. */
