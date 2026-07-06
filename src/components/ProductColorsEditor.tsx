@@ -1,13 +1,37 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { defaultPickerHex } from "@/lib/colorSwatch";
+import {
+  defaultPickerHex,
+  hexForColorLabel,
+  swatchNeedsStrongBorder,
+} from "@/lib/colorSwatch";
 import { normalizeHex } from "@/lib/productColorHexes";
 
 export type ColorOptionEntry = {
   name: string;
   hex: string;
 };
+
+/** Cores prontas para o vendedor adicionar com 1 clique (bolinha na cor certa). */
+const COLOR_PRESETS: string[] = [
+  "Preto",
+  "Branco",
+  "Cinza",
+  "Bege",
+  "Nude",
+  "Marrom",
+  "Vermelho",
+  "Vinho",
+  "Rosa",
+  "Laranja",
+  "Amarelo",
+  "Verde",
+  "Verde militar",
+  "Azul",
+  "Azul marinho",
+  "Roxo",
+];
 
 /**
  * Cores do produto: nome + tom exato da bolinha na vitrine (<input type="color">).
@@ -46,6 +70,20 @@ export function ProductColorsEditor({
         i === index ? { ...e, hex: normalizeHex(hex) } : e
       );
       onEntriesChange(next);
+    },
+    [entries, onEntriesChange]
+  );
+
+  /** Adiciona (com a bolinha na cor certa) ou remove uma cor pronta. */
+  const togglePreset = useCallback(
+    (name: string) => {
+      const lower = name.toLowerCase();
+      const at = entries.findIndex((e) => e.name.toLowerCase() === lower);
+      if (at >= 0) {
+        onEntriesChange(entries.filter((_, i) => i !== at));
+      } else {
+        onEntriesChange([...entries, { name, hex: defaultPickerHex(name) }]);
+      }
     },
     [entries, onEntriesChange]
   );
@@ -119,6 +157,44 @@ export function ProductColorsEditor({
         >
           Adicionar cor
         </button>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-xs text-slate-500 mb-2">
+          Ou toque em uma cor pronta (a bolinha já vem na cor certa; dá para
+          ajustar o tom depois):
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {COLOR_PRESETS.map((name) => {
+            const active = entries.some(
+              (e) => e.name.toLowerCase() === name.toLowerCase()
+            );
+            const swatch = hexForColorLabel(name);
+            return (
+              <button
+                key={name}
+                type="button"
+                onClick={() => togglePreset(name)}
+                aria-pressed={active}
+                className={`inline-flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  active
+                    ? "bg-whatsapp text-white border-whatsapp"
+                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                <span
+                  className={`h-4 w-4 rounded-full shrink-0 ${
+                    swatchNeedsStrongBorder(swatch)
+                      ? "border border-slate-300"
+                      : ""
+                  }`}
+                  style={{ background: swatch }}
+                />
+                {name}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {entries.length > 0 ? (
