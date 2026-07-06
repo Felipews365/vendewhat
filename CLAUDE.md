@@ -464,17 +464,23 @@ tempo é por loja. **Migration:** rode
 - **Configuração:** no painel (aba Atendente de IA), o lojista escolhe o tempo de silêncio
   (30min/1h/2h/3h/6h/1 dia) e, opcionalmente, uma **mensagem fixa**; vazio = a IA gera com base na
   conversa (`generateFollowupReply` em [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts)).
-- **Cron:** o GitHub Action
-  [.github/workflows/whatsapp-followups.yml](.github/workflows/whatsapp-followups.yml) chama
-  `POST /api/whatsapp/followups?key=<CRON_SECRET>` **a cada 15 min**. O endpoint
-  ([followups/route.ts](src/app/api/whatsapp/followups/route.ts)) varre as lojas com follow-up
-  ligado (`listFollowupConfigs`), e para cada cliente cutuca se: tem mensagem do cliente,
-  `idle ∈ [minutos, minutos×3]` (não ressuscita conversas muito antigas), **não** está pausado
-  (global/handoff/manual) e ainda não foi cutucado desde a última fala dele
+- **Cron:** um workflow do **n8n** (self-hosted no mesmo VPS da Evolution/debounce) faz um
+  `GET /api/whatsapp/followups?key=<CRON_SECRET>` a cada **~5 min** (nó *Schedule Trigger* →
+  *HTTP Request*). O endpoint
+  ([followups/route.ts](src/app/api/whatsapp/followups/route.ts)) aceita `GET` e `POST`, varre as
+  lojas com follow-up ligado (`listFollowupConfigs`), e para cada cliente cutuca se: tem mensagem
+  do cliente, `idle ∈ [minutos, minutos×3]` (não ressuscita conversas muito antigas), **não** está
+  pausado (global/handoff/manual) e ainda não foi cutucado desde a última fala dele
   (`whatsapp_followups.last_followup_at >= lastUserAt`). Tetos de envio por loja/execução evitam
   timeout. Depois de enviar, grava a mensagem como `assistant` e atualiza `last_followup_at`.
+  - **Por que n8n e não GitHub Actions:** o `schedule` do GitHub é impreciso (dispara de 1 em 1h+,
+    não de 15 em 15 min) e a janela de follow-up é estreita (`[minutos, minutos×3]`), então o cron
+    do GitHub perdia a janela quase sempre e o `sent` vinha 0. O n8n roda de verdade a cada 5 min,
+    igual ao cron de debounce. O GitHub Action
+    [.github/workflows/whatsapp-followups.yml](.github/workflows/whatsapp-followups.yml) ficou só
+    com **disparo manual** (`workflow_dispatch`), como backup/depuração.
 - **Variável de ambiente extra:** `CRON_SECRET` (segredo que protege o endpoint; sem ele o endpoint
-  recusa). **Secrets do GitHub** para o workflow: `APP_BASE_URL` e `CRON_SECRET`.
+  recusa). O n8n usa o mesmo `APP_BASE_URL` + `CRON_SECRET` do workflow de debounce.
 
 ### Pós-venda automático (perguntar se chegou certinho)
 
@@ -495,7 +501,8 @@ Alguns **dias** depois do pedido, a IA manda uma mensagem perguntando se chegou 
   (`toWhatsAppNumber` em [src/lib/customerPhone.ts](src/lib/customerPhone.ts) prefixa o DDI 55) e
   grava `postsale_sent_at` (`markPostsaleSent`) para **não repetir**. Usa `orders.customer_phone`,
   `customer_name` e `order_number`.
-- Usa o mesmo `CRON_SECRET` e o mesmo GitHub Action (a cada 15 min) do follow-up.
+- Usa o mesmo `CRON_SECRET` e o mesmo cron do n8n (~5 min) do follow-up — o endpoint
+  [followups/route.ts](src/app/api/whatsapp/followups/route.ts) roda os dois na mesma chamada.
 
 ### Keep-alive (evitar pausa do plano Free)
 

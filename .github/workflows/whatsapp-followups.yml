@@ -1,12 +1,16 @@
 name: WhatsApp Follow-ups
 
-# Cutuca clientes que ficaram um tempo sem responder (cada loja escolhe o tempo
-# no painel). Chama um endpoint protegido que decide quem cutucar.
+# Cutuca clientes que ficaram um tempo sem responder + pós-venda (cada loja
+# escolhe o tempo no painel). Chama um endpoint protegido que decide quem cutucar.
+#
+# ATENÇÃO: o agendamento automático agora roda pelo n8n (self-hosted no VPS da
+# Evolution), pois o `schedule` do GitHub Actions é impreciso (dispara de 1 em
+# 1h ou mais, não de 15 em 15 min) e a janela de follow-up é estreita, então ele
+# perdia a janela quase sempre. O workflow do n8n faz um GET em
+# /api/whatsapp/followups?key=<CRON_SECRET> a cada ~5 min. Este arquivo ficou só
+# com o disparo MANUAL (botão "Run workflow"), como backup/depuração.
 
 on:
-  schedule:
-    # A cada 15 minutos. O endpoint respeita o tempo configurado por loja.
-    - cron: "*/15 * * * *"
   workflow_dispatch: # permite rodar manualmente pelo botão "Run workflow"
 
 jobs:
