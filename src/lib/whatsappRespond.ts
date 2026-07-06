@@ -21,6 +21,43 @@ import {
 
 type AnyObj = Record<string, unknown>;
 
+/**
+ * Quebra a resposta da IA em partes para enviar como mensagens separadas (cara de
+ * humano mandando vários balões, um "digitando…" antes de cada um). Quebra nos
+ * parágrafos (linhas em branco) e, se um parágrafo ficar muito longo, divide por
+ * frases. Linhas com link (URL) ficam intactas, junto do texto do parágrafo.
+ */
+export function splitReplyIntoParts(text: string): string[] {
+  const MAX = 300; // acima disso, tenta quebrar o parágrafo por frases.
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const parts: string[] = [];
+  for (const p of paragraphs) {
+    // Parágrafo curto, ou com link (não quebra o link do resto) → manda inteiro.
+    if (p.length <= MAX || /https?:\/\//i.test(p)) {
+      parts.push(p);
+      continue;
+    }
+    // Parágrafo longo sem link: agrupa frases até ~MAX por balão.
+    const sentences = p.match(/[^.!?…]+[.!?…]*\s*/g) ?? [p];
+    let buf = "";
+    for (const s of sentences) {
+      if (buf && (buf + s).length > MAX) {
+        parts.push(buf.trim());
+        buf = s;
+      } else {
+        buf += s;
+      }
+    }
+    if (buf.trim()) parts.push(buf.trim());
+  }
+
+  return parts.length ? parts : [text.trim()];
+}
+
 function mapProducts(rows: AnyObj[]): AttendantProduct[] {
   return rows.map((row) => {
     const price =
@@ -114,10 +151,16 @@ export async function respondToCustomer(
     parseReplyDirectives(reply);
   let sent = false;
   if (replyText) {
-    // "Digitando…" proporcional ao tamanho da resposta (entre 1,5s e 8s).
-    const typingMs = Math.min(Math.max(replyText.length * 45, 1500), 8000);
-    await sendText(cfg.evolutionInstance, customerPhone, replyText, typingMs);
-    await appendMessage(admin, cfg.storeId, customerPhone, "assistant", replyText);
+    // Manda em partes (vários balões), com "digitando…" antes de cada uma, para
+    // parecer um atendente humano digitando aos poucos. Cada parte também vira uma
+    // linha no histórico (importante p/ a detecção de eco do handoff no webhook).
+    const parts = splitReplyIntoParts(replyText);
+    for (const part of parts) {
+      // "Digitando…" proporcional ao tamanho da parte (entre 1,2s e 5s).
+      const typingMs = Math.min(Math.max(part.length * 45, 1200), 5000);
+      await sendText(cfg.evolutionInstance, customerPhone, part, typingMs);
+      await appendMessage(admin, cfg.storeId, customerPhone, "assistant", part);
+    }
     sent = true;
   }
   if (wantLocation && hasLocationPin) {

@@ -127,11 +127,13 @@ export async function POST(req: Request) {
     // Pode ser o eco da própria IA (ignora) ou o dono respondendo manualmente.
     // Quando é o dono, pausa a IA para esse cliente pelo tempo de "handoff".
     if (text && cfg.aiHandoffMinutes > 0) {
+      // Janela maior porque a IA agora responde em várias partes (vários balões);
+      // cada uma volta como fromMe e precisa ser reconhecida como eco (não handoff).
       const recentAi = await getLastAssistantMessages(
         admin,
         cfg.storeId,
         customerPhone,
-        3
+        8
       );
       const isEcho = recentAi.some((c) => c.trim() === text);
       if (!isEcho) {
