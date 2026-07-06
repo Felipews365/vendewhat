@@ -18,6 +18,7 @@ type Body = {
   aiPostsaleMessage?: string;
   aiCartMinutes?: number;
   aiCartMessage?: string;
+  aiOnlineOnly?: boolean;
   aiLocationAddress?: string;
   /** Link do Google Maps (ou "lat,lng") de onde a loja fica. */
   aiLocationUrl?: string;
@@ -90,6 +91,7 @@ export async function POST(req: Request) {
       typeof body.aiCartMinutes === "number" ? body.aiCartMinutes : 0,
     aiCartMessage:
       typeof body.aiCartMessage === "string" ? body.aiCartMessage : "",
+    aiOnlineOnly: body.aiOnlineOnly === true,
     aiLocationAddress:
       typeof body.aiLocationAddress === "string" ? body.aiLocationAddress : "",
     aiLocationUrl: locationUrl,

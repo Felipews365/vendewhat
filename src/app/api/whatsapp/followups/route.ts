@@ -90,6 +90,7 @@ async function buildStorePrompt(
     products: mapProducts((productRows ?? []) as AnyObj[]),
     baseUrl: process.env.APP_BASE_URL || "",
     isFirstContact: false,
+    onlineOnly: cfg.aiOnlineOnly,
   });
   return { slug: String(store.slug), storeName, systemPrompt };
 }

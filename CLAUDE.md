@@ -381,6 +381,16 @@ loja, configurado na aba **Atendente de IA** (seção "Localização e foto da l
 (adiciona `ai_location_address`, `ai_location_lat`, `ai_location_lng`,
 `ai_location_url`, `ai_store_photo_url` em `store_whatsapp`).
 
+- **Loja só online (`ai_online_only`, default `false`):** caixinha "Minha loja é só
+  online (não tem ponto físico)" na aba Atendente de IA. Quando marcada, o painel
+  **esconde** a seção "Localização e foto da loja" e o atendimento
+  ([whatsappRespond.ts](src/lib/whatsappRespond.ts)) força `storeAddress=""` e
+  `hasLocationPin/hasStorePhoto/hasStoreVideo=false` — a IA **nunca** envia pino/foto/vídeo
+  e, via `buildSystemPrompt({ onlineOnly })`, é instruída a explicar que a loja é 100% online
+  (sem endereço/visita) e mandar o link do catálogo. **Migration:**
+  [supabase-migration-whatsapp-online-only.sql](supabase-migration-whatsapp-online-only.sql)
+  (só adiciona a coluna booleana).
+
 - **Endereço:** `ai_location_address` (onde a loja fica — pode ser igual ou
   diferente do `storefront.pickupAddress` de retirada). No webhook, se vazio, cai
   no endereço de retirada (`cfg.aiLocationAddress.trim() || pickupAddress`).

@@ -101,10 +101,13 @@ export async function respondToCustomer(
 
   const storeName = typeof store.name === "string" ? store.name : "Loja";
   const pickupAddress = storefrontFromDb(store.storefront).pickupAddress;
-  const storeAddress = cfg.aiLocationAddress.trim() || pickupAddress;
-  const hasLocationPin = cfg.aiLocationLat != null && cfg.aiLocationLng != null;
-  const hasStorePhoto = Boolean(cfg.aiStorePhotoUrl);
-  const hasStoreVideo = Boolean(cfg.aiStoreVideoUrl);
+  // Loja só online: sem endereço/pino/foto/vídeo (a IA avisa que é só online).
+  const onlineOnly = cfg.aiOnlineOnly;
+  const storeAddress = onlineOnly ? "" : cfg.aiLocationAddress.trim() || pickupAddress;
+  const hasLocationPin =
+    !onlineOnly && cfg.aiLocationLat != null && cfg.aiLocationLng != null;
+  const hasStorePhoto = !onlineOnly && Boolean(cfg.aiStorePhotoUrl);
+  const hasStoreVideo = !onlineOnly && Boolean(cfg.aiStoreVideoUrl);
 
   const { data: productRows } = await admin
     .from("products")
@@ -139,6 +142,7 @@ export async function respondToCustomer(
     baseUrl: process.env.APP_BASE_URL || "",
     isFirstContact,
     storeAddress,
+    onlineOnly,
     hasLocationPin,
     hasStorePhoto,
     hasStoreVideo,

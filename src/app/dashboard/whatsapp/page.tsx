@@ -121,6 +121,7 @@ export default function WhatsAppIaPage() {
   const [postsaleDays, setPostsaleDays] = useState(0);
   const [postsaleMessage, setPostsaleMessage] = useState("");
   const [cartMinutes, setCartMinutes] = useState(0);
+  const [onlineOnly, setOnlineOnly] = useState(false);
   const [locationAddress, setLocationAddress] = useState("");
   const [locationUrl, setLocationUrl] = useState("");
   // Campos de latitude/longitude (sincronizados com o link acima).
@@ -220,7 +221,7 @@ export default function WhatsAppIaPage() {
       const { data: cfg } = await supabase
         .from("store_whatsapp")
         .select(
-          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_cart_minutes, ai_location_address, ai_location_url, ai_store_photo_url, ai_store_video_url"
+          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_cart_minutes, ai_online_only, ai_location_address, ai_location_url, ai_store_photo_url, ai_store_video_url"
         )
         .eq("store_id", store.id)
         .maybeSingle();
@@ -255,6 +256,7 @@ export default function WhatsAppIaPage() {
         if (typeof cfg.ai_cart_minutes === "number") {
           setCartMinutes(cfg.ai_cart_minutes);
         }
+        setOnlineOnly(cfg.ai_online_only === true);
         setLocationAddress(
           typeof cfg.ai_location_address === "string" ? cfg.ai_location_address : ""
         );
@@ -342,6 +344,7 @@ export default function WhatsAppIaPage() {
           aiPostsaleDays: postsaleDays,
           aiPostsaleMessage: postsaleMessage,
           aiCartMinutes: cartMinutes,
+          aiOnlineOnly: onlineOnly,
           aiLocationAddress: locationAddress,
           aiLocationUrl: locationUrl,
           aiStorePhotoUrl: storePhotoUrl,
@@ -764,7 +767,28 @@ export default function WhatsAppIaPage() {
           />
         </div>
 
-        {/* Localização e foto da loja */}
+        {/* Loja só online (sem ponto físico) */}
+        <label className="flex items-start gap-3 rounded-xl border border-stone-200 dark:border-slate-700 p-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={onlineOnly}
+            onChange={(e) => setOnlineOnly(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-stone-300 text-violet-700 focus:ring-violet-600 dark:border-slate-600 dark:bg-slate-800"
+          />
+          <span>
+            <span className="block text-sm font-medium text-stone-800 dark:text-slate-100">
+              Minha loja é só online (não tem ponto físico)
+            </span>
+            <span className="mt-0.5 block text-xs text-stone-500 dark:text-slate-400">
+              Marque para a IA saber que não há endereço para visita. Ela não vai
+              enviar localização, foto nem vídeo da loja — se o cliente pedir o
+              endereço, explica que a loja é só online e manda o link do catálogo.
+            </span>
+          </span>
+        </label>
+
+        {/* Localização e foto da loja (escondido quando a loja é só online) */}
+        {!onlineOnly && (
         <div className="rounded-xl border border-stone-200 dark:border-slate-700 p-4 space-y-4">
           <div>
             <h3 className="text-sm font-semibold text-stone-800 dark:text-slate-100">
@@ -1017,6 +1041,7 @@ export default function WhatsAppIaPage() {
             </label>
           </div>
         </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">

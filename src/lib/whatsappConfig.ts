@@ -43,6 +43,8 @@ export type WhatsAppConfig = {
   aiCartMinutes: number;
   /** Mensagem fixa de recuperação de carrinho. Vazio = a IA gera citando os itens. */
   aiCartMessage: string;
+  /** Loja é só online (sem ponto físico): a IA não envia localização/foto/vídeo. */
+  aiOnlineOnly: boolean;
   /** Endereço de onde a loja fica (a IA informa quando perguntam). Vazio = usa o de retirada. */
   aiLocationAddress: string;
   /** Coordenadas para o pino do mapa do WhatsApp. null = sem pino. */
@@ -115,6 +117,7 @@ function rowToConfig(row: Record<string, unknown>): WhatsAppConfig {
         : Number(row.ai_cart_minutes ?? 0) || 0,
     aiCartMessage:
       typeof row.ai_cart_message === "string" ? row.ai_cart_message : "",
+    aiOnlineOnly: row.ai_online_only === true,
     aiLocationAddress:
       typeof row.ai_location_address === "string" ? row.ai_location_address : "",
     aiLocationLat:
@@ -131,7 +134,7 @@ function rowToConfig(row: Record<string, unknown>): WhatsAppConfig {
 }
 
 const SELECT =
-  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_cart_minutes, ai_cart_message, ai_location_address, ai_location_lat, ai_location_lng, ai_location_url, ai_store_photo_url, ai_store_video_url";
+  "store_id, evolution_instance, webhook_token, connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_paused, ai_paused_until, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_cart_minutes, ai_cart_message, ai_online_only, ai_location_address, ai_location_lat, ai_location_lng, ai_location_url, ai_store_photo_url, ai_store_video_url";
 
 /** Lê a config da loja (ou null se ainda não existe). */
 export async function getConfig(
@@ -215,6 +218,7 @@ export async function saveAiConfig(
     aiPostsaleMessage: string;
     aiCartMinutes: number;
     aiCartMessage: string;
+    aiOnlineOnly: boolean;
     aiLocationAddress: string;
     aiLocationLat: number | null;
     aiLocationLng: number | null;
@@ -256,6 +260,7 @@ export async function saveAiConfig(
       ai_postsale_message: cfg.aiPostsaleMessage.trim().slice(0, 1000),
       ai_cart_minutes: cartMinutes,
       ai_cart_message: cfg.aiCartMessage.trim().slice(0, 1000),
+      ai_online_only: cfg.aiOnlineOnly,
       ai_location_address: cfg.aiLocationAddress.trim().slice(0, 300),
       ai_location_lat:
         cfg.aiLocationLat != null && Number.isFinite(cfg.aiLocationLat)

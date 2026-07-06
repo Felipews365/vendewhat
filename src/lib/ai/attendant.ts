@@ -85,6 +85,8 @@ export function buildSystemPrompt(args: {
   isFirstContact: boolean;
   /** Endereço/localização da loja; vazio = não informado. */
   storeAddress?: string;
+  /** Loja é só online (sem ponto físico): a IA não oferece endereço/visita. */
+  onlineOnly?: boolean;
   /** A loja tem coordenadas: a IA pode enviar o pino do mapa do WhatsApp. */
   hasLocationPin?: boolean;
   /** A loja tem foto da fachada: a IA pode enviar a imagem. */
@@ -102,6 +104,7 @@ export function buildSystemPrompt(args: {
     baseUrl,
     isFirstContact,
     storeAddress,
+    onlineOnly,
     hasLocationPin,
     hasStorePhoto,
     hasStoreVideo,
@@ -130,7 +133,9 @@ export function buildSystemPrompt(args: {
     "- Escreva como um atendente humano de verdade: natural, caloroso, frases curtas e no máximo um emoji. NÃO use markdown (nada de **, ##, listas com [colchetes] ou links [texto](url)). Se precisar destacar algo, use *um asterisco só* para negrito, do jeito do WhatsApp.",
     `- Ao mandar o link, use um tom acolhedor, a URL numa linha só para ela e uma frase de apoio no final (numa linha separada). Siga EXATAMENTE este padrão de 3 partes (varie um pouco as palavras, mas mantenha a estrutura: abertura + link isolado + frase final):\nClaro! 😊 Segue o link da loja para você conferir nossos produtos já com valores:\n${storeUrl}\n\nDá uma olhada com calma e, se precisar de ajuda, estou aqui!`,
     "- Não prometa descontos ou condições que não estejam nas informações fornecidas.",
-    address
+    onlineOnly
+      ? "- Esta loja é 100% ONLINE: NÃO tem loja física, endereço para visita, nem ponto de retirada. Se o cliente pedir a localização, o endereço, para visitar ou conhecer a loja, explique com gentileza que a loja é só online (tudo pelo WhatsApp e pelo catálogo) e direcione para o link da loja. NUNCA invente endereço, nem diga que vai verificar um endereço."
+      : address
       ? "- Se o cliente pedir a localização, o endereço ou como chegar na loja, informe o endereço abaixo. Não invente endereço."
       : "- A loja não cadastrou um endereço. Se o cliente pedir a localização, diga que vai verificar com a loja; não invente endereço.",
     hasLocationPin
@@ -154,7 +159,9 @@ export function buildSystemPrompt(args: {
       ? "- Os marcadores [[...]] são comandos internos: use-os só quando fizer sentido, nunca os explique ao cliente e nunca os escreva em outro contexto."
       : "",
     "",
-    address
+    onlineOnly
+      ? "LOCALIZAÇÃO DA LOJA:\n(Loja 100% online — sem endereço físico.)"
+      : address
       ? `LOCALIZAÇÃO DA LOJA:\n${address}\nMapa: ${mapsLink(address)}`
       : "LOCALIZAÇÃO DA LOJA:\n(Endereço não cadastrado.)",
     "",
