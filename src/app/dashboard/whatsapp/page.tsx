@@ -917,7 +917,8 @@ export default function WhatsAppIaPage() {
               Foto da loja
             </label>
             <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
-              A IA envia esta foto quando o cliente pede para ver a loja.
+              A IA envia esta foto quando o cliente pede para ver a loja ou a
+              localização.
             </p>
             {storePhotoUrl && (
               <div className="mt-2 flex items-center gap-3">

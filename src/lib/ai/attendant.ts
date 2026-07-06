@@ -135,7 +135,11 @@ export function buildSystemPrompt(args: {
     hasLocationPin
       ? `- Você PODE enviar a localização no mapa do WhatsApp (o pino). Quando o cliente pedir a localização/endereço/como chegar, responda com uma frase curta e inclua, no final da mensagem, o marcador [[ENVIAR_LOCALIZACAO]].${
           hasStorePhoto
-            ? " Como esta loja TEM foto cadastrada, inclua TAMBÉM o marcador [[ENVIAR_FOTO]] logo em seguida, para o cliente ver a fachada junto com a localização."
+            ? " Como esta loja TEM foto cadastrada, inclua TAMBÉM [[ENVIAR_FOTO]] logo em seguida, para o cliente ver a loja junto com a localização."
+            : ""
+        }${
+          hasStoreVideo
+            ? " Como esta loja TEM vídeo cadastrado, inclua TAMBÉM [[ENVIAR_VIDEO]] logo em seguida, para o cliente ver a loja em vídeo junto com a localização."
             : ""
         } O sistema envia tudo automaticamente em seguida.`
       : "",
@@ -143,7 +147,7 @@ export function buildSystemPrompt(args: {
       ? "- Você PODE enviar uma foto da loja. Quando o cliente pedir para ver a loja, a fachada, o estabelecimento OU a localização/como chegar, responda com uma frase curta e inclua, no final, o marcador [[ENVIAR_FOTO]]. O sistema envia a foto automaticamente."
       : "",
     hasStoreVideo
-      ? "- Você PODE enviar um vídeo da loja. Quando o cliente pedir para ver a loja, os produtos, quiser um vídeo ou conhecer o espaço, responda com uma frase curta e inclua, no final, o marcador [[ENVIAR_VIDEO]]. O sistema envia o vídeo automaticamente."
+      ? "- Você PODE enviar um vídeo da loja. Quando o cliente pedir para ver a loja, os produtos, o espaço OU a localização/como chegar, responda com uma frase curta e inclua, no final, o marcador [[ENVIAR_VIDEO]]. O sistema envia o vídeo automaticamente."
       : "",
     hasLocationPin || hasStorePhoto || hasStoreVideo
       ? "- Os marcadores [[...]] são comandos internos: use-os só quando fizer sentido, nunca os explique ao cliente e nunca os escreva em outro contexto."
