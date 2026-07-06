@@ -143,8 +143,13 @@ export default function WhatsAppIaPage() {
   const [conversations, setConversations] = useState<RecentCustomer[]>([]);
   const [pauseBusy, setPauseBusy] = useState(false);
   const [newPausePhone, setNewPausePhone] = useState("");
-  // Duração escolhida ao pausar um cliente da lista (minutes; null = até reativar).
+  // Duração PADRÃO ao pausar um cliente da lista (minutes; null = até reativar).
   const [customerDuration, setCustomerDuration] = useState<number | null>(30);
+  // Duração escolhida POR contato (sobrepõe o padrão só naquela linha). A chave
+  // é o telefone; sem entrada = usa o padrão acima.
+  const [rowDuration, setRowDuration] = useState<Record<string, number | null>>(
+    {}
+  );
 
   const [tab, setTab] = useState<"conexao" | "ia" | "pausar">("conexao");
 
@@ -1231,7 +1236,7 @@ export default function WhatsAppIaPage() {
               Clientes
             </span>
             <label className="flex items-center gap-2 text-xs text-stone-500 dark:text-slate-400">
-              Pausar por:
+              Tempo padrão:
               <select
                 value={customerDuration ?? ""}
                 onChange={(e) =>
@@ -1290,13 +1295,46 @@ export default function WhatsAppIaPage() {
                       Reativar
                     </button>
                   ) : (
-                    <button
-                      onClick={() => pauseCustomer(c.phone, customerDuration)}
-                      disabled={pauseBusy}
-                      className="shrink-0 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
-                    >
-                      Pausar
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <select
+                        value={
+                          (c.phone in rowDuration
+                            ? rowDuration[c.phone]
+                            : customerDuration) ?? ""
+                        }
+                        onChange={(e) =>
+                          setRowDuration((prev) => ({
+                            ...prev,
+                            [c.phone]:
+                              e.target.value === ""
+                                ? null
+                                : Number(e.target.value),
+                          }))
+                        }
+                        title="Por quanto tempo pausar este contato"
+                        className="rounded-lg border border-stone-300 px-1.5 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                      >
+                        {PAUSE_DURATIONS.map((d) => (
+                          <option key={d.label} value={d.minutes ?? ""}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() =>
+                          pauseCustomer(
+                            c.phone,
+                            c.phone in rowDuration
+                              ? rowDuration[c.phone]
+                              : customerDuration
+                          )
+                        }
+                        disabled={pauseBusy}
+                        className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
+                      >
+                        Pausar
+                      </button>
+                    </div>
                   )}
                 </li>
               ))}

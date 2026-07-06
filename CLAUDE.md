@@ -502,8 +502,10 @@ A tela [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) é dividida em *
 (`listRecentCustomers` em [whatsappConfig.ts](src/lib/whatsappConfig.ts), das `whatsapp_messages`)
 mesclados com os pausados; cada linha mostra um **selo de status** — "IA atendendo" (verde),
 "Você assumiu" (handoff) / "Pausado por você" (manual), "IA pausada"/"IA desligada" — e um botão
-**Pausar** (usa a duração escolhida no seletor) ou **Reativar**. Durações: 15min/30min/1h/3h/1 dia/
-"até eu reativar". Há ainda um campo para pausar um número que ainda não apareceu.
+**Pausar** ou **Reativar**. Cada linha tem seu **próprio seletor de tempo** (estado `rowDuration`
+por telefone) que começa no **tempo padrão** do topo (`customerDuration`) e pode ser mudado só
+naquele contato — o botão Pausar daquela linha usa esse valor. Durações: 15min/30min/1h/3h/1 dia/
+"até eu reativar". Há ainda um campo para pausar um número que ainda não apareceu (usa o tempo padrão).
 
 ### Follow-up automático (cutucar quem sumiu)
 
