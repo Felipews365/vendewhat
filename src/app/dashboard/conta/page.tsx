@@ -379,6 +379,30 @@ export default function ContaPage() {
             </svg>
           }
         />
+        <AccountRow
+          href="/dashboard/pixels"
+          label="Pixels e rastreamento"
+          icon={
+            <svg
+              className="h-5 w-5 text-sky-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M20.488 9A9.004 9.004 0 0015 3.512V9h5.488z"
+              />
+            </svg>
+          }
+        />
       </div>
 
       <SectionTitle>Ajuda</SectionTitle>

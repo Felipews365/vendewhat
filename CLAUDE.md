@@ -126,9 +126,11 @@ Orientações para o Claude Code trabalhar neste repositório.
   página do banner. Sem migration (JSONB).
 - **Pixels e rastreamento (por loja):** cada lojista cola o **próprio** Pixel do Facebook/Meta
   (`storefront.facebookPixelId`, só dígitos) e a **tag do Google** (`storefront.googleAnalyticsId` —
-  GA4 `G-…`, Google Ads `AW-…` ou Tag Manager `GTM-…`) no painel do editor
-  ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), atalho/painel
-  `marketing` "Pixels e rastreamento"). Os scripts carregam **só na loja pública**
+  GA4 `G-…`, Google Ads `AW-…` ou Tag Manager `GTM-…`) na página dedicada
+  [/dashboard/pixels](src/app/dashboard/pixels/page.tsx), acessada por uma linha "Pixels e
+  rastreamento" na seção "Loja" da [Conta](src/app/dashboard/conta/page.tsx) (ficam junto dos IDs no
+  JSONB `storefront`, então a página só edita esses dois campos e preserva o resto). Os scripts
+  carregam **só na loja pública**
   (`/loja/[slug]`), renderizados por
   [StoreTrackingScripts.tsx](src/components/StoreTrackingScripts.tsx) (via `next/script`) injetado no
   server component [page.tsx](src/app/loja/[slug]/page.tsx) — só os IDs **daquela** loja (multi-tenant,
