@@ -309,6 +309,12 @@ uma instância Evolution e uma config de IA por loja.
   primeiro contato quando **a IA ainda não falou** na conversa (`!full.some(t => t.role ===
   "assistant")`, robusto ao agrupamento de mensagens) e passa `isFirstContact` para
   `buildSystemPrompt` em [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts).
+- **Envio do link da loja (URL pura, padrão de 3 partes):** o `buildSystemPrompt` instrui a IA a
+  mandar o link como **URL pura numa linha só** (nunca markdown `[texto](url)`, que o WhatsApp quebra)
+  e num padrão acolhedor de 3 blocos — abertura + link isolado + frase de apoio (ex.: "Claro! 😊
+  Segue o link…" / URL / "Dá uma olhada com calma…"). Combinado com a resposta em partes, cada bloco
+  vira um balão; o balão do link ganha a **prévia rica** (card de Open Graph) que o WhatsApp gera da
+  página `/loja/[slug]`.
 - **Espera + agrupamento de mensagens (debounce por tabela + cron):** para o cliente que manda
   várias mensagens seguidas, a IA espera ele parar de digitar e responde tudo de uma vez. O
   [webhook](src/app/api/whatsapp/webhook/route.ts) **não gera resposta** — ele grava a mensagem e
