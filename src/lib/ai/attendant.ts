@@ -130,10 +130,14 @@ export function buildSystemPrompt(args: {
       ? "- Se o cliente pedir a localização, o endereço ou como chegar na loja, informe o endereço abaixo. Não invente endereço."
       : "- A loja não cadastrou um endereço. Se o cliente pedir a localização, diga que vai verificar com a loja; não invente endereço.",
     hasLocationPin
-      ? "- Você PODE enviar a localização no mapa do WhatsApp (o pino). Quando o cliente pedir a localização/endereço/como chegar, responda com uma frase curta e inclua, no final da mensagem, o marcador [[ENVIAR_LOCALIZACAO]]. O sistema envia o pino do mapa automaticamente em seguida."
+      ? `- Você PODE enviar a localização no mapa do WhatsApp (o pino). Quando o cliente pedir a localização/endereço/como chegar, responda com uma frase curta e inclua, no final da mensagem, o marcador [[ENVIAR_LOCALIZACAO]].${
+          hasStorePhoto
+            ? " Como esta loja TEM foto cadastrada, inclua TAMBÉM o marcador [[ENVIAR_FOTO]] logo em seguida, para o cliente ver a fachada junto com a localização."
+            : ""
+        } O sistema envia tudo automaticamente em seguida.`
       : "",
     hasStorePhoto
-      ? "- Você PODE enviar uma foto da loja. Quando o cliente pedir para ver a loja, a fachada ou o estabelecimento, responda com uma frase curta e inclua, no final, o marcador [[ENVIAR_FOTO]]. O sistema envia a foto automaticamente."
+      ? "- Você PODE enviar uma foto da loja. Quando o cliente pedir para ver a loja, a fachada, o estabelecimento OU a localização/como chegar, responda com uma frase curta e inclua, no final, o marcador [[ENVIAR_FOTO]]. O sistema envia a foto automaticamente."
       : "",
     hasLocationPin || hasStorePhoto
       ? "- Os marcadores [[...]] são comandos internos: use-os só quando fizer sentido, nunca os explique ao cliente e nunca os escreva em outro contexto."
