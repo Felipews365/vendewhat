@@ -5,12 +5,13 @@ import { ensureConfig, updateConnection } from "@/lib/whatsappConfig";
 import {
   connectInstance,
   createInstance,
+  getWebhookInfo,
   isEvolutionConfigured,
 } from "@/lib/evolution";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(req: Request) {
   if (!isEvolutionConfigured()) {
     return NextResponse.json(
       { ok: false, error: "Integração WhatsApp não configurada no servidor." },
@@ -18,10 +19,21 @@ export async function POST() {
     );
   }
 
-  const baseUrl = process.env.APP_BASE_URL;
+  // Endereço base do webhook: usa o domínio REAL desta requisição (auto-corrige);
+  // só cai no APP_BASE_URL se por algum motivo não der para ler o host.
+  const hdrHost =
+    req.headers.get("x-forwarded-host") || req.headers.get("host") || "";
+  const hdrProto = req.headers.get("x-forwarded-proto") || "https";
+  const originFromReq = hdrHost
+    ? `${hdrProto}://${hdrHost}`
+    : new URL(req.url).origin;
+  const baseUrl = (originFromReq || process.env.APP_BASE_URL || "").replace(
+    /\/+$/,
+    ""
+  );
   if (!baseUrl) {
     return NextResponse.json(
-      { ok: false, error: "APP_BASE_URL não configurada no servidor." },
+      { ok: false, error: "Não foi possível determinar a URL do app." },
       { status: 503 }
     );
   }
@@ -53,8 +65,15 @@ export async function POST() {
 
   try {
     const cfg = await ensureConfig(admin, store.id as string);
-    const webhookUrl = `${baseUrl.replace(/\/+$/, "")}/api/whatsapp/webhook?token=${cfg.webhookToken}`;
+    const webhookUrl = `${baseUrl}/api/whatsapp/webhook?token=${cfg.webhookToken}`;
     await createInstance(cfg.evolutionInstance, webhookUrl);
+    // Diagnóstico: mostra a URL que tentamos gravar e o que a Evolution guardou.
+    const storedWebhook = await getWebhookInfo(cfg.evolutionInstance);
+    console.log("[whatsapp/connect] webhook", {
+      instance: cfg.evolutionInstance,
+      webhookUrl,
+      stored: storedWebhook,
+    });
     const qr = await connectInstance(cfg.evolutionInstance);
     await updateConnection(admin, store.id as string, "connecting");
     return NextResponse.json({

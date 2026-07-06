@@ -141,11 +141,32 @@ export async function setWebhook(
     webhook: {
       enabled: true,
       url: webhookUrl,
+      // Manda os dois padrões de nome (versões diferentes da Evolution usam um ou outro).
       byEvents: false,
-      base64: true,
+      webhookByEvents: false,
+      base64: false,
+      webhookBase64: false,
       events: [...EVENTS],
     },
   });
+}
+
+/**
+ * Consulta o webhook atualmente gravado na instância (para diagnóstico).
+ * Nunca lança — devolve o objeto de erro para logar.
+ */
+export async function getWebhookInfo(
+  instance: string
+): Promise<Record<string, unknown>> {
+  try {
+    const data = await call<Record<string, unknown>>(
+      "GET",
+      `/webhook/find/${encodeURIComponent(instance)}`
+    );
+    return data ?? {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /** Conecta a instância e retorna o QR Code (base64) / pairing code. */

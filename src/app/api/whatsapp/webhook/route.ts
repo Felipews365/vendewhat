@@ -123,12 +123,35 @@ export async function POST(req: Request) {
 
   if (!text) return ok(); // só atende texto
 
+  // Log de diagnóstico: confirma que o webhook chegou e o estado da IA.
+  console.log("[whatsapp/webhook] msg recebida", {
+    store: cfg.storeId,
+    from: customerPhone,
+    aiEnabled: cfg.aiEnabled,
+    aiConfigured: isAiConfigured(),
+  });
+
   // Se a IA está desligada, não responde (mas a loja ainda recebe a mensagem normalmente).
-  if (!cfg.aiEnabled || !isAiConfigured()) return ok();
+  if (!cfg.aiEnabled) {
+    console.log("[whatsapp/webhook] ignorado: IA desligada", cfg.storeId);
+    return ok();
+  }
+  if (!isAiConfigured()) {
+    console.log(
+      "[whatsapp/webhook] ignorado: OPENAI_API_KEY ausente no servidor"
+    );
+    return ok();
+  }
 
   // Atendimento pausado — globalmente ou só para este cliente.
-  if (globalPauseActive(cfg)) return ok();
-  if (await isCustomerPaused(admin, cfg.storeId, customerPhone)) return ok();
+  if (globalPauseActive(cfg)) {
+    console.log("[whatsapp/webhook] ignorado: pausa global", cfg.storeId);
+    return ok();
+  }
+  if (await isCustomerPaused(admin, cfg.storeId, customerPhone)) {
+    console.log("[whatsapp/webhook] ignorado: cliente pausado", customerPhone);
+    return ok();
+  }
 
   try {
     // Dados da loja + catálogo
@@ -197,6 +220,9 @@ export async function POST(req: Request) {
     await appendMessage(admin, cfg.storeId, customerPhone, "user", text);
 
     const reply = await generateReply(systemPrompt, history, text);
+    if (!reply) {
+      console.log("[whatsapp/webhook] IA retornou resposta vazia", cfg.storeId);
+    }
     if (reply) {
       const { text: replyText, sendLocation: wantLocation, sendPhoto } =
         parseReplyDirectives(reply);
