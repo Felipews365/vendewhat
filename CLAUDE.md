@@ -103,7 +103,10 @@ Orientações para o Claude Code trabalhar neste repositório.
     foto), + a seção "Texto geral". Carrega/salva o próprio `storefront` (botão **Salvar**). O clique
     no banner dentro do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
     (canvas + FAB) navega para essa página (`openBannerEditor`); o antigo painel `banner` do modal
-    ficou **legado/inacessível** (marcado no código, a remover depois).
+    ficou **legado/inacessível** (marcado no código, a remover depois). Ao **adicionar** uma foto, a
+    página **rola até o card recém-criado e o destaca** (anel + etiqueta "Ajuste texto e formato
+    aqui", some após 3s) — via `highlightUrl`/`highlightRef` — para o lojista não perder o card lá no
+    fim da lista e configurar texto/formato na hora.
   - **Migração:** `storefrontFromDb` (`heroSlidesFromDb`) migra formatos antigos — `heroImages:
     string[]`, `heroCarousels` (faixas), `heroImage` (única) → viram slides herdando o antigo formato
     global `heroLayout`/`heroSplitPhotoSide`. Sem migration de banco: tudo no JSONB.
@@ -328,10 +331,21 @@ uma instância Evolution e uma config de IA por loja.
   do cliente após a última fala da IA = `full.slice(splitIdx)`), o contexto anterior, detecta
   primeiro contato (`!full.some(t => t.role === "assistant")`), gera com `generateReply` e envia. É a
   lógica que antes ficava no webhook — agora vive aqui e roda no cron.
-- **"Digitando…" antes de enviar:** `sendText` ([evolution.ts](src/lib/evolution.ts)) aceita um
-  `delayMs` — a Evolution mostra o presence *composing* por esse tempo e só então entrega a
-  mensagem. `respondToCustomer` calcula o tempo proporcional ao tamanho da resposta
-  (`replyText.length * 45`, entre 1,5s e 8s).
+- **Resposta em partes (vários balões) com "digitando…":** `sendText`
+  ([evolution.ts](src/lib/evolution.ts)) aceita um `delayMs` — a Evolution mostra o presence
+  *composing* por esse tempo e só então entrega a mensagem. Em vez de mandar tudo num balão só,
+  `respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)) quebra a resposta com
+  `splitReplyIntoParts` (por **parágrafos** = linha em branco; parágrafo muito longo é dividido por
+  **frases**, tetos de 300 chars; linhas com **link** ficam intactas) e envia **cada bloco como uma
+  mensagem separada**, com um "digitando…" proporcional antes de cada uma
+  (`part.length * 45`, entre 1,2s e 5s) — cara de humano mandando aos poucos. A IA é instruída no
+  `buildSystemPrompt` a separar ideias por linha em branco (2 a 4 balões: saudação / resposta /
+  link-fechamento). **Cada parte também vira uma linha `assistant` no histórico**, o que importa
+  para a detecção de eco do handoff (ver abaixo).
+- **Handoff × resposta em partes:** como a IA agora manda vários balões (cada um volta como `fromMe`
+  no `MESSAGES_UPSERT`), o [webhook](src/app/api/whatsapp/webhook/route.ts) compara com as **últimas
+  8** mensagens `assistant` (`getLastAssistantMessages`, era 3) para reconhecer os ecos e **não**
+  tratar os próprios balões da IA como o dono assumindo a conversa.
 - **Entende imagem e áudio:** o webhook detecta `imageMessage`/`audioMessage` (desembrulhando
   efêmeras/"ver uma vez" com `unwrapMessage`) e baixa o conteúdo via `getMediaBase64`
   (`POST /chat/getBase64FromMediaMessage/{instance}` em [evolution.ts](src/lib/evolution.ts)). A
@@ -389,12 +403,14 @@ loja, configurado na aba **Atendente de IA** (seção "Localização e foto da l
 - **Como a IA dispara:** o `buildSystemPrompt`
   ([src/lib/ai/attendant.ts](src/lib/ai/attendant.ts)) recebe `hasLocationPin` /
   `hasStorePhoto` / `hasStoreVideo` e instrui a IA a incluir os marcadores
-  `[[ENVIAR_LOCALIZACAO]]` / `[[ENVIAR_FOTO]]` / `[[ENVIAR_VIDEO]]` no fim da resposta
-  (quando pedem a localização e há foto, a foto vai junto). O `respondToCustomer`
+  `[[ENVIAR_LOCALIZACAO]]` / `[[ENVIAR_FOTO]]` / `[[ENVIAR_VIDEO]]` no fim da resposta. Quando o
+  cliente pede a localização/endereço/como chegar, a IA **manda tudo de uma vez, sem perguntar**
+  ("quer que eu envie o mapa?" é proibido no prompt): o **endereço em texto** + o **pino** +
+  (se cadastrados) a **foto** e/ou o **vídeo**. O `respondToCustomer`
   ([src/lib/whatsappRespond.ts](src/lib/whatsappRespond.ts)) usa `parseReplyDirectives`
   para separar o texto dos marcadores e então chama `sendLocation` / `sendMedia`
   ([src/lib/evolution.ts](src/lib/evolution.ts)). O texto (sem marcadores) vai pelo
-  `sendText` normal (com o `delayMs` do "digitando…").
+  `sendText` normal, **em partes** (com o `delayMs` do "digitando…").
 
 ### Pausar o atendimento da IA (assumir a conversa)
 
