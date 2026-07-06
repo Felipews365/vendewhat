@@ -318,9 +318,12 @@ uma instância Evolution e uma config de IA por loja.
   só reserva se ainda vencido — evita resposta dupla de crons concorrentes e não interrompe quem
   ainda digita) e chama `respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)).
   Migration: [supabase-migration-whatsapp-debounce.sql](supabase-migration-whatsapp-debounce.sql)
-  (tabela sem policies — só service role). **Gatilho:** crontab no VPS da Evolution chamando o
-  endpoint a cada 1 min (o delay efetivo ao cliente é ~15-75s: os 15s de silêncio + o intervalo do
-  cron). O webhook precisa de `maxDuration = 30` (transcrição/descrição de mídia), o cron de `= 60`.
+  (tabela sem policies — só service role). **Gatilho:** um workflow do **n8n** (self-hosted no mesmo
+  VPS da Evolution) — nó *Schedule Trigger* (1 min) → *HTTP Request* `GET` no endpoint com
+  `?key=CRON_SECRET`. Escolhido em vez de crontab porque o painel do VPS (iContainer) só dá shell
+  dentro de containers, sem cron no host; o n8n já roda ali, sobrevive a restart e mostra logs. O
+  delay efetivo ao cliente é ~15-75s (os 15s de silêncio + o intervalo do cron). O webhook precisa de
+  `maxDuration = 30` (transcrição/descrição de mídia), o cron de `= 60`.
 - **`respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)):** monta o lote (mensagens
   do cliente após a última fala da IA = `full.slice(splitIdx)`), o contexto anterior, detecta
   primeiro contato (`!full.some(t => t.role === "assistant")`), gera com `generateReply` e envia. É a
