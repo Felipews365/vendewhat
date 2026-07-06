@@ -160,6 +160,9 @@ export default function BannerEditPage() {
   const [nextLayout, setNextLayout] = useState<HeroLayout>("overlay");
   const [nextSide, setNextSide] = useState<HeroSplitPhotoSide>("right");
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  // Banner recém-adicionado: rola até ele e destaca para o lojista configurar.
+  const [highlightUrl, setHighlightUrl] = useState<string | null>(null);
+  const highlightRef = useRef<HTMLDivElement | null>(null);
 
   const maxBannerPhotos = bannerPhotoLimitForPlan(planId, cheapestPlanId);
   const slides = sf.heroSlides;
@@ -221,6 +224,18 @@ export default function BannerEditPage() {
     return () => URL.revokeObjectURL(url);
   }, [heroCrop]);
 
+  // Ao adicionar um banner, rola até o card recém-criado e destaca por uns segundos
+  // (senão ele fica lá no fim da lista e o lojista nem percebe que precisa configurar).
+  useEffect(() => {
+    if (!highlightUrl) return;
+    const el = highlightRef.current;
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    const t = setTimeout(() => setHighlightUrl(null), 3000);
+    return () => clearTimeout(t);
+  }, [highlightUrl, slides.length]);
+
   function selectHeroPhotos(fileList: FileList | File[]) {
     if (!storeId) return;
     const list = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
@@ -272,6 +287,7 @@ export default function BannerEditPage() {
           maxBannerPhotos
         ),
       }));
+      setHighlightUrl(data.publicUrl);
     } finally {
       setHeroUploading(false);
     }
@@ -488,11 +504,21 @@ export default function BannerEditPage() {
           {slides.map((slide, i) => (
             <div
               key={`${slide.url}-${i}`}
-              className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
+              ref={slide.url === highlightUrl ? highlightRef : undefined}
+              className={`rounded-2xl border bg-white p-4 transition-all dark:bg-slate-900 ${
+                slide.url === highlightUrl
+                  ? "border-landing-primary ring-2 ring-landing-primary ring-offset-2 dark:ring-offset-slate-950"
+                  : "border-slate-200 dark:border-slate-700"
+              }`}
             >
               <div className="mb-3 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                <span className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
                   Banner {i + 1}
+                  {slide.url === highlightUrl && (
+                    <span className="rounded-full bg-landing-primary px-2 py-0.5 text-[10px] font-semibold text-white">
+                      Ajuste texto e formato aqui ↓
+                    </span>
+                  )}
                 </span>
                 <div className="flex items-center gap-1">
                   <button
