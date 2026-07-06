@@ -72,27 +72,88 @@ Orientações para o Claude Code trabalhar neste repositório.
   prévia e na loja pública); no painel "Categorias" cada item tem setas **▲/▼** (`moveStoreCategory`
   em [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)) que trocam a posição e
   **salvam na hora** (via `onAutoSaveStorefront`, igual salvar/excluir).
-- **Banner da loja (um carrossel só):** o banner é **uma lista única de fotos**
-  (`storefront.heroImages: string[]` em [src/lib/storefront.ts](src/lib/storefront.ts)) que
-  passam **uma atrás da outra** (1→2→…) no mesmo lugar — não há faixas empilhadas. Renderizado por
+- **Banner da loja (carrossel com formato por foto):** o banner é **uma lista de fotos**
+  (`storefront.heroSlides: HeroSlide[]` em [src/lib/storefront.ts](src/lib/storefront.ts), cada
+  `{ url, layout, photoSide }`) que passam **uma atrás da outra** (1→2→…). Renderizado por
   `HeroBannerBlock` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) (auto-avança; setas +
-  bolinhas; o título/subtítulo/CTA ficam por cima). Sem foto = sem banner. O **número de fotos**
-  depende do plano: `bannerPhotoLimitForPlan()` → plano mais barato 5, demais 10 (teto absoluto
-  `MAX_BANNER_PHOTOS_ABS`). O editor
-  ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), painel `banner`) lista as
-  fotos numeradas. Ao escolher cada foto, abre o **ajuste/recorte** no formato do banner
-  ([ProductImageCropModal.tsx](src/components/ProductImageCropModal.tsx), generalizado com `aspect` —
-  aqui `HERO_TARGET_RATIO`; o mesmo modal recorta 1:1 nas fotos de produto). Depois do recorte o
-  **upload é imediato** (vai pro bucket `product-images`, em
-  [configuracoes/page.tsx](src/app/dashboard/configuracoes/page.tsx) → `selectHeroPhotos` →
-  `uploadOneHeroPhoto`), então o "Salvar" só persiste as URLs no JSONB. `storefrontFromDb` migra
-  formatos antigos (`heroCarousels` faixas → achata numa lista; `heroImage` foto única). Mostra dica
-  de tamanho ideal (1920×600) e avisa por foto quando a proporção vai cortar muito
-  (`heroImageProportionWarning`).
+  bolinhas). **Cada foto tem seu próprio formato** — o carrossel renderiza só o slide ativo (por
+  isso a altura acompanha o formato de cada um). Sem foto = sem banner. O **número de fotos** depende
+  do plano: `bannerPhotoLimitForPlan()` → plano mais barato 5, demais 10 (teto `MAX_BANNER_PHOTOS_ABS`).
+  - **Formato por foto (`HeroSlide.layout`):** `"overlay"` (foto de fundo, texto por cima) ou
+    `"split"` (foto de um lado, texto num painel `--store-secondary` do outro; `photoSide`
+    `"left"`/`"right"`). O CTA usa sempre `--store-primary` (visível nos dois fundos).
+  - **Texto por banner (`HeroSlide.badge/title/highlight/subtitle/couponCode/ctaLabel/ctaHref`):**
+    cada slide tem seu próprio texto; **campo vazio = usa o texto geral** (fallback: `heroSubtitle`→
+    badge, `heroTitle`||nome da loja→title, `store.description`→subtitle, `heroCouponCode`,
+    `heroCtaLabel`, `heroCtaHref`). O `HeroBannerBlock` resolve o conteúdo do slide ativo e recebe o
+    fallback via prop `fallback` + `onCta` (não usa mais `children`). `heroSlideTextFromRaw` só guarda
+    os campos preenchidos no JSONB.
+  - **Destaque cursivo animado (`HeroSlide.highlight`):** 2ª linha do título em fonte **cursiva**
+    (`.font-script` = `Dancing_Script`, carregada em [layout.tsx](src/app/layout.tsx) como
+    `--font-script`) com **degradê animado** (`.vw-anim-gradient` + keyframe `vw-gradient-pan` em
+    [globals.css](src/app/globals.css); gradiente `--store-primary`→branco→`--store-primary`).
+    Inspirado no `AnimatedGradientText` do projeto de referência. É por banner (sem fallback geral).
+  - **Recorte por formato:** ao adicionar, o `ProductImageCropModal` recorta na proporção do formato
+    escolhido — `HERO_TARGET_RATIO` (largo) para "de fundo", `HERO_SPLIT_RATIO` (1:1) para "ao lado"
+    (`heroCropRatioForLayout`). `heroImageProportionWarning(w,h,layout)` avisa por foto conforme o
+    formato. Upload imediato (bucket `product-images`).
+  - **Editor = página dedicada** [/dashboard/banner](src/app/dashboard/banner/page.tsx) (não é mais
+    modal): lista de banners com prévia fiel (`SlidePreview`), formato por banner (Fundo/Ao lado +
+    lado), textos por banner, reordenar (▲▼), remover, adicionar (com formato padrão p/ a próxima
+    foto), + a seção "Texto geral". Carrega/salva o próprio `storefront` (botão **Salvar**). O clique
+    no banner dentro do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
+    (canvas + FAB) navega para essa página (`openBannerEditor`); o antigo painel `banner` do modal
+    ficou **legado/inacessível** (marcado no código, a remover depois).
+  - **Migração:** `storefrontFromDb` (`heroSlidesFromDb`) migra formatos antigos — `heroImages:
+    string[]`, `heroCarousels` (faixas), `heroImage` (única) → viram slides herdando o antigo formato
+    global `heroLayout`/`heroSplitPhotoSide`. Sem migration de banco: tudo no JSONB.
+  - `heroLayout`/`heroSplitPhotoSide` em `StorefrontSettings` agora são só o **padrão para novas
+    fotos** (não afetam o render, que é por slide).
+- **Cards promocionais abaixo do banner (`storefront.promoCards: PromoCard[]`):** faixa de até
+  `MAX_PROMO_CARDS` (6) cartões coloridos (gradiente `from`→`to`) com etiqueta/título/frase/link.
+  Renderizados em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) logo **abaixo do banner**
+  (grid `sm:grid-cols-3`); link usa `handleHeroCta`. Editados na página
+  [/dashboard/banner](src/app/dashboard/banner/page.tsx) com **modelos prontos** (`PROMO_CARD_PRESETS`
+  em [storefront.ts](src/lib/storefront.ts) — Imperdível/Destaque/Oferta/Frete/Novidade/Premium),
+  seletor de cor (`PROMO_CARD_COLORS`), reordenar/remover. Sem migration (JSONB).
+- **Menu de categorias no topo (`storefront.showCategoryNav`, default `true`):** barra horizontal
+  (`CategoryNavBar` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)) abaixo do cabeçalho,
+  reaproveita os `categoryStripItems` (mesma fonte do strip de bolinhas) e o `categoryFilter`; item
+  ativo usa `--store-primary`. Só aparece se houver categorias (logo, precisa de produtos). Toggle na
+  página do banner. Sem migration (JSONB).
 - **Pendente:** os widgets internos compartilhados ainda estão só no tema claro — editor visual
   da loja ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), cuja
   pré-visualização da loja pública deve continuar clara de propósito), seletor de fotos,
   editores de cor/tamanho/estoque, autocomplete de categoria e os modais.
+
+### Blocos de conteúdo (builder de loja)
+
+Biblioteca de blocos reutilizáveis em [src/components/storefront/blocks/](src/components/storefront/blocks/)
+para montar seções extras da vitrine (banner promo, boas-vindas, vitrine de categorias, grade de
+produtos, chamada WhatsApp, cupom/oferta, destaque imagem+texto). É **aditiva** e mobile-first;
+usa os tokens `--store-primary`/`--store-secondary`.
+
+- **Camadas:** [types.ts](src/components/storefront/blocks/types.ts) (config de cada bloco +
+  `BLOCK_LIMITS` por campo + `StoreBlock`/`StoreBlockType`), [primitives.tsx](src/components/storefront/blocks/primitives.tsx)
+  (peças comuns: `BlockContainer`, `BlockImage` com fallback, `BlockEmpty`, `BlockButton`,
+  `formatMoneyBRL`), [registry.ts](src/components/storefront/blocks/registry.ts) (menu do "+":
+  `BLOCK_REGISTRY`, `BLOCK_MENU_ORDER`, `createBlock`), [validation.ts](src/components/storefront/blocks/validation.ts)
+  (`validateBlock` — avisos p/ texto longo, erros só no essencial) e
+  [BlockRenderer.tsx](src/components/storefront/blocks/BlockRenderer.tsx) (renderiza por `type`;
+  injeta `products` na grade). Import único via [index.ts](src/components/storefront/blocks/index.ts).
+- **Cada bloco** tem fallback de imagem, `line-clamp` p/ textos longos e **se oculta na loja
+  pública quando vazio** (com `editing`, aparece na prévia com dica).
+- **Armazenamento:** `storefront.contentBlocks: StoreBlock[]` (em [storefront.ts](src/lib/storefront.ts),
+  sanitizado por `contentBlocksFromDb` — só tipos conhecidos, teto `MAX_CONTENT_BLOCKS`). **Sem
+  migration:** mora no mesmo JSONB `stores.storefront`; persiste no "Salvar loja".
+- **Loja pública:** [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) renderiza
+  `storefront.contentBlocks` **abaixo do catálogo** (entre `</main>` e o `<footer>`), com os produtos
+  mapeados para `BlockProduct` (`blockProducts`).
+- **Editor:** [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) tem o painel
+  `blocks` (atalho "Blocos de destaque") e a prévia no canvas. **Por enquanto só o bloco
+  `imageTextFeature`** está exposto para adicionar/editar/reordenar/remover; os outros tipos já
+  renderizam se existirem no JSONB. Expansão futura: formulário genérico guiado por
+  `BLOCK_REGISTRY[type].fields`, upload de imagem (hoje é URL) e arrastar-e-soltar.
 
 ## Loja pública — carrinho e formas de envio
 
@@ -222,6 +283,20 @@ uma instância Evolution e uma config de IA por loja.
   instância **já existente** a Evolution responde **403** com `{response:{message:["...already in
   use..."]}}`; sem ler o aninhado, `createInstance` acha que é erro fatal e o painel mostra
   "Evolution API erro 403" no botão Conectar (em vez de seguir para o QR).
+- **Registro do webhook (URL pelo domínio da requisição):** o
+  [connect](src/app/api/whatsapp/connect/route.ts) monta o `webhookUrl` a partir do **host real da
+  requisição** (`x-forwarded-host`/`host`), caindo no `APP_BASE_URL` só se não der para ler o host.
+  Isso auto-corrige o caso clássico de o webhook ficar registrado num endereço antigo/errado (era o
+  motivo de a Evolution receber as mensagens mas **não repassar** pro app). O `setWebhook`
+  ([evolution.ts](src/lib/evolution.ts)) manda os **dois padrões de nome** de campo
+  (`byEvents`/`webhookByEvents`, `base64`/`webhookBase64`) por compatibilidade entre versões da
+  Evolution. **Diagnóstico:** ao conectar, o app consulta `getWebhookInfo` (`GET
+  /webhook/find/{instance}`) e loga `[whatsapp/connect] webhook { webhookUrl, stored }` (mostra a URL
+  que a Evolution realmente gravou + `enabled`/`events`). O [webhook](src/app/api/whatsapp/webhook/route.ts)
+  também loga o motivo quando ignora (`msg recebida`, `IA desligada`, `OPENAI_API_KEY ausente`,
+  `cliente pausado`, `resposta vazia`) — some pelos Logs da Vercel se a IA "não responder".
+  Obs.: em **modo webhook global** na Evolution (`WEBHOOK_GLOBAL_ENABLED=true`) o webhook por
+  instância é ignorado; para o multi-tenant do VendeWhat, esse modo deve ficar **desligado**.
 - **Selo de conexão:** [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) deriva
   `displayStatus` — um estado preso em `connecting` no servidor (instância criada mas nunca
   escaneada) é exibido como **"Desconectado"** numa página recém-aberta (sem QR na tela nem clique
@@ -263,7 +338,13 @@ loja, configurado na aba **Atendente de IA** (seção "Localização e foto da l
   runtime nodejs) e, quando resolve, guarda em `ai_location_url` uma URL canônica
   `…/maps/search/?api=1&query=lat,lng` (devolvida ao painel em `resolvedUrl` para
   reexibir já reconhecida). O painel tem um passo a passo (`<details>` "Como pego o
-  link do mapa?") ensinando a copiar o link no app/site do Maps.
+  link do mapa?") ensinando a copiar o link no app/site do Maps. O painel também tem
+  **campos de Latitude/Longitude** ([whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx):
+  `latStr`/`lngStr`, `handleCoordChange`/`handleLocationUrlChange`) sincronizados com o
+  campo do link: digitar as coordenadas monta o `locationUrl` como `"lat, lng"` (que o
+  save lê por `parseLatLng`); colar um link que tem o ponto preenche os campos. Há também
+  um botão **"Abrir o Google Maps para pegar as coordenadas"** que abre o Maps já buscando
+  o endereço da loja (`ai_location_address`), se houver.
 - **Foto:** upload para o bucket `product-images` (igual às fotos do banner),
   guarda a URL pública em `ai_store_photo_url`.
 - **Como a IA dispara:** o `buildSystemPrompt`

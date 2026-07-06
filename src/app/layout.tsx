@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Dancing_Script } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/Toast";
 
 const inter = Inter({ subsets: ["latin"] });
+/** Fonte cursiva do destaque animado do banner (classe .font-script). */
+const dancingScript = Dancing_Script({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-script",
+});
 
 export const metadata: Metadata = {
   title: "VendeWhat - Plataforma para Vender pelo WhatsApp",
@@ -24,7 +30,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} ${dancingScript.variable}`}>
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

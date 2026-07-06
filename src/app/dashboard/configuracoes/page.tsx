@@ -6,8 +6,10 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   DEFAULT_STOREFRONT,
-  HERO_TARGET_RATIO,
+  heroCropRatioForLayout,
   bannerPhotoLimitForPlan,
+  type HeroLayout,
+  type HeroSplitPhotoSide,
   type StorefrontSettings,
   normalizeInstagramUrl,
   normalizeSocialUrl,
@@ -27,6 +29,9 @@ import { useToast } from "@/components/Toast";
 type HeroCropSession = {
   files: File[];
   current: number;
+  /** Formato escolhido para ESTAS fotos (define o recorte e vai em cada slide). */
+  layout: HeroLayout;
+  photoSide: HeroSplitPhotoSide;
 };
 
 export default function ConfiguracoesLojaPage() {
@@ -125,7 +130,7 @@ export default function ConfiguracoesLojaPage() {
     if (!storeId) return;
     const list = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
     if (!list.length) return;
-    const free = maxBannerPhotos - sf.heroImages.length;
+    const free = maxBannerPhotos - sf.heroSlides.length;
     if (free <= 0) {
       showToast(
         `O banner aceita no máximo ${maxBannerPhotos} fotos no seu plano.`,
@@ -137,7 +142,13 @@ export default function ConfiguracoesLojaPage() {
     if (list.length > free) {
       showToast(`Só cabem mais ${free} foto(s) no banner.`, "error");
     }
-    setHeroCrop({ files: toAdjust, current: 0 });
+    // O formato do editor (padrão para novas fotos) vale para estas fotos.
+    setHeroCrop({
+      files: toAdjust,
+      current: 0,
+      layout: sf.heroLayout,
+      photoSide: sf.heroSplitPhotoSide,
+    });
   }
 
   /** Fecha o modal ou avança para a próxima foto da fila. */
@@ -151,7 +162,11 @@ export default function ConfiguracoesLojaPage() {
   }
 
   /** Envia uma foto (já recortada/ajustada) e adiciona ao banner. */
-  async function uploadOneHeroPhoto(file: File) {
+  async function uploadOneHeroPhoto(
+    file: File,
+    layout: HeroLayout,
+    photoSide: HeroSplitPhotoSide
+  ) {
     if (!storeId) return;
     setHeroUploading(true);
     try {
@@ -172,7 +187,10 @@ export default function ConfiguracoesLojaPage() {
         .getPublicUrl(fileName);
       setSf((s) => ({
         ...s,
-        heroImages: [...s.heroImages, data.publicUrl].slice(0, maxBannerPhotos),
+        heroSlides: [
+          ...s.heroSlides,
+          { url: data.publicUrl, layout, photoSide },
+        ].slice(0, maxBannerPhotos),
       }));
     } finally {
       setHeroUploading(false);
@@ -181,14 +199,16 @@ export default function ConfiguracoesLojaPage() {
 
   /** Chamado pelo modal de recorte ao confirmar (ou “usar foto inteira”). */
   async function handleHeroCropDone(file: File) {
+    const layout = heroCrop?.layout ?? "overlay";
+    const photoSide = heroCrop?.photoSide ?? "right";
     advanceHeroCrop();
-    await uploadOneHeroPhoto(file);
+    await uploadOneHeroPhoto(file, layout, photoSide);
   }
 
   function removeHeroPhoto(photoIndex: number) {
     setSf((s) => ({
       ...s,
-      heroImages: s.heroImages.filter((_, i) => i !== photoIndex),
+      heroSlides: s.heroSlides.filter((_, i) => i !== photoIndex),
     }));
   }
 
@@ -399,7 +419,7 @@ export default function ConfiguracoesLojaPage() {
 
   const heroPreviewTitle =
     sf.heroTitle.trim() || storeName || "Nome da sua loja";
-  const bannerBgSrc = sf.heroImages[0] ?? null;
+  const bannerBgSrc = sf.heroSlides[0]?.url ?? null;
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
@@ -509,9 +529,13 @@ export default function ConfiguracoesLojaPage() {
           imageSrc={heroCropSrc}
           sourceFileName={heroCrop.files[heroCrop.current].name}
           originalFile={heroCrop.files[heroCrop.current]}
-          aspect={HERO_TARGET_RATIO}
+          aspect={heroCropRatioForLayout(heroCrop.layout)}
           title="Ajustar foto do banner"
-          description="Arraste e use o zoom para enquadrar a foto no formato largo do banner."
+          description={
+            heroCrop.layout === "split"
+              ? "Arraste e use o zoom para enquadrar a foto no formato “ao lado” (mais quadrado)."
+              : "Arraste e use o zoom para enquadrar a foto no formato largo do banner."
+          }
           confirmLabel="Usar este enquadramento"
           onCancel={advanceHeroCrop}
           onComplete={handleHeroCropDone}

@@ -129,6 +129,25 @@ html {
   }
 }
 
+/* Texto em degradê animado (destaque do banner) + fonte cursiva.
+   Inspirado no AnimatedGradientText: gradiente largo que desliza no texto. */
+.font-script {
+  font-family: var(--font-script), "Segoe Script", "Brush Script MT", cursive;
+}
+.vw-anim-gradient {
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: vw-gradient-pan 4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vw-anim-gradient {
+    animation: none;
+  }
+}
+
 .vw-blob {
   animation: vw-blob 18s ease-in-out infinite;
 }

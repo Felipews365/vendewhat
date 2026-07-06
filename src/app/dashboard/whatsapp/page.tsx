@@ -110,6 +110,9 @@ export default function WhatsAppIaPage() {
   const [postsaleMessage, setPostsaleMessage] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [locationUrl, setLocationUrl] = useState("");
+  // Campos de latitude/longitude (sincronizados com o link acima).
+  const [latStr, setLatStr] = useState("");
+  const [lngStr, setLngStr] = useState("");
   const [storePhotoUrl, setStorePhotoUrl] = useState("");
   const [photoUploading, setPhotoUploading] = useState(false);
   const [pickupAddress, setPickupAddress] = useState("");
@@ -237,9 +240,17 @@ export default function WhatsAppIaPage() {
         setLocationAddress(
           typeof cfg.ai_location_address === "string" ? cfg.ai_location_address : ""
         );
-        setLocationUrl(
-          typeof cfg.ai_location_url === "string" ? cfg.ai_location_url : ""
-        );
+        {
+          const url =
+            typeof cfg.ai_location_url === "string" ? cfg.ai_location_url : "";
+          setLocationUrl(url);
+          // Lê lat/lng do link/coordenadas salvos para preencher os campos.
+          const p = parseLatLng(url);
+          if (p) {
+            setLatStr(String(p.lat));
+            setLngStr(String(p.lng));
+          }
+        }
         setStorePhotoUrl(
           typeof cfg.ai_store_photo_url === "string" ? cfg.ai_store_photo_url : ""
         );
@@ -327,6 +338,11 @@ export default function WhatsAppIaPage() {
         data.resolvedUrl !== locationUrl
       ) {
         setLocationUrl(data.resolvedUrl);
+        const p = parseLatLng(data.resolvedUrl);
+        if (p) {
+          setLatStr(String(p.lat));
+          setLngStr(String(p.lng));
+        }
       }
       if (data.locationParsed === false) {
         showToast(
@@ -341,6 +357,35 @@ export default function WhatsAppIaPage() {
       setError("Falha de rede ao salvar.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** Preenche o link a partir do que foi digitado/colado, sincronizando lat/lng. */
+  function handleLocationUrlChange(value: string) {
+    setLocationUrl(value);
+    const p = parseLatLng(value);
+    if (p) {
+      setLatStr(String(p.lat));
+      setLngStr(String(p.lng));
+    }
+  }
+
+  /** Atualiza latitude ou longitude e, se ambos forem números, monta o "lat, lng". */
+  function handleCoordChange(which: "lat" | "lng", value: string) {
+    const clean = value.replace(",", ".");
+    const nextLat = which === "lat" ? clean : latStr;
+    const nextLng = which === "lng" ? clean : lngStr;
+    if (which === "lat") setLatStr(clean);
+    else setLngStr(clean);
+    const la = Number(nextLat);
+    const lo = Number(nextLng);
+    if (
+      nextLat.trim() &&
+      nextLng.trim() &&
+      Number.isFinite(la) &&
+      Number.isFinite(lo)
+    ) {
+      setLocationUrl(`${la}, ${lo}`);
     }
   }
 
@@ -747,7 +792,7 @@ export default function WhatsAppIaPage() {
             <input
               type="url"
               value={locationUrl}
-              onChange={(e) => setLocationUrl(e.target.value)}
+              onChange={(e) => handleLocationUrlChange(e.target.value)}
               className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
               placeholder="Cole o link do Google Maps aqui"
             />
@@ -767,6 +812,67 @@ export default function WhatsAppIaPage() {
                   Google Maps ou as coordenadas (ex.: -23.55, -46.63).
                 </p>
               ))}
+
+            {/* Latitude/longitude — alternativa ao link (fica em sincronia com ele). */}
+            <div className="mt-3">
+              <p className="text-xs font-medium text-stone-600 dark:text-slate-300">
+                Ou digite as coordenadas
+              </p>
+
+              {/* Atalho: abre o Maps já na loja (se tiver endereço) para pegar o ponto. */}
+              <a
+                href={
+                  locationAddress.trim()
+                    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        locationAddress.trim()
+                      )}`
+                    : "https://www.google.com/maps"
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+              >
+                📍 Abrir o Google Maps para pegar as coordenadas
+              </a>
+              <p className="mt-1 text-[11px] text-stone-400 dark:text-slate-500">
+                No mapa que abrir: <strong>toque e segure</strong> no ponto da loja
+                (celular) ou <strong>clique com o botão direito</strong> (PC). As
+                coordenadas aparecem — copie e cole nos campos abaixo.
+              </p>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] text-stone-500 dark:text-slate-400">
+                    Latitude
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={latStr}
+                    onChange={(e) => handleCoordChange("lat", e.target.value)}
+                    className="mt-0.5 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    placeholder="-23.55"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-stone-500 dark:text-slate-400">
+                    Longitude
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={lngStr}
+                    onChange={(e) => handleCoordChange("lng", e.target.value)}
+                    className="mt-0.5 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    placeholder="-46.63"
+                  />
+                </div>
+              </div>
+              <p className="mt-1 text-[11px] text-stone-400 dark:text-slate-500">
+                No Google Maps, toque no ponto e as coordenadas aparecem em cima
+                (ex.: <strong>-23.55, -46.63</strong>).
+              </p>
+            </div>
           </div>
 
           <div>

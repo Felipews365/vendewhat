@@ -1,16 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CategoryFormModal } from "@/components/CategoryFormModal";
 import {
   HERO_RECOMMENDED_HEIGHT,
   HERO_RECOMMENDED_WIDTH,
   heroImageProportionWarning,
+  type HeroLayout,
+  type HeroSplitPhotoSide,
   type StorefrontCategoryItem,
   type StorefrontSettings,
 } from "@/lib/storefront";
+import { BlockRenderer } from "@/components/storefront/blocks";
+import { createBlock } from "@/components/storefront/blocks/registry";
+import {
+  BLOCK_LIMITS,
+  type ImageTextFeatureConfig,
+  type StoreBlock,
+} from "@/components/storefront/blocks/types";
 
 /** Prévia na vitrine: produtos reais da loja + sempre um cartão “novo”. */
 export type CatalogPreviewProduct = {
@@ -53,10 +63,14 @@ type EditorPanel =
   | "info"
   | "search"
   | "categories"
+  | "blocks"
   | "footer";
 
-/** Mede a imagem (URL ou blob) e avisa se a proporção não combina com o banner. */
-function useHeroProportionWarning(src: string | null): string | null {
+/** Mede a imagem (URL ou blob) e avisa se a proporção não combina com o formato. */
+function useHeroProportionWarning(
+  src: string | null,
+  layout: HeroLayout
+): string | null {
   const [warning, setWarning] = useState<string | null>(null);
   useEffect(() => {
     if (!src) {
@@ -68,7 +82,11 @@ function useHeroProportionWarning(src: string | null): string | null {
     img.onload = () => {
       if (active) {
         setWarning(
-          heroImageProportionWarning(img.naturalWidth, img.naturalHeight)
+          heroImageProportionWarning(
+            img.naturalWidth,
+            img.naturalHeight,
+            layout
+          )
         );
       }
     };
@@ -79,25 +97,39 @@ function useHeroProportionWarning(src: string | null): string | null {
     return () => {
       active = false;
     };
-  }, [src]);
+  }, [src, layout]);
   return warning;
 }
 
-/** Miniatura de uma foto do banner com botão remover e aviso de proporção. */
+/**
+ * Miniatura de uma foto do banner: preview + remover + aviso de proporção +
+ * escolha do FORMATO daquela foto (fundo/ao lado e o lado). Cada foto é
+ * independente — mudar uma não mexe nas outras.
+ */
 function HeroPhotoThumb({
   src,
+  index,
+  layout,
+  photoSide,
   onRemove,
+  onChangeLayout,
+  onChangeSide,
 }: {
   /** URL pública (foto salva) ou blob: (foto pendente). */
   src: string;
+  index: number;
+  layout: HeroLayout;
+  photoSide: HeroSplitPhotoSide;
   onRemove: () => void;
+  onChangeLayout: (layout: HeroLayout) => void;
+  onChangeSide: (side: HeroSplitPhotoSide) => void;
 }) {
-  const warning = useHeroProportionWarning(src);
+  const warning = useHeroProportionWarning(src, layout);
   const isBlob = src.startsWith("blob:");
   return (
-    <div className="shrink-0">
+    <div className="w-28 shrink-0">
       <div
-        className={`relative w-24 h-14 rounded-lg border overflow-hidden ${
+        className={`relative w-28 h-16 rounded-lg border overflow-hidden ${
           warning ? "border-amber-400 ring-1 ring-amber-300" : "border-slate-200"
         }`}
       >
@@ -105,8 +137,11 @@ function HeroPhotoThumb({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={src} alt="" className="w-full h-full object-cover" />
         ) : (
-          <Image src={src} alt="" fill className="object-cover" sizes="96px" />
+          <Image src={src} alt="" fill className="object-cover" sizes="112px" />
         )}
+        <span className="absolute top-0 left-0 w-5 h-5 bg-landing-primary text-white text-[10px] font-bold flex items-center justify-center">
+          {index + 1}
+        </span>
         <button
           type="button"
           onClick={onRemove}
@@ -124,10 +159,54 @@ function HeroPhotoThumb({
           </span>
         )}
       </div>
+
+      {/* Formato desta foto */}
+      <div className="mt-1 grid grid-cols-2 gap-0.5">
+        {(
+          [
+            { v: "overlay" as const, label: "Fundo" },
+            { v: "split" as const, label: "Ao lado" },
+          ]
+        ).map((opt) => (
+          <button
+            key={opt.v}
+            type="button"
+            onClick={() => onChangeLayout(opt.v)}
+            className={`rounded px-1 py-0.5 text-[10px] font-semibold border ${
+              layout === opt.v
+                ? "border-landing-primary bg-teal-50 text-slate-800"
+                : "border-slate-200 bg-white text-slate-500"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {layout === "split" && (
+        <div className="mt-0.5 grid grid-cols-2 gap-0.5">
+          {(
+            [
+              { v: "left" as const, label: "◧ Esq" },
+              { v: "right" as const, label: "Dir ◨" },
+            ]
+          ).map((opt) => (
+            <button
+              key={opt.v}
+              type="button"
+              onClick={() => onChangeSide(opt.v)}
+              className={`rounded px-1 py-0.5 text-[10px] font-medium border ${
+                photoSide === opt.v
+                  ? "border-landing-primary bg-teal-50 text-slate-800"
+                  : "border-slate-200 bg-white text-slate-500"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
       {warning && (
-        <p className="mt-1 w-24 text-[9px] leading-tight text-amber-700">
-          {warning}
-        </p>
+        <p className="mt-1 text-[9px] leading-tight text-amber-700">{warning}</p>
       )}
     </div>
   );
@@ -279,14 +358,39 @@ export function StoreVisualEditor({
    */
   onAutoSaveStorefront?: (next: StorefrontSettings) => void;
 }) {
+  const router = useRouter();
   const [panel, setPanel] = useState<EditorPanel>(null);
+  /** Abre a página dedicada de edição do banner (em vez de um modal). */
+  const openBannerEditor = () => router.push("/dashboard/banner");
   const [storeCategoryModal, setStoreCategoryModal] = useState<{
     open: boolean;
     editIndex: number | null;
   }>({ open: false, editIndex: null });
 
-  const heroPhotoCount = sf.heroImages.length;
+  const heroPhotoCount = sf.heroSlides.length;
   const heroSlotsFull = heroPhotoCount >= maxBannerPhotos;
+
+  /** Formato/lado usado na prévia do canvas = o da 1ª foto (o "de fundo" da prévia). */
+  const firstSlide = sf.heroSlides[0];
+  const previewLayout: HeroLayout = firstSlide?.layout ?? sf.heroLayout;
+  const previewSide: HeroSplitPhotoSide =
+    firstSlide?.photoSide ?? sf.heroSplitPhotoSide;
+
+  /** Muda o formato de UMA foto (não afeta as outras). */
+  const setSlideLayout = (i: number, layout: HeroLayout) =>
+    setSf((s) => ({
+      ...s,
+      heroSlides: s.heroSlides.map((sl, j) =>
+        j === i ? { ...sl, layout } : sl
+      ),
+    }));
+  const setSlideSide = (i: number, photoSide: HeroSplitPhotoSide) =>
+    setSf((s) => ({
+      ...s,
+      heroSlides: s.heroSlides.map((sl, j) =>
+        j === i ? { ...sl, photoSide } : sl
+      ),
+    }));
 
   const MAX_CATALOG_PREVIEW = 32;
   const productsInPreview = catalogPreview.slice(0, MAX_CATALOG_PREVIEW);
@@ -342,6 +446,50 @@ export function StoreVisualEditor({
     setSf(nextSf);
     onAutoSaveStorefront?.(nextSf);
   };
+
+  /* ---- Blocos de conteúdo (builder) — hoje só "Destaque com imagem + texto" ---- */
+  const contentBlocks = sf.contentBlocks;
+  const FEAT = BLOCK_LIMITS.imageTextFeature;
+
+  const addFeatureBlock = () =>
+    setSf((s) => ({
+      ...s,
+      contentBlocks: [...s.contentBlocks, createBlock("imageTextFeature")],
+    }));
+
+  /** Atualiza a config de um bloco (merge raso). */
+  const patchBlockConfig = (id: string, patch: Record<string, unknown>) =>
+    setSf((s) => ({
+      ...s,
+      contentBlocks: s.contentBlocks.map((b) =>
+        b.id === id
+          ? ({ ...b, config: { ...b.config, ...patch } } as StoreBlock)
+          : b
+      ),
+    }));
+
+  const removeBlock = (id: string) =>
+    setSf((s) => ({
+      ...s,
+      contentBlocks: s.contentBlocks.filter((b) => b.id !== id),
+    }));
+
+  /** Sobe (−1) ou desce (+1) um bloco na ordem. */
+  const moveBlock = (id: string, dir: -1 | 1) =>
+    setSf((s) => {
+      const i = s.contentBlocks.findIndex((b) => b.id === id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= s.contentBlocks.length) return s;
+      const next = [...s.contentBlocks];
+      [next[i], next[j]] = [next[j]!, next[i]!];
+      return { ...s, contentBlocks: next };
+    });
+
+  /** Vars de cor da loja para a prévia dos blocos combinar com o tema. */
+  const previewColorVars = {
+    ["--store-primary"]: sf.themePrimary,
+    ["--store-secondary"]: sf.themeSecondary,
+  } as CSSProperties;
 
   const displayLogo =
     logoPreviewObjectUrl ||
@@ -526,7 +674,7 @@ export function StoreVisualEditor({
                   ? "border-landing-primary bg-teal-50 scale-[1.01]"
                   : "border-slate-200 hover:border-landing-primary/50 bg-slate-200/80"
               }`}
-              onClick={() => setPanel("banner")}
+              onClick={openBannerEditor}
               onDragOver={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -545,58 +693,111 @@ export function StoreVisualEditor({
                   onSelectHeroPhotos(e.dataTransfer.files);
               }}
             >
-              {bannerBgSrc ? (
-                bannerBgSrc.startsWith("blob:") ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={bannerBgSrc}
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
+              {(() => {
+                const photoEl = bannerBgSrc ? (
+                  bannerBgSrc.startsWith("blob:") ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={bannerBgSrc}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Image
+                      src={bannerBgSrc}
+                      alt=""
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 896px) 100vw, 896px"
+                    />
+                  )
                 ) : (
-                  <Image
-                    src={bannerBgSrc}
-                    alt=""
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 896px) 100vw, 896px"
-                  />
-                )
-              ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 gap-1">
-                  <span className="text-2xl opacity-50" aria-hidden>
-                    🖼
-                  </span>
-                  <span className="text-xs font-medium px-2 text-center">
-                    Banner opcional
-                  </span>
-                  <span className="text-[10px] px-2 text-center text-slate-400">
-                    Toque para adicionar fotos ou deixe só as cores
-                  </span>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-r from-black/45 via-black/20 to-transparent pointer-events-none" />
-              <div className="absolute inset-0 flex flex-col justify-end p-3 sm:p-5 max-w-md pointer-events-none">
-                {sf.heroSubtitle.trim() && (
-                  <p className="text-[10px] text-white/90 font-medium tracking-wide uppercase drop-shadow line-clamp-1">
-                    {sf.heroSubtitle}
-                  </p>
-                )}
-                <h3 className="text-base sm:text-xl font-bold text-white leading-tight mt-0.5 drop-shadow-lg line-clamp-2">
-                  {heroPreviewTitle}
-                </h3>
-                <span
-                  className="mt-2 inline-flex self-start px-2.5 py-1 rounded text-white text-[10px] font-bold uppercase shadow-md"
-                  style={{ backgroundColor: sf.themeSecondary }}
-                >
-                  {sf.heroCtaLabel || "Comprar"}
-                </span>
-              </div>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 gap-1">
+                    <span className="text-2xl opacity-50" aria-hidden>
+                      🖼
+                    </span>
+                    <span className="text-xs font-medium px-2 text-center">
+                      Banner opcional
+                    </span>
+                    <span className="text-[10px] px-2 text-center text-slate-400">
+                      Toque para adicionar fotos ou deixe só as cores
+                    </span>
+                  </div>
+                );
+
+                const textLines = (
+                  <>
+                    {sf.heroSubtitle.trim() && (
+                      <p className="text-[10px] font-medium tracking-wide uppercase text-white/90 drop-shadow line-clamp-1">
+                        {sf.heroSubtitle}
+                      </p>
+                    )}
+                    <h3 className="text-base sm:text-xl font-bold text-white leading-tight mt-0.5 drop-shadow-lg line-clamp-2">
+                      {heroPreviewTitle}
+                    </h3>
+                    {sf.heroCouponCode.trim() && (
+                      <span className="mt-1.5 inline-flex self-start items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-white/85">
+                        Cód.
+                        <span className="px-1.5 py-0.5 rounded bg-white/20 border border-white/30 text-white">
+                          {sf.heroCouponCode.trim()}
+                        </span>
+                      </span>
+                    )}
+                    <span
+                      className="mt-2 inline-flex self-start px-2.5 py-1 rounded text-white text-[10px] font-bold uppercase shadow-md"
+                      style={{ backgroundColor: sf.themePrimary }}
+                    >
+                      {sf.heroCtaLabel || "Comprar"}
+                    </span>
+                  </>
+                );
+
+                if (previewLayout === "split") {
+                  const photoCol = (
+                    <div className="relative w-1/2 h-full overflow-hidden">
+                      {photoEl}
+                    </div>
+                  );
+                  const textCol = (
+                    <div
+                      className="w-1/2 h-full flex flex-col justify-center p-3 sm:p-4"
+                      style={{ backgroundColor: sf.themeSecondary }}
+                    >
+                      {textLines}
+                    </div>
+                  );
+                  return (
+                    <div className="absolute inset-0 flex">
+                      {previewSide === "left" ? (
+                        <>
+                          {photoCol}
+                          {textCol}
+                        </>
+                      ) : (
+                        <>
+                          {textCol}
+                          {photoCol}
+                        </>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <>
+                    {photoEl}
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/45 via-black/20 to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 flex flex-col justify-end p-3 sm:p-5 max-w-md pointer-events-none">
+                      {textLines}
+                    </div>
+                  </>
+                );
+              })()}
             </button>
             <div className="absolute top-2 right-3 sm:top-3 sm:right-4 z-30">
               <PlusFab
                 label="Gerenciar fotos do banner"
-                onClick={() => setPanel("banner")}
+                onClick={openBannerEditor}
               />
             </div>
             {heroPhotoCount > 1 && (
@@ -800,6 +1001,34 @@ export function StoreVisualEditor({
           </p>
         </div>
 
+        {/* Blocos de destaque (conteúdo extra abaixo dos produtos) */}
+        <div className="relative bg-white border-t border-slate-200">
+          <div className="absolute top-2 right-2 z-20">
+            <PlusFab
+              label="Gerenciar blocos de destaque"
+              onClick={() => setPanel("blocks")}
+            />
+          </div>
+          {contentBlocks.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => setPanel("blocks")}
+              className="w-full px-3 py-6 text-center text-xs font-medium text-slate-500 hover:bg-slate-50"
+            >
+              <span className="text-lg">✨</span>
+              <span className="mt-1 block">
+                Adicionar bloco de destaque (imagem + texto)
+              </span>
+            </button>
+          ) : (
+            <div style={previewColorVars}>
+              {contentBlocks.map((block) => (
+                <BlockRenderer key={block.id} block={block} editing />
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Rodapé comercial (abaixo dos produtos na loja pública) */}
         <div className="relative bg-stone-50/95 border-t border-slate-200 px-3 py-3 sm:px-4">
           <div className="absolute top-2 right-2 z-20">
@@ -892,6 +1121,14 @@ export function StoreVisualEditor({
         </button>
         <button
           type="button"
+          id="passo-blocos"
+          onClick={() => setPanel("blocks")}
+          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
+        >
+          Blocos de destaque
+        </button>
+        <button
+          type="button"
           id="passo-rodape"
           onClick={() => setPanel("footer")}
           className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
@@ -947,21 +1184,98 @@ export function StoreVisualEditor({
         />
       </EditorSheet>
 
+      {/* LEGADO: o banner agora é editado na página /dashboard/banner (o clique
+          no banner navega para lá). Este painel não é mais aberto — mantido só
+          para não quebrar props enquanto migramos; pode ser removido depois. */}
       <EditorSheet
         open={panel === "banner"}
         title="Banner da loja (opcional)"
         onClose={() => setPanel(null)}
       >
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Formato das próximas fotos
+          </label>
+          <p className="text-[11px] text-slate-500 mb-1.5">
+            Vale para as fotos que você <strong>adicionar agora</strong>. Cada
+            foto guarda seu próprio formato — dá para mudar depois em cada uma,
+            sem mexer nas outras.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { v: "overlay" as const, label: "Foto de fundo", hint: "Texto por cima da foto" },
+                { v: "split" as const, label: "Foto ao lado", hint: "Foto de um lado, texto do outro" },
+              ]
+            ).map((opt) => {
+              const active = sf.heroLayout === opt.v;
+              return (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setSf((s) => ({ ...s, heroLayout: opt.v }))}
+                  className={`rounded-xl border-2 p-2.5 text-left transition-all ${
+                    active
+                      ? "border-landing-primary bg-teal-50"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <span className="block text-xs font-bold text-slate-800">
+                    {opt.label}
+                  </span>
+                  <span className="block text-[10px] text-slate-500 mt-0.5 leading-tight">
+                    {opt.hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {sf.heroLayout === "split" && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Lado da foto (novas fotos)
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { v: "left" as const, label: "Foto à esquerda" },
+                  { v: "right" as const, label: "Foto à direita" },
+                ]
+              ).map((opt) => {
+                const active = sf.heroSplitPhotoSide === opt.v;
+                return (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() =>
+                      setSf((s) => ({ ...s, heroSplitPhotoSide: opt.v }))
+                    }
+                    className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold transition-all ${
+                      active
+                        ? "border-landing-primary bg-teal-50 text-slate-800"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="rounded-xl bg-sky-50 border border-sky-100 p-3 text-xs text-sky-900 space-y-1">
           <p className="font-semibold">
-            📐 Tamanho ideal: {HERO_RECOMMENDED_WIDTH} × {HERO_RECOMMENDED_HEIGHT}{" "}
-            pixels (foto larga, deitada).
+            📐 Tamanho ideal: “de fundo” {HERO_RECOMMENDED_WIDTH} ×{" "}
+            {HERO_RECOMMENDED_HEIGHT} (larga); “ao lado” foto quadrada.
           </p>
           <p>
             Você pode colocar até <strong>{maxBannerPhotos} fotos</strong> no
             banner — elas passam <strong>uma atrás da outra</strong> sozinhas
             (1ª, 2ª, 3ª…). Ao escolher cada foto, você ajusta o enquadramento no
-            formato do banner.
+            formato escolhido.
           </p>
         </div>
 
@@ -979,13 +1293,17 @@ export function StoreVisualEditor({
           </p>
         ) : (
           <div className="flex flex-wrap gap-3">
-            {sf.heroImages.map((url, i) => (
-              <div key={`${url}-${i}`} className="relative">
-                <HeroPhotoThumb src={url} onRemove={() => onRemoveHeroPhoto(i)} />
-                <span className="absolute -top-1.5 -left-1.5 z-10 w-5 h-5 rounded-full bg-landing-primary text-white text-[10px] font-bold flex items-center justify-center shadow">
-                  {i + 1}
-                </span>
-              </div>
+            {sf.heroSlides.map((slide, i) => (
+              <HeroPhotoThumb
+                key={`${slide.url}-${i}`}
+                src={slide.url}
+                index={i}
+                layout={slide.layout}
+                photoSide={slide.photoSide}
+                onRemove={() => onRemoveHeroPhoto(i)}
+                onChangeLayout={(layout) => setSlideLayout(i, layout)}
+                onChangeSide={(side) => setSlideSide(i, side)}
+              />
             ))}
           </div>
         )}
@@ -1048,6 +1366,23 @@ export function StoreVisualEditor({
               className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Cupom de desconto (opcional)
+            </label>
+            <input
+              type="text"
+              value={sf.heroCouponCode}
+              onChange={(e) =>
+                setSf((s) => ({ ...s, heroCouponCode: e.target.value }))
+              }
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm uppercase"
+              placeholder="Ex.: BEMVINDO10"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">
+              Aparece no banner como “Use o código”. Deixe vazio para não mostrar.
+            </p>
+          </div>
           <div className="grid grid-cols-1 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -1078,6 +1413,207 @@ export function StoreVisualEditor({
             </div>
           </div>
         </div>
+      </EditorSheet>
+
+      <EditorSheet
+        open={panel === "blocks"}
+        title="Blocos de destaque"
+        onClose={() => setPanel(null)}
+      >
+        <p className="text-xs text-slate-500">
+          Blocos aparecem <strong>abaixo dos produtos</strong>, na ordem da
+          lista. Hoje: “Destaque com imagem + texto”. Salvam junto com o{" "}
+          <strong>Salvar loja</strong>.
+        </p>
+
+        {contentBlocks.length === 0 && (
+          <p className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-500">
+            Nenhum bloco ainda. Toque em “Adicionar destaque” para criar o
+            primeiro.
+          </p>
+        )}
+
+        <div className="space-y-4">
+          {contentBlocks.map((block, idx) => {
+            const cfg = block.config as ImageTextFeatureConfig;
+            const bodyLen = (cfg.body ?? "").length;
+            return (
+              <div
+                key={block.id}
+                className="rounded-xl border border-slate-200 p-3 space-y-2.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700">
+                    ✨ Destaque {idx + 1}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveBlock(block.id, -1)}
+                      disabled={idx === 0}
+                      className="w-7 h-7 rounded border border-slate-200 text-slate-600 disabled:opacity-30 hover:bg-slate-50"
+                      aria-label="Subir bloco"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveBlock(block.id, 1)}
+                      disabled={idx === contentBlocks.length - 1}
+                      className="w-7 h-7 rounded border border-slate-200 text-slate-600 disabled:opacity-30 hover:bg-slate-50"
+                      aria-label="Descer bloco"
+                    >
+                      ▼
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeBlock(block.id)}
+                      className="w-7 h-7 rounded border border-red-200 text-red-600 hover:bg-red-50"
+                      aria-label="Remover bloco"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Etiqueta (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={cfg.eyebrow ?? ""}
+                    maxLength={FEAT.eyebrow.max}
+                    onChange={(e) =>
+                      patchBlockConfig(block.id, { eyebrow: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                    placeholder="Ex.: NOVIDADE"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Título
+                  </label>
+                  <input
+                    type="text"
+                    value={cfg.title ?? ""}
+                    maxLength={FEAT.title.max}
+                    onChange={(e) =>
+                      patchBlockConfig(block.id, { title: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                    placeholder="Conheça a nova coleção"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Texto
+                  </label>
+                  <textarea
+                    value={cfg.body ?? ""}
+                    maxLength={FEAT.body.max}
+                    rows={3}
+                    onChange={(e) =>
+                      patchBlockConfig(block.id, { body: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm resize-none"
+                    placeholder="Peças selecionadas com carinho para você."
+                  />
+                  <span className="text-[10px] text-slate-400">
+                    {bodyLen}/{FEAT.body.max}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Link da imagem (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={cfg.imageUrl ?? ""}
+                    onChange={(e) =>
+                      patchBlockConfig(block.id, { imageUrl: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono"
+                    placeholder="https://…/foto.jpg"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Sem imagem, mostra um espaço com ícone (não quebra).
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Lado da imagem
+                    </label>
+                    <div className="grid grid-cols-2 gap-1">
+                      {(["left", "right"] as const).map((sideVal) => (
+                        <button
+                          key={sideVal}
+                          type="button"
+                          onClick={() =>
+                            patchBlockConfig(block.id, { imageSide: sideVal })
+                          }
+                          className={`rounded-lg border-2 px-2 py-1.5 text-[11px] font-semibold ${
+                            (cfg.imageSide ?? "right") === sideVal
+                              ? "border-landing-primary bg-teal-50 text-slate-800"
+                              : "border-slate-200 bg-white text-slate-600"
+                          }`}
+                        >
+                          {sideVal === "left" ? "Esquerda" : "Direita"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Botão (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={cfg.ctaLabel ?? ""}
+                      maxLength={FEAT.ctaLabel.max}
+                      onChange={(e) =>
+                        patchBlockConfig(block.id, { ctaLabel: e.target.value })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                      placeholder="Ver coleção"
+                    />
+                  </div>
+                </div>
+
+                {(cfg.ctaLabel ?? "").trim() && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Link do botão
+                    </label>
+                    <input
+                      type="text"
+                      value={cfg.ctaHref ?? ""}
+                      onChange={(e) =>
+                        patchBlockConfig(block.id, { ctaHref: e.target.value })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono"
+                      placeholder="#catalogo"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={addFeatureBlock}
+          className="w-full py-3 rounded-xl bg-slate-100 text-slate-800 font-semibold text-sm hover:bg-slate-200"
+        >
+          + Adicionar destaque (imagem + texto)
+        </button>
       </EditorSheet>
 
       <EditorSheet

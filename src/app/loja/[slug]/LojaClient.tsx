@@ -10,11 +10,14 @@ import {
   sumVariantStockRows,
 } from "@/lib/productVariants";
 import {
+  type HeroSlide,
   type StorefrontCategoryItem,
   type StorefrontSettings,
   storefrontRichFooterVisible,
 } from "@/lib/storefront";
 import { StorefrontRichFooter } from "@/components/storefront/StorefrontRichFooter";
+import { BlockRenderer } from "@/components/storefront/blocks";
+import type { BlockProduct } from "@/components/storefront/blocks";
 import { swatchNeedsStrongBorder } from "@/lib/colorSwatch";
 import { resolveSwatchFill } from "@/lib/productColorHexes";
 import { isCustomerPhoneValid } from "@/lib/customerPhone";
@@ -180,24 +183,40 @@ function HeroSlideshowLayer({
   );
 }
 
-/** Banner + setas sobre a foto; bolinhas do carrossel fora do banner (não cobrem o texto). */
+/**
+ * Banner: carrossel onde CADA foto tem seu próprio formato (`overlay`/`split`)
+ * E seu próprio texto. Renderiza só o slide ativo (a altura acompanha o formato).
+ * Campo de texto vazio no slide → usa o `fallback` (texto geral do banner).
+ */
+type HeroFallbackContent = {
+  badge: string;
+  title: string;
+  subtitle: string;
+  couponCode: string;
+  ctaLabel: string;
+  ctaHref: string;
+};
+
 function HeroBannerBlock({
-  images,
+  slides,
   themePrimary,
-  children,
+  fallback,
+  onCta,
 }: {
-  images: string[];
+  slides: HeroSlide[];
   themePrimary: string;
-  children: React.ReactNode;
+  fallback: HeroFallbackContent;
+  onCta: (e: React.MouseEvent, href: string) => void;
 }) {
   const [idx, setIdx] = useState(0);
-  const len = images.length;
+  const len = slides.length;
   const safeIdx = len > 0 ? Math.min(idx, len - 1) : 0;
-  const imagesKey = useMemo(() => images.join("|"), [images]);
+  const slide = slides[safeIdx];
+  const slidesKey = useMemo(() => slides.map((s) => s.url).join("|"), [slides]);
 
   useEffect(() => {
     setIdx(0);
-  }, [imagesKey]);
+  }, [slidesKey]);
 
   useEffect(() => {
     if (len <= 1) return;
@@ -207,55 +226,161 @@ function HeroBannerBlock({
     return () => clearInterval(t);
   }, [len]);
 
+  if (!slide) return null;
+
+  // Conteúdo do slide ativo: usa o texto próprio da foto ou cai no texto geral.
+  const badge = slide.badge?.trim() || fallback.badge;
+  const title = slide.title?.trim() || fallback.title;
+  const highlight = slide.highlight?.trim() || "";
+  const subtitle = slide.subtitle?.trim() || fallback.subtitle;
+  const couponCode = slide.couponCode?.trim() || fallback.couponCode;
+  const ctaLabel = slide.ctaLabel?.trim() || fallback.ctaLabel;
+  const ctaHref = slide.ctaHref?.trim() || fallback.ctaHref || "#catalogo";
+
+  const textContent = (
+    <>
+      {badge && (
+        <p className="text-sm sm:text-base text-white/90 font-medium tracking-widest uppercase">
+          {badge}
+        </p>
+      )}
+      <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-[1.1] mt-2 drop-shadow-lg">
+        {title}
+      </h2>
+      {highlight && (
+        <p className="leading-none mt-1">
+          {/* Destaque cursivo em degradê animado (estilo do outro projeto). */}
+          <span
+            className="vw-anim-gradient font-script font-bold text-4xl sm:text-5xl md:text-6xl"
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, var(--store-primary), #ffffff, var(--store-primary))",
+            }}
+          >
+            {highlight}
+          </span>
+        </p>
+      )}
+      {subtitle && (
+        <p className="mt-3 text-white/85 text-sm md:text-base max-w-md leading-relaxed drop-shadow">
+          {subtitle}
+        </p>
+      )}
+      {couponCode && (
+        <div className="mt-5 inline-flex items-center gap-2 self-start">
+          <span className="text-xs sm:text-sm font-semibold uppercase tracking-widest text-white/80">
+            Use o código
+          </span>
+          <span className="px-3 py-1 rounded bg-white/15 border border-white/30 text-white text-sm font-bold tracking-wider backdrop-blur-sm">
+            {couponCode}
+          </span>
+        </div>
+      )}
+      {ctaLabel && (
+        <a
+          href={ctaHref}
+          onClick={(e) => onCta(e, ctaHref)}
+          className="mt-6 inline-flex items-center justify-center px-8 py-3 rounded-md text-white text-sm font-bold uppercase tracking-widest shadow-lg hover:opacity-90 transition-opacity self-start"
+          style={{ backgroundColor: "var(--store-primary)" }}
+        >
+          {ctaLabel}
+        </a>
+      )}
+    </>
+  );
+
+  const arrows = len > 1 && (
+    <>
+      <button
+        type="button"
+        onClick={() => setIdx((i) => (i - 1 + len) % len)}
+        className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/35 text-white text-xl font-light hover:bg-black/50 backdrop-blur-sm"
+        aria-label="Foto anterior"
+      >
+        ‹
+      </button>
+      <button
+        type="button"
+        onClick={() => setIdx((i) => (i + 1) % len)}
+        className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/35 text-white text-xl font-light hover:bg-black/50 backdrop-blur-sm"
+        aria-label="Próxima foto"
+      >
+        ›
+      </button>
+    </>
+  );
+
+  const dots = len > 1 && (
+    <nav
+      className="w-full flex justify-center items-center gap-2 py-2.5 sm:py-3 bg-white border-b border-stone-200/90"
+      aria-label="Fotos do banner"
+    >
+      {slides.map((_, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => setIdx(i)}
+          className={`h-2 rounded-full transition-all duration-300 ${
+            i === safeIdx ? "w-7 shadow-sm" : "w-2 opacity-80"
+          }`}
+          style={{
+            backgroundColor: i === safeIdx ? themePrimary : "rgb(163 163 163)",
+          }}
+          aria-label={`Ir para foto ${i + 1}`}
+          aria-current={i === safeIdx ? "true" : undefined}
+        />
+      ))}
+    </nav>
+  );
+
+  // Formato dividido: foto de um lado, texto (painel colorido) do outro.
+  if (slide.layout === "split") {
+    const photo = (
+      <div className="relative w-full md:w-1/2 aspect-square md:aspect-auto md:self-stretch overflow-hidden">
+        <HeroSlideshowLayer images={[slide.url]} activeIndex={0} />
+        {arrows}
+      </div>
+    );
+    const text = (
+      <div
+        className="w-full md:w-1/2 flex flex-col justify-center px-6 sm:px-10 md:px-12 py-8 md:py-12"
+        style={{ backgroundColor: "var(--store-secondary)" }}
+      >
+        {textContent}
+      </div>
+    );
+    return (
+      <>
+        <section className="relative w-full flex flex-col md:flex-row md:min-h-[340px] lg:min-h-[440px] overflow-hidden">
+          {slide.photoSide === "left" ? (
+            <>
+              {photo}
+              {text}
+            </>
+          ) : (
+            <>
+              {text}
+              {photo}
+            </>
+          )}
+        </section>
+        {dots}
+      </>
+    );
+  }
+
+  // Formato padrão: foto de fundo com o texto por cima.
   return (
     <>
       <section className="relative w-full aspect-[16/9] sm:aspect-[2/1] md:aspect-[21/9] lg:aspect-[1920/600] overflow-hidden">
-        <HeroSlideshowLayer images={images} activeIndex={safeIdx} />
-        {len > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={() => setIdx((i) => (i - 1 + len) % len)}
-              className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/35 text-white text-xl font-light hover:bg-black/50 backdrop-blur-sm"
-              aria-label="Foto anterior"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              onClick={() => setIdx((i) => (i + 1) % len)}
-              className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/35 text-white text-xl font-light hover:bg-black/50 backdrop-blur-sm"
-              aria-label="Próxima foto"
-            >
-              ›
-            </button>
-          </>
-        )}
-        {children}
+        <HeroSlideshowLayer images={[slide.url]} activeIndex={0} />
+        {arrows}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/20 to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-0 z-20 flex flex-col justify-end px-6 sm:px-10 md:px-14 pb-6 sm:pb-10 md:pb-12 max-w-3xl">
+          {textContent}
+        </div>
       </section>
-      {len > 1 && (
-        <nav
-          className="w-full flex justify-center items-center gap-2 py-2.5 sm:py-3 bg-white border-b border-stone-200/90"
-          aria-label="Fotos do banner"
-        >
-          {images.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setIdx(i)}
-              className={`h-2 rounded-full transition-all duration-300 ${
-                i === safeIdx ? "w-7 shadow-sm" : "w-2 opacity-80"
-              }`}
-              style={{
-                backgroundColor:
-                  i === safeIdx ? themePrimary : "rgb(163 163 163)",
-              }}
-              aria-label={`Ir para foto ${i + 1}`}
-              aria-current={i === safeIdx ? "true" : undefined}
-            />
-          ))}
-        </nav>
-      )}
+      {dots}
     </>
   );
 }
@@ -1134,6 +1259,70 @@ function scrollToCatalogo() {
   });
 }
 
+/** Menu de categorias no topo (barra horizontal, rola no celular). */
+function CategoryNavBar({
+  items,
+  selectedLabel,
+  onSelect,
+}: {
+  items: StorefrontCategoryItem[];
+  selectedLabel: string | null;
+  onSelect: (label: string | null) => void;
+}) {
+  const itemClass = (active: boolean) =>
+    `shrink-0 whitespace-nowrap px-3 py-3 text-sm font-medium border-b-2 transition-colors ${
+      active
+        ? "font-semibold"
+        : "border-transparent text-stone-600 hover:text-stone-900"
+    }`;
+  return (
+    <nav
+      className="w-full bg-white border-b border-stone-200/80"
+      aria-label="Categorias"
+    >
+      <div className="max-w-6xl mx-auto px-2 sm:px-4 flex items-stretch gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          type="button"
+          onClick={() => onSelect(null)}
+          className={itemClass(selectedLabel == null)}
+          style={
+            selectedLabel == null
+              ? { color: "var(--store-primary)", borderColor: "var(--store-primary)" }
+              : undefined
+          }
+        >
+          ✨ Novidades
+        </button>
+        {items.map((it) => {
+          const active =
+            selectedLabel != null &&
+            it.label.localeCompare(selectedLabel, "pt", {
+              sensitivity: "base",
+            }) === 0;
+          return (
+            <button
+              key={it.label}
+              type="button"
+              onClick={() => onSelect(it.label)}
+              className={itemClass(active)}
+              style={
+                active
+                  ? {
+                      color: "var(--store-primary)",
+                      borderColor: "var(--store-primary)",
+                    }
+                  : undefined
+              }
+            >
+              {it.label}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 function StorefrontCategoriesStrip({
   items,
   selectedLabel,
@@ -1365,6 +1554,20 @@ export function LojaClient({
 
   const heroDisplayTitle =
     storefront.heroTitle.trim() || store.name;
+
+  /** Produtos no formato mínimo que os blocos (grade) esperam. */
+  const blockProducts = useMemo<BlockProduct[]>(
+    () =>
+      catalogProducts.map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        image: p.image,
+        compareAtPrice: p.compareAtPrice,
+        badge: p.isPromotion ? "Promoção" : null,
+      })),
+    [catalogProducts]
+  );
 
   /**
    * Faixa abaixo do banner:
@@ -1917,40 +2120,76 @@ export function LojaClient({
         </div>
       </header>
 
-      {/* Banner: um carrossel só; as fotos passam uma atrás da outra.
-          Só aparece se o vendedor enviou ao menos uma foto. */}
-      {storefront.heroImages.length > 0 && (
+      {/* Menu de categorias no topo (abaixo do cabeçalho). */}
+      {storefront.showCategoryNav && categoryStripItems.length > 0 && (
+        <CategoryNavBar
+          items={categoryStripItems}
+          selectedLabel={categoryFilter}
+          onSelect={setCategoryFilter}
+        />
+      )}
+
+      {/* Banner: um carrossel só; cada foto tem seu formato E seu texto.
+          Texto vazio na foto → usa o texto geral (fallback). */}
+      {storefront.heroSlides.length > 0 && (
         <HeroBannerBlock
-          images={storefront.heroImages}
+          slides={storefront.heroSlides}
           themePrimary={storefront.themePrimary}
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/20 to-transparent z-10 pointer-events-none" />
-          <div className="absolute inset-0 z-20 flex flex-col justify-end px-6 sm:px-10 md:px-14 pb-6 sm:pb-10 md:pb-12 max-w-3xl">
-            {storefront.heroSubtitle && (
-              <p className="text-sm sm:text-base text-white/90 font-medium tracking-widest uppercase">
-                {storefront.heroSubtitle}
-              </p>
-            )}
-            <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-[1.1] mt-2 drop-shadow-lg">
-              {heroDisplayTitle}
-            </h2>
-            {store.description && (
-              <p className="mt-3 text-white/85 text-sm md:text-base max-w-md leading-relaxed drop-shadow">
-                {store.description}
-              </p>
-            )}
-            <a
-              href={storefront.heroCtaHref || "#catalogo"}
-              onClick={(e) =>
-                handleHeroCta(e, storefront.heroCtaHref || "#catalogo")
-              }
-              className="mt-6 inline-flex items-center justify-center px-8 py-3 rounded-md text-white text-sm font-bold uppercase tracking-widest shadow-lg hover:opacity-90 transition-opacity self-start"
-              style={{ backgroundColor: "var(--store-secondary)" }}
-            >
-              {storefront.heroCtaLabel}
-            </a>
+          fallback={{
+            badge: storefront.heroSubtitle,
+            title: heroDisplayTitle,
+            subtitle: store.description ?? "",
+            couponCode: storefront.heroCouponCode,
+            ctaLabel: storefront.heroCtaLabel,
+            ctaHref: storefront.heroCtaHref,
+          }}
+          onCta={handleHeroCta}
+        />
+      )}
+
+      {/* Cards promocionais coloridos abaixo do banner. */}
+      {storefront.promoCards.length > 0 && (
+        <section className="max-w-6xl mx-auto w-full px-4 mt-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            {storefront.promoCards.map((c, i) => (
+              <a
+                key={i}
+                href={c.href || "#catalogo"}
+                onClick={(e) => handleHeroCta(e, c.href || "#catalogo")}
+                className="group relative flex flex-col justify-end p-3 sm:p-5 rounded-2xl overflow-hidden min-h-[90px] sm:min-h-[110px] transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+                style={{
+                  backgroundImage: `linear-gradient(135deg, ${c.from}, ${c.to})`,
+                }}
+              >
+                {/* brilho radial no canto superior */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.15)_0%,transparent_50%)]" />
+                <div className="relative z-10">
+                  {c.eyebrow && (
+                    <p className="text-[0.55rem] sm:text-[0.65rem] font-bold uppercase tracking-widest text-white/75 mb-0.5">
+                      {c.eyebrow}
+                    </p>
+                  )}
+                  <h3 className="text-xs sm:text-base font-bold text-white leading-snug">
+                    {c.title}
+                    {c.subtitle && (
+                      <>
+                        <br />
+                        <span className="text-white/90 font-medium text-[0.65rem] sm:text-sm">
+                          {c.subtitle}
+                        </span>
+                      </>
+                    )}
+                  </h3>
+                  {c.ctaLabel && (
+                    <span className="text-[0.6rem] sm:text-xs text-white/70 mt-1 flex items-center gap-1 group-hover:gap-2 transition-all">
+                      {c.ctaLabel} <span aria-hidden>→</span>
+                    </span>
+                  )}
+                </div>
+              </a>
+            ))}
           </div>
-        </HeroBannerBlock>
+        </section>
       )}
 
       {categoryStripItems.length > 0 && (
@@ -2095,6 +2334,11 @@ export function LojaClient({
           />
         )}
       </main>
+
+      {/* Blocos de conteúdo do builder (Destaques etc.), abaixo do catálogo. */}
+      {storefront.contentBlocks.map((block) => (
+        <BlockRenderer key={block.id} block={block} products={blockProducts} />
+      ))}
 
       <footer className="bg-stone-100/90 border-t border-stone-200/80 mt-4">
         <div className="max-w-6xl mx-auto px-4 py-10 md:py-12 grid grid-cols-1 sm:grid-cols-3 gap-8 text-sm">

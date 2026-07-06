@@ -1,6 +1,11 @@
 /**
  * Configurações visuais da loja pública (coluna `stores.storefront` JSONB).
  */
+import {
+  type StoreBlock,
+  type StoreBlockType,
+  STORE_BLOCK_TYPES,
+} from "@/components/storefront/blocks/types";
 
 /**
  * O banner é um único carrossel: as fotos passam uma atrás da outra (1→2→…).
@@ -32,15 +37,55 @@ export const HERO_RECOMMENDED_HEIGHT = 600;
 export const HERO_TARGET_RATIO = HERO_RECOMMENDED_WIDTH / HERO_RECOMMENDED_HEIGHT;
 
 /**
- * Avalia se uma foto serve para o banner sem cortar demais.
- * Banner é bem largo; fotos quadradas ou em pé perdem muito nas laterais/topo.
+ * Formato do banner:
+ * - `overlay` (padrão): foto ocupa tudo e o texto fica por cima.
+ * - `split`: foto de um lado e o texto do outro (painel colorido).
+ */
+export type HeroLayout = "overlay" | "split";
+/** No formato `split`, de que lado fica a foto. */
+export type HeroSplitPhotoSide = "left" | "right";
+
+/**
+ * Proporção de recorte da foto no formato "ao lado" (split). O espaço da foto
+ * ali é mais em pé/quadrado (não deitado como o banner de fundo), então
+ * recortamos ~quadrado (1:1) — encaixa bem no celular e no desktop.
+ */
+export const HERO_SPLIT_RATIO = 1;
+
+export function heroLayoutFromDb(v: unknown): HeroLayout {
+  return v === "split" ? "split" : "overlay";
+}
+
+export function heroSplitPhotoSideFromDb(v: unknown): HeroSplitPhotoSide {
+  return v === "left" ? "left" : "right";
+}
+
+/** Proporção de recorte recomendada conforme o formato da foto. */
+export function heroCropRatioForLayout(layout: HeroLayout): number {
+  return layout === "split" ? HERO_SPLIT_RATIO : HERO_TARGET_RATIO;
+}
+
+/**
+ * Avalia se uma foto serve para o formato escolhido sem cortar demais.
+ * - overlay: banner largo → fotos em pé perdem as bordas.
+ * - split: espaço ~quadrado → fotos muito deitadas ou muito em pé cortam.
  */
 export function heroImageProportionWarning(
   width: number,
-  height: number
+  height: number,
+  layout: HeroLayout = "overlay"
 ): string | null {
   if (!width || !height) return null;
   const ratio = width / height;
+  if (layout === "split") {
+    if (ratio > 1.7) {
+      return "Foto muito deitada para o formato ao lado: o topo e a base podem ser cortados.";
+    }
+    if (ratio < 0.55) {
+      return "Foto muito em pé para o formato ao lado: as laterais podem ser cortadas.";
+    }
+    return null;
+  }
   if (ratio < 1.2) {
     return "Foto quadrada ou em pé: vai cortar bastante as bordas. O ideal é uma foto larga (paisagem).";
   }
@@ -51,6 +96,188 @@ export function heroImageProportionWarning(
     return "Foto muito larga/fininha: o topo e a base podem ser cortados.";
   }
   return null;
+}
+
+/**
+ * Uma foto do banner com seu próprio formato E seu próprio conteúdo.
+ * `layout`/`photoSide` são por foto — mudar uma não afeta as outras.
+ * Os campos de texto são opcionais: **vazio = usa o texto geral do banner**
+ * (`heroSubtitle`/`heroTitle`/… em `StorefrontSettings`), então lojas simples
+ * podem ter um texto só para todas as fotos.
+ */
+export type HeroSlide = {
+  url: string;
+  layout: HeroLayout;
+  /** Só usado quando `layout === "split"`. */
+  photoSide: HeroSplitPhotoSide;
+  /** Etiqueta pequena (linha de cima, em maiúsculas). */
+  badge?: string;
+  /** Título grande. */
+  title?: string;
+  /** Destaque em degradê animado + fonte cursiva (2ª linha, ex.: "para o verão"). */
+  highlight?: string;
+  /** Frase de apoio. */
+  subtitle?: string;
+  /** Cupom "Use o código …". */
+  couponCode?: string;
+  /** Texto do botão. */
+  ctaLabel?: string;
+  /** Link do botão (âncora #catalogo ou URL). */
+  ctaHref?: string;
+};
+
+/** Campos de texto por slide (para ler/gravar mantendo só os preenchidos). */
+const HERO_SLIDE_TEXT_KEYS = [
+  "badge",
+  "title",
+  "highlight",
+  "subtitle",
+  "couponCode",
+  "ctaLabel",
+  "ctaHref",
+] as const;
+
+/** Extrai os textos preenchidos de um slide (ignora vazios → usa o geral). */
+function heroSlideTextFromRaw(
+  s: Record<string, unknown>
+): Partial<HeroSlide> {
+  const out: Partial<HeroSlide> = {};
+  for (const k of HERO_SLIDE_TEXT_KEYS) {
+    const v = typeof s[k] === "string" ? (s[k] as string).trim() : "";
+    if (v) out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Card promocional colorido exibido **abaixo do banner** (faixa de 3).
+ * `from`/`to` = cores do gradiente (hex). `href` = âncora #catalogo ou URL.
+ */
+export type PromoCard = {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  ctaLabel: string;
+  href: string;
+  from: string;
+  to: string;
+};
+
+/** Máximo de cards promocionais abaixo do banner. */
+export const MAX_PROMO_CARDS = 6;
+
+/** Cards prontos ("pré-moldados") para o lojista adicionar com 1 clique. */
+export const PROMO_CARD_PRESETS: { id: string; label: string; card: PromoCard }[] = [
+  {
+    id: "imperdivel",
+    label: "Imperdível (laranja)",
+    card: {
+      eyebrow: "🔥 Imperdível",
+      title: "Camisetas & Polos",
+      subtitle: "A partir de R$ 39",
+      ctaLabel: "Explorar",
+      href: "#catalogo",
+      from: "#fb923c",
+      to: "#ea580c",
+    },
+  },
+  {
+    id: "destaque",
+    label: "Destaque (roxo)",
+    card: {
+      eyebrow: "✨ Destaque",
+      title: "Vestidos",
+      subtitle: "Coleção nova",
+      ctaLabel: "Ver modelos",
+      href: "#catalogo",
+      from: "#a855f7",
+      to: "#7e22ce",
+    },
+  },
+  {
+    id: "oferta",
+    label: "Oferta (azul)",
+    card: {
+      eyebrow: "⚡ Oferta",
+      title: "Até 50% OFF",
+      subtitle: "Peças selecionadas",
+      ctaLabel: "Aproveitar",
+      href: "#catalogo",
+      from: "#2563eb",
+      to: "#0c2b6b",
+    },
+  },
+  {
+    id: "frete",
+    label: "Frete grátis (verde)",
+    card: {
+      eyebrow: "🚚 Frete grátis",
+      title: "Acima de R$ 99",
+      subtitle: "Para todo o Brasil",
+      ctaLabel: "Comprar",
+      href: "#catalogo",
+      from: "#10b981",
+      to: "#047857",
+    },
+  },
+  {
+    id: "novidade",
+    label: "Novidade (rosa)",
+    card: {
+      eyebrow: "🆕 Novidade",
+      title: "Recém-chegados",
+      subtitle: "Confira as novidades",
+      ctaLabel: "Ver agora",
+      href: "#catalogo",
+      from: "#ec4899",
+      to: "#be185d",
+    },
+  },
+  {
+    id: "premium",
+    label: "Premium (escuro)",
+    card: {
+      eyebrow: "👑 Premium",
+      title: "Seleção especial",
+      subtitle: "As melhores peças",
+      ctaLabel: "Descobrir",
+      href: "#catalogo",
+      from: "#334155",
+      to: "#0f172a",
+    },
+  },
+];
+
+/** Só as cores dos presets, para recolorir um card existente. */
+export const PROMO_CARD_COLORS = PROMO_CARD_PRESETS.map((p) => ({
+  id: p.id,
+  from: p.card.from,
+  to: p.card.to,
+}));
+
+function promoCardsFromDb(v: unknown): PromoCard[] {
+  if (!Array.isArray(v)) return [];
+  const out: PromoCard[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== "object") continue;
+    const o = raw as Record<string, unknown>;
+    const pick = (k: string) =>
+      typeof o[k] === "string" ? (o[k] as string).trim() : "";
+    const card: PromoCard = {
+      eyebrow: pick("eyebrow"),
+      title: pick("title"),
+      subtitle: pick("subtitle"),
+      ctaLabel: pick("ctaLabel"),
+      href: pick("href"),
+      from: pick("from") || "#334155",
+      to: pick("to") || "#0f172a",
+    };
+    // Ignora cards totalmente vazios.
+    if (!card.eyebrow && !card.title && !card.subtitle) continue;
+    out.push(card);
+    if (out.length >= MAX_PROMO_CARDS) break;
+  }
+  return out;
 }
 
 /** Bolinha “Categorias” abaixo do banner (estilo stories). */
@@ -71,10 +298,21 @@ export type StorefrontSettings = {
   heroCtaHref: string;
   /**
    * Fotos do banner — um único carrossel: passam uma atrás da outra na loja
-   * (1 = estática; 2+ = passa sozinha). Vazio = sem banner. A quantidade é
-   * limitada pelo plano (ver `bannerPhotoLimitForPlan`).
+   * (1 = estática; 2+ = passa sozinha). Vazio = sem banner. Cada foto tem seu
+   * próprio formato (`layout`/`photoSide`). A quantidade é limitada pelo plano
+   * (ver `bannerPhotoLimitForPlan`).
    */
-  heroImages: string[];
+  heroSlides: HeroSlide[];
+  /** Formato aplicado às PRÓXIMAS fotos adicionadas (padrão do editor). */
+  heroLayout: HeroLayout;
+  /** Lado padrão da foto (dividido) para as próximas fotos adicionadas. */
+  heroSplitPhotoSide: HeroSplitPhotoSide;
+  /** Código de cupom mostrado no banner (opcional; ex.: "BEMVINDO10"). */
+  heroCouponCode: string;
+  /** Cards promocionais coloridos exibidos abaixo do banner (faixa de 3). */
+  promoCards: PromoCard[];
+  /** Mostra a barra de menu de categorias no topo (abaixo do cabeçalho). */
+  showCategoryNav: boolean;
   /** Frases curtas abaixo do logo (ex.: pedido mínimo) */
   infoBullets: string[];
   /** Cor de destaque (botões catálogo, detalhes) — ex. rosa pó */
@@ -108,6 +346,11 @@ export type StorefrontSettings = {
   pixKey: string;
   /** Nome do titular da conta Pix (mostrado junto da chave). */
   pixName: string;
+  /**
+   * Blocos de conteúdo extra (builder), renderizados abaixo dos produtos na
+   * ordem do array. Ver `src/components/storefront/blocks`. Mora no mesmo JSONB.
+   */
+  contentBlocks: StoreBlock[];
 };
 
 export const DEFAULT_STOREFRONT: StorefrontSettings = {
@@ -115,7 +358,12 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroTitle: "",
   heroCtaLabel: "Ver produtos",
   heroCtaHref: "#catalogo",
-  heroImages: [],
+  heroSlides: [],
+  heroLayout: "overlay",
+  heroSplitPhotoSide: "right",
+  heroCouponCode: "",
+  promoCards: [],
+  showCategoryNav: true,
   infoBullets: [],
   themePrimary: "#c9a8ac",
   themeSecondary: "#5c2e36",
@@ -138,7 +386,42 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   footerShowCash: false,
   pixKey: "",
   pixName: "",
+  contentBlocks: [],
 };
+
+/** Máximo de blocos de conteúdo guardados (defensivo). */
+const MAX_CONTENT_BLOCKS = 20;
+
+const KNOWN_BLOCK_TYPES = new Set<StoreBlockType>(STORE_BLOCK_TYPES);
+
+/**
+ * Sanitiza a lista de blocos vinda do banco: mantém só entradas com `id`,
+ * `type` conhecido e `config` objeto. A config em si é validada/limitada em
+ * runtime pelos próprios componentes (fallbacks + `limitText`).
+ */
+function contentBlocksFromDb(v: unknown): StoreBlock[] {
+  if (!Array.isArray(v)) return [];
+  const out: StoreBlock[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== "object") continue;
+    const o = raw as Record<string, unknown>;
+    const type = o.type;
+    if (typeof type !== "string" || !KNOWN_BLOCK_TYPES.has(type as StoreBlockType)) {
+      continue;
+    }
+    const id =
+      typeof o.id === "string" && o.id.trim()
+        ? o.id
+        : `blk_${out.length}_${Math.random().toString(36).slice(2, 8)}`;
+    const config =
+      o.config && typeof o.config === "object"
+        ? (o.config as Record<string, unknown>)
+        : {};
+    out.push({ id, type, config } as StoreBlock);
+    if (out.length >= MAX_CONTENT_BLOCKS) break;
+  }
+  return out;
+}
 
 function str(v: unknown, fallback: string): string {
   return typeof v === "string" ? v : fallback;
@@ -214,25 +497,70 @@ function sanitizeStringList(raw: unknown): string[] {
     .filter(Boolean);
 }
 
-/**
- * Fotos do banner (carrossel único). Lê `heroImages` ou migra formatos
- * antigos: `heroCarousels` (faixas → achata tudo numa lista) ou `heroImage`
- * (foto única). Cap no teto absoluto.
- */
-function heroImagesFromDb(o: Record<string, unknown>): string[] {
+/** URLs antigas (string[]) achatadas de qualquer formato legado do banner. */
+function legacyHeroUrls(o: Record<string, unknown>): string[] {
   const direct = sanitizeStringList(o.heroImages);
-  if (direct.length > 0) return direct.slice(0, MAX_BANNER_PHOTOS_ABS);
+  if (direct.length > 0) return direct;
   // Legado: heroCarousels (faixas) → achata na ordem em uma lista só.
   if (Array.isArray(o.heroCarousels)) {
     const flat = o.heroCarousels.flatMap((c) => sanitizeStringList(c));
-    if (flat.length > 0) return flat.slice(0, MAX_BANNER_PHOTOS_ABS);
+    if (flat.length > 0) return flat;
   }
   // Legado mais antigo: heroImage (uma foto só).
   const single = o.heroImage;
-  if (typeof single === "string" && single.trim()) {
-    return [single.trim()];
-  }
+  if (typeof single === "string" && single.trim()) return [single.trim()];
   return [];
+}
+
+/**
+ * Fotos do banner com formato por foto (`heroSlides`). Migra o formato antigo
+ * (`heroImages`/`heroCarousels`/`heroImage`, que eram só URLs) aplicando o
+ * formato global anterior (`heroLayout`/`heroSplitPhotoSide`) em cada foto.
+ * Cap no teto absoluto.
+ */
+function heroSlidesFromDb(o: Record<string, unknown>): HeroSlide[] {
+  // Novo formato: lista de objetos { url, layout, photoSide }.
+  if (Array.isArray(o.heroSlides)) {
+    const out: HeroSlide[] = [];
+    for (const raw of o.heroSlides) {
+      if (!raw || typeof raw !== "object") continue;
+      const s = raw as Record<string, unknown>;
+      const url = typeof s.url === "string" ? s.url.trim() : "";
+      if (!url) continue;
+      out.push({
+        url,
+        layout: heroLayoutFromDb(s.layout),
+        photoSide: heroSplitPhotoSideFromDb(s.photoSide),
+        ...heroSlideTextFromRaw(s),
+      });
+      if (out.length >= MAX_BANNER_PHOTOS_ABS) break;
+    }
+    if (out.length > 0) return out;
+  }
+  // Legado: só URLs → herdam o formato global que existia.
+  const layout = heroLayoutFromDb(o.heroLayout);
+  const photoSide = heroSplitPhotoSideFromDb(o.heroSplitPhotoSide);
+  return legacyHeroUrls(o)
+    .slice(0, MAX_BANNER_PHOTOS_ABS)
+    .map((url) => ({ url, layout, photoSide }));
+}
+
+/** Sanitiza a lista de slides para gravar (aparadas, com formato válido, cap). */
+function heroSlidesToDb(slides: HeroSlide[]): HeroSlide[] {
+  if (!Array.isArray(slides)) return [];
+  const out: HeroSlide[] = [];
+  for (const s of slides) {
+    const url = typeof s?.url === "string" ? s.url.trim() : "";
+    if (!url) continue;
+    out.push({
+      url,
+      layout: heroLayoutFromDb(s.layout),
+      photoSide: heroSplitPhotoSideFromDb(s.photoSide),
+      ...heroSlideTextFromRaw(s as unknown as Record<string, unknown>),
+    });
+    if (out.length >= MAX_BANNER_PHOTOS_ABS) break;
+  }
+  return out;
 }
 
 /** Normaliza entrada do vendedor para URL do Instagram. */
@@ -266,7 +594,12 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     heroTitle: strOrEmpty(o.heroTitle),
     heroCtaLabel: str(o.heroCtaLabel, DEFAULT_STOREFRONT.heroCtaLabel),
     heroCtaHref: str(o.heroCtaHref, DEFAULT_STOREFRONT.heroCtaHref),
-    heroImages: heroImagesFromDb(o),
+    heroSlides: heroSlidesFromDb(o),
+    heroLayout: heroLayoutFromDb(o.heroLayout),
+    heroSplitPhotoSide: heroSplitPhotoSideFromDb(o.heroSplitPhotoSide),
+    heroCouponCode: strOrEmpty(o.heroCouponCode),
+    promoCards: promoCardsFromDb(o.promoCards),
+    showCategoryNav: boolFromDb(o.showCategoryNav, DEFAULT_STOREFRONT.showCategoryNav),
     infoBullets: bulletsFromDb(o.infoBullets),
     themePrimary: str(o.themePrimary, DEFAULT_STOREFRONT.themePrimary),
     themeSecondary: str(o.themeSecondary, DEFAULT_STOREFRONT.themeSecondary),
@@ -298,6 +631,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     ),
     pixKey: strOrEmpty(o.pixKey),
     pixName: strOrEmpty(o.pixName),
+    contentBlocks: contentBlocksFromDb(o.contentBlocks),
   };
 }
 
@@ -307,7 +641,12 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     heroTitle: s.heroTitle.trim(),
     heroCtaLabel: s.heroCtaLabel.trim(),
     heroCtaHref: s.heroCtaHref.trim() || "#catalogo",
-    heroImages: sanitizeStringList(s.heroImages).slice(0, MAX_BANNER_PHOTOS_ABS),
+    heroSlides: heroSlidesToDb(s.heroSlides),
+    heroLayout: heroLayoutFromDb(s.heroLayout),
+    heroSplitPhotoSide: heroSplitPhotoSideFromDb(s.heroSplitPhotoSide),
+    heroCouponCode: s.heroCouponCode.trim(),
+    promoCards: promoCardsFromDb(s.promoCards),
+    showCategoryNav: s.showCategoryNav,
     infoBullets: s.infoBullets.map((b) => b.trim()).filter(Boolean),
     themePrimary: s.themePrimary.trim(),
     themeSecondary: s.themeSecondary.trim(),
@@ -329,6 +668,10 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     footerShowCash: s.footerShowCash,
     pixKey: s.pixKey.trim(),
     pixName: s.pixName.trim(),
+    contentBlocks: contentBlocksFromDb(s.contentBlocks).slice(
+      0,
+      MAX_CONTENT_BLOCKS
+    ),
     categories: s.categories
       .map((c) => {
         const label = c.label.trim();
