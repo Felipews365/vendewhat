@@ -246,6 +246,16 @@ export function ProductPhotosPicker({
     onItemsChange(items.filter((i) => i.id !== id));
   }
 
+  /** Move a foto para a 1.ª posição (a capa = primeira foto em toda a loja). */
+  function makeCover(id: string) {
+    const idx = itemsRef.current.findIndex((i) => i.id === id);
+    if (idx <= 0) return;
+    const next = [...itemsRef.current];
+    const [it] = next.splice(idx, 1);
+    next.unshift(it);
+    onItemsChange(next);
+  }
+
   const accentRing =
     variant === "editor"
       ? "text-landing-primary focus:ring-landing-primary"
@@ -301,6 +311,20 @@ export function ProductPhotosPicker({
                   >
                     ×
                   </button>
+                  {i === 0 ? (
+                    <span className="absolute bottom-1.5 left-1.5 z-10 rounded-full bg-landing-primary text-white text-[10px] font-semibold px-2 py-0.5 shadow-md pointer-events-none">
+                      ★ Capa
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => makeCover(item.id)}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="absolute bottom-1.5 left-1.5 z-10 rounded-full bg-black/60 text-white text-[10px] font-semibold px-2 py-0.5 shadow-md hover:bg-black/80"
+                    >
+                      Tornar capa
+                    </button>
+                  )}
                 </div>
               );
             }
@@ -375,7 +399,7 @@ export function ProductPhotosPicker({
       </label>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {items.map((item) => {
+        {items.map((item, i) => {
           const src = item.kind === "remote" ? item.url : item.preview;
           return (
             <div
@@ -396,6 +420,20 @@ export function ProductPhotosPicker({
               >
                 ×
               </button>
+              {i === 0 ? (
+                <span className="absolute bottom-2 left-2 z-10 rounded-full bg-whatsapp text-white text-[11px] font-semibold px-2 py-0.5 shadow-md pointer-events-none">
+                  ★ Capa
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => makeCover(item.id)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="absolute bottom-2 left-2 z-10 rounded-full bg-black/60 text-white text-[11px] font-semibold px-2 py-0.5 shadow-md hover:bg-black/80"
+                >
+                  Tornar capa
+                </button>
+              )}
             </div>
           );
         })}

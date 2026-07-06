@@ -60,6 +60,9 @@ import {
 
 type ProductTab = "produto" | "variacoes" | "estoque";
 
+// Limite prático para o vídeo do produto (upload ao bucket product-images).
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+
 const INITIAL_FORM = {
   name: "",
   productReference: "",
@@ -147,6 +150,8 @@ export default function NovoProdutoPage() {
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [storeId, setStoreId] = useState<string | null>(null);
   const [categorySuggestionsRefresh, setCategorySuggestionsRefresh] = useState(0);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoUploading, setVideoUploading] = useState(false);
 
   const hasVariantOptions = colors.length > 0 || sizes.length > 0;
 
@@ -185,6 +190,51 @@ export default function NovoProdutoPage() {
     setForm({ ...form, [e.target.name]: e.target.value });
     setError("");
     setSaveOk(false);
+  }
+
+  async function handleVideoUpload(file: File) {
+    if (!file.type.startsWith("video/")) {
+      setError("Envie um arquivo de vídeo.");
+      return;
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      setError("O vídeo é muito grande (máx. 50MB).");
+      return;
+    }
+    setVideoUploading(true);
+    setError("");
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { data: store } = user
+        ? await supabase.from("stores").select("id").eq("user_id", user.id).maybeSingle()
+        : { data: null };
+      const sid = (store?.id as string) || storeId;
+      if (!sid) {
+        setError("Loja não encontrada para enviar o vídeo.");
+        return;
+      }
+      const ext = file.name.split(".").pop() || "mp4";
+      const fileName = `${sid}/videos/${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("product-images")
+        .upload(fileName, file, { contentType: file.type });
+      if (upErr) {
+        setError("Erro ao enviar vídeo: " + upErr.message);
+        return;
+      }
+      const { data: urlData } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(fileName);
+      setVideoUrl(urlData.publicUrl);
+      setSaveOk(false);
+    } finally {
+      setVideoUploading(false);
+    }
   }
 
   function resetAll() {
@@ -292,6 +342,7 @@ export default function NovoProdutoPage() {
         active: true,
         image: imageUrls[0] ?? null,
         images: imageUrls,
+        video_url: videoUrl,
         colors,
         color_hexes,
         sizes,
@@ -314,6 +365,15 @@ export default function NovoProdutoPage() {
       ) {
         const { images: _i, ...withoutImages } = payload;
         insertError = (await supabase.from("products").insert(withoutImages))
+          .error;
+      }
+
+      if (
+        insertError &&
+        isMissingColumnError(insertError.message, "video_url", insertError.code)
+      ) {
+        const { video_url: _vu, ...withoutVideo } = payload;
+        insertError = (await supabase.from("products").insert(withoutVideo))
           .error;
       }
 
@@ -815,10 +875,45 @@ export default function NovoProdutoPage() {
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     Vídeo do produto
                   </label>
-                  <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">
-                    <span className="text-2xl block mb-1">🎬</span>
-                    Em breve
-                  </div>
+                  {videoUrl ? (
+                    <div className="space-y-2">
+                      <video
+                        src={videoUrl}
+                        controls
+                        playsInline
+                        className="w-full max-h-64 rounded-lg bg-black"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVideoUrl(null);
+                          setSaveOk(false);
+                        }}
+                        className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400"
+                      >
+                        Remover vídeo
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center cursor-pointer rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40 py-8 text-center text-slate-500 dark:text-slate-400 text-sm hover:border-landing-primary/50">
+                      <span className="text-2xl block mb-1">🎬</span>
+                      {videoUploading ? "Enviando vídeo…" : "Toque para enviar um vídeo"}
+                      <span className="text-[11px] text-slate-400 mt-1">
+                        MP4/MOV · máx. 50MB
+                      </span>
+                      <input
+                        type="file"
+                        accept="video/*"
+                        disabled={videoUploading}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleVideoUpload(file);
+                          e.target.value = "";
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
                 </div>
 
                 <div>

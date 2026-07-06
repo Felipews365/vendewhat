@@ -46,6 +46,8 @@ export type CatalogProduct = {
   price: number;
   image: string | null;
   images: string[];
+  /** Vídeo do produto (opcional), exibido no detalhe. */
+  videoUrl: string | null;
   colors: string[];
   /** Tom #rrggbb da bolinha por nome da cor (vendedor). */
   colorHexes: Record<string, string>;
@@ -994,6 +996,16 @@ function ProductDetailModal({
               <p className="mt-4 text-sm text-stone-600 leading-relaxed whitespace-pre-line">
                 {product.description}
               </p>
+            )}
+
+            {product.videoUrl && (
+              <video
+                src={product.videoUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="mt-4 w-full max-h-72 rounded-xl bg-black"
+              />
             )}
 
             {/* Cores */}

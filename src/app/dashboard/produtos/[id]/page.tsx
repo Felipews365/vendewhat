@@ -73,6 +73,9 @@ function remotePhotoId(url: string) {
 
 type ProductTab = "produto" | "variacoes" | "estoque";
 
+// Limite prático para o vídeo do produto (upload ao bucket product-images).
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+
 function TabButton({
   active,
   children,
@@ -160,6 +163,8 @@ export default function EditarProdutoPage() {
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [storeId, setStoreId] = useState<string | null>(null);
   const [categorySuggestionsRefresh, setCategorySuggestionsRefresh] = useState(0);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoUploading, setVideoUploading] = useState(false);
 
   const loadProduct = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -226,6 +231,7 @@ export default function EditarProdutoPage() {
           category?: string | null;
           image_object_position?: string | null;
           image_object_positions?: unknown;
+          video_url?: string | null;
         };
         const sid = (product as { store_id?: string }).store_id;
         setStoreId(typeof sid === "string" && sid ? sid : null);
@@ -252,6 +258,9 @@ export default function EditarProdutoPage() {
           ),
         });
         setIsPromotion(Boolean(row.is_promotion));
+        setVideoUrl(
+          typeof row.video_url === "string" && row.video_url ? row.video_url : null
+        );
         const sale = productSaleFromDb(product as Record<string, unknown>);
         setSaleMode({
           saleMode: sale.saleMode,
@@ -326,6 +335,44 @@ export default function EditarProdutoPage() {
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm({ ...form, [e.target.name]: e.target.value });
     setError("");
+  }
+
+  async function handleVideoUpload(file: File) {
+    if (!file.type.startsWith("video/")) {
+      setError("Envie um arquivo de vídeo.");
+      return;
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      setError("O vídeo é muito grande (máx. 50MB).");
+      return;
+    }
+    setVideoUploading(true);
+    setError("");
+    try {
+      const supabase = createClient();
+      const sid = storeId;
+      if (!sid) {
+        setError("Loja não encontrada para enviar o vídeo.");
+        return;
+      }
+      const ext = file.name.split(".").pop() || "mp4";
+      const fileName = `${sid}/videos/${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("product-images")
+        .upload(fileName, file, { contentType: file.type });
+      if (upErr) {
+        setError("Erro ao enviar vídeo: " + upErr.message);
+        return;
+      }
+      const { data: urlData } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(fileName);
+      setVideoUrl(urlData.publicUrl);
+    } finally {
+      setVideoUploading(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -421,6 +468,7 @@ export default function EditarProdutoPage() {
         stock: stockNum,
         image: finalUrls[0] ?? null,
         images: finalUrls,
+        video_url: videoUrl,
         colors,
         color_hexes,
         sizes,
@@ -452,6 +500,19 @@ export default function EditarProdutoPage() {
           await supabase
             .from("products")
             .update(withoutImages)
+            .eq("id", productId)
+        ).error;
+      }
+
+      if (
+        updateError &&
+        isMissingColumnError(updateError.message, "video_url", updateError.code)
+      ) {
+        const { video_url: _vu, ...withoutVideo } = updatePayload;
+        updateError = (
+          await supabase
+            .from("products")
+            .update(withoutVideo)
             .eq("id", productId)
         ).error;
       }
@@ -927,10 +988,42 @@ export default function EditarProdutoPage() {
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     Vídeo do produto
                   </label>
-                  <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">
-                    <span className="text-2xl block mb-1">🎬</span>
-                    Em breve
-                  </div>
+                  {videoUrl ? (
+                    <div className="space-y-2">
+                      <video
+                        src={videoUrl}
+                        controls
+                        playsInline
+                        className="w-full max-h-64 rounded-lg bg-black"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setVideoUrl(null)}
+                        className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400"
+                      >
+                        Remover vídeo
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center cursor-pointer rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40 py-8 text-center text-slate-500 dark:text-slate-400 text-sm hover:border-landing-primary/50">
+                      <span className="text-2xl block mb-1">🎬</span>
+                      {videoUploading ? "Enviando vídeo…" : "Toque para enviar um vídeo"}
+                      <span className="text-[11px] text-slate-400 mt-1">
+                        MP4/MOV · máx. 50MB
+                      </span>
+                      <input
+                        type="file"
+                        accept="video/*"
+                        disabled={videoUploading}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleVideoUpload(file);
+                          e.target.value = "";
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
                 </div>
 
                 <div>

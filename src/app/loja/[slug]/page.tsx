@@ -160,6 +160,10 @@ export default async function LojaPublicaPage({ params }: Props) {
       price: Number(p.price),
       image: images[0] ?? null,
       images,
+      videoUrl: (() => {
+        const v = (p as { video_url?: string | null }).video_url;
+        return typeof v === "string" && v.trim() ? v : null;
+      })(),
       colors: optionArrayFromDb(p.colors),
       colorHexes: colorHexesFromDb(
         (p as { color_hexes?: unknown }).color_hexes
