@@ -70,6 +70,36 @@ function formatPrice(value: number): string {
   return value.toFixed(2).replace(".", ",");
 }
 
+/** Conectores que ficam minúsculos no meio de um nome (pt-BR). */
+const TITLE_CASE_LOWER = new Set([
+  "da",
+  "de",
+  "do",
+  "das",
+  "dos",
+  "e",
+  "di",
+  "du",
+]);
+
+/**
+ * "Primeira letra maiúscula em cada palavra", mantendo conectores (da, de, do,
+ * e…) minúsculos — exceto quando são a primeira palavra. Ex.: "felipe da silva"
+ * → "Felipe da Silva"; "santa cruz do capibaribe" → "Santa Cruz do Capibaribe".
+ */
+function titleCasePtBr(raw: string): string {
+  const s = raw.trim();
+  if (!s) return s;
+  return s
+    .split(/\s+/)
+    .map((word, i) => {
+      const lower = word.toLocaleLowerCase("pt");
+      if (i > 0 && TITLE_CASE_LOWER.has(lower)) return lower;
+      return lower.charAt(0).toLocaleUpperCase("pt") + lower.slice(1);
+    })
+    .join(" ");
+}
+
 const CATEGORY_SPLIT_RE = /[,;/|]+/;
 
 function normCategoryLabel(s: string): string {
@@ -1781,7 +1811,7 @@ export function LojaClient({
       lines.push(`*Código do pedido:* #${orderCode}`, "");
     }
     lines.push(
-      `*Cliente:* ${customerName.trim() || "—"}`,
+      `*Cliente:* ${titleCasePtBr(customerName) || "—"}`,
       `*Telefone / WhatsApp:* ${customerPhone.trim() || "—"}`,
     );
     if (shippingMode) {
@@ -1801,7 +1831,8 @@ export function LojaClient({
       v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     const itemLines = items.map((i) => {
       const ref = i.productReference?.trim();
-      const namePart = ref ? `${i.name} (Ref. ${ref})` : i.name;
+      const displayName = titleCasePtBr(i.name);
+      const namePart = ref ? `${displayName} (Ref. ${ref})` : displayName;
       const seg: string[] = [`${i.quantity}x ${namePart}`];
       if (i.color) seg.push(i.color);
       if (i.size) seg.push(`Tam. ${i.size}`);
