@@ -441,6 +441,73 @@ export async function isCustomerPaused(
   return false;
 }
 
+// --- Tags de conversa --------------------------------------------------------
+
+const CONV_TAGS = "whatsapp_conversation_tags";
+
+function sanitizeTags(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of input) {
+    const s = String(t ?? "").trim().slice(0, 30);
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+    if (out.length >= 8) break; // teto de tags por conversa
+  }
+  return out;
+}
+
+/** Mapa telefone (dígitos) -> tags da conversa, para a loja inteira. */
+export async function listConversationTags(
+  db: SupabaseClient,
+  storeId: string
+): Promise<Record<string, string[]>> {
+  const { data } = await db
+    .from(CONV_TAGS)
+    .select("customer_phone, tags")
+    .eq("store_id", storeId);
+  const map: Record<string, string[]> = {};
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const phone = String(r.customer_phone ?? "").replace(/\D/g, "");
+    if (!phone) continue;
+    map[phone] = sanitizeTags(r.tags);
+  }
+  return map;
+}
+
+/** Define as tags de uma conversa (lista vazia remove a linha). */
+export async function setConversationTags(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string,
+  tags: string[]
+): Promise<string[]> {
+  const clean = sanitizeTags(tags);
+  const phone = customerPhone.replace(/\D/g, "");
+  if (clean.length === 0) {
+    await db
+      .from(CONV_TAGS)
+      .delete()
+      .eq("store_id", storeId)
+      .eq("customer_phone", phone);
+    return [];
+  }
+  await db.from(CONV_TAGS).upsert(
+    {
+      store_id: storeId,
+      customer_phone: phone,
+      tags: clean,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "store_id,customer_phone" }
+  );
+  return clean;
+}
+
 // --- Follow-up (cron) --------------------------------------------------------
 
 const FOLLOWUPS = "whatsapp_followups";

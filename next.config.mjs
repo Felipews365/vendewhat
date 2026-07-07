@@ -16,7 +16,7 @@ const nextConfig = {
   // Next; tratá-lo como externo faz o Node carregá-lo em runtime (gera o catálogo
   // em PDF na rota /api/loja/[slug]/catalogo e no envio pela IA no WhatsApp).
   experimental: {
-    serverComponentsExternalPackages: ["@react-pdf/renderer"],
+    serverComponentsExternalPackages: ["@react-pdf/renderer", "sharp"],
   },
   // OneDrive / rede / alguns antivírus no Windows não disparam eventos de arquivo;
   // o polling faz o hot-reload funcionar (atualiza ao salvar sem reiniciar).

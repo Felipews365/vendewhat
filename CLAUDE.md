@@ -545,11 +545,13 @@ cliente escolher pelo site OU folheando o PDF. **Sem migration** (o PDF mora no 
   Cada produto vira um card: **foto de capa + nome + preço** (com risco no preço antigo em
   promoção) **+ cores + tamanhos + descrição**. O cabeçalho tem **logo + nome da loja** e um
   **QR code** (lib `qrcode`) que abre a loja; o rodapé traz a URL e a paginação. O
-  `@react-pdf` só lê **JPG/PNG** — como as fotos passam pelo crop que exporta JPEG, dá para
-  embutir direto (as fotos são baixadas como data URI, com concorrência limitada; formato não
-  suportado, ex.: logo WebP, é ignorado). Como `@react-pdf` traz deps que quebram no bundler,
-  ele está em `experimental.serverComponentsExternalPackages` no
-  [next.config.mjs](next.config.mjs).
+  `@react-pdf` só lê **JPG/PNG** — as fotos são baixadas e **recomprimidas com `sharp`**
+  (`compressForPdf`: redimensiona p/ máx. 640px + JPEG q70) antes de embutir, o que derruba o
+  tamanho do PDF (era ~7MB; as fotos full-res pesavam demais). O `sharp` também **converte WebP→JPEG**,
+  então logos/fotos WebP agora entram (antes eram ignoradas). Se o `sharp` falhar, cai no buffer
+  original. As imagens são baixadas com concorrência limitada. Como `@react-pdf` e `sharp` trazem
+  deps/binários que quebram no bundler, ambos estão em
+  `experimental.serverComponentsExternalPackages` no [next.config.mjs](next.config.mjs).
 - **Cache no bucket:** `ensureCatalogPdfUrl` (em [catalogPdf.tsx](src/lib/catalogPdf.tsx))
   gera e guarda o PDF em `product-images/catalogos/{slug}.pdf` e devolve a **URL pública**
   (com `?v=` para furar cache de CDN). Regenera só se não existir ou se o cache passar de
@@ -627,6 +629,19 @@ WhatsApp Web. Componente [ConversationsPanel.tsx](src/components/dashboard/Conve
   desativado, 30min) — o mesmo comportamento do handoff automático. O painel atualiza as pausas
   (`onSent → loadPauses`), então o selo "você" aparece na lista. Exige o WhatsApp conectado
   (`status === "connected"`), senão o envio é bloqueado com aviso.
+- **Pausar/Reativar no cabeçalho:** o botão **Pausar IA / Reativar IA** no topo da conversa chama
+  `POST /api/whatsapp/pause` (`scope=customer`, `minutes=null` = até reativar) — o mesmo endpoint da
+  aba Pausar, só que sem trocar de aba. Atualiza via `onSent`.
+- **Tags na conversa:** cada conversa pode receber **tags** (rótulos como "Interessado", "Pago",
+  "VIP"). Ficam numa barra abaixo do cabeçalho (chips removíveis + botão "+ Tag" com sugestões
+  prontas `TAG_PRESETS` e campo livre) e também aparecem **na lista** de conversas. Cor por tag é
+  determinística (hash → paleta). Armazenamento: tabela `whatsapp_conversation_tags`
+  (`(store_id, customer_phone)` PK, `tags jsonb`; sem RLS, só service role) via
+  `listConversationTags`/`setConversationTags` em [whatsappConfig.ts](src/lib/whatsappConfig.ts) e a
+  rota [/api/whatsapp/tags](src/app/api/whatsapp/tags/route.ts) (GET mapa telefone→tags; POST
+  `{phone, tags[]}`). **Migration:** rode
+  [supabase-migration-whatsapp-tags.sql](supabase-migration-whatsapp-tags.sql). A rota tolera a
+  tabela ausente (devolve vazio) até a migration ser aplicada.
 
 ### Follow-up automático (cutucar quem sumiu)
 

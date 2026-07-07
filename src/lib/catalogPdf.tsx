@@ -42,7 +42,34 @@ function brl(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-/** Baixa uma imagem e devolve como data URI (só JPG/PNG; null caso contrário). */
+/**
+ * Recomprime uma imagem para o PDF: redimensiona para no máx. `IMG_MAX_PX` de
+ * largura e reencoda como JPEG (~`IMG_QUALITY`%). Isso derruba o tamanho do PDF
+ * (fotos de produto full-res deixavam o catálogo com vários MB). Como o
+ * @react-pdf embute os bytes crus da imagem, encolher os bytes = PDF leve.
+ * Se o sharp falhar (formato exótico etc.), devolve o buffer original.
+ */
+const IMG_MAX_PX = 640;
+const IMG_QUALITY = 70;
+async function compressForPdf(buf: Buffer): Promise<{ buf: Buffer; mime: string }> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const out = await sharp(buf)
+      .rotate() // respeita orientação EXIF
+      .resize({ width: IMG_MAX_PX, height: IMG_MAX_PX, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: IMG_QUALITY, mozjpeg: true })
+      .toBuffer();
+    // Só usa se realmente ficou menor (imagens já pequenas podem crescer).
+    if (out.length > 0 && out.length < buf.length) {
+      return { buf: out, mime: "image/jpeg" };
+    }
+  } catch {
+    /* segue com o original */
+  }
+  return { buf, mime: buf[0] === 0x89 && buf[1] === 0x50 ? "image/png" : "image/jpeg" };
+}
+
+/** Baixa uma imagem e devolve como data URI leve (JPG/PNG; null caso contrário). */
 async function fetchImageDataUri(
   url: string,
   timeoutMs = 8000
@@ -59,9 +86,17 @@ async function fetchImageDataUri(
       // Descobre pelos bytes mágicos (o header pode vir errado/genérico).
       if (buf[0] === 0xff && buf[1] === 0xd8) mime = "image/jpeg";
       else if (buf[0] === 0x89 && buf[1] === 0x50) mime = "image/png";
-      else return null; // WebP e afins: o @react-pdf não renderiza.
+      else {
+        // WebP e afins: o @react-pdf não renderiza direto, mas o sharp converte.
+        const conv = await compressForPdf(buf);
+        if (conv.mime === "image/jpeg" && conv.buf !== buf) {
+          return `data:image/jpeg;base64,${conv.buf.toString("base64")}`;
+        }
+        return null;
+      }
     }
-    return `data:${mime};base64,${buf.toString("base64")}`;
+    const { buf: outBuf, mime: outMime } = await compressForPdf(buf);
+    return `data:${outMime};base64,${outBuf.toString("base64")}`;
   } catch {
     return null;
   }
