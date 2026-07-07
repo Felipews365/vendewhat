@@ -694,6 +694,7 @@ function ProductCatalogCard({
   installmentsMax,
   freeShippingLabel,
   showRatings,
+  revealDelayMs = 0,
   onOpen,
 }: {
   product: CatalogProduct;
@@ -705,10 +706,35 @@ function ProductCatalogCard({
   freeShippingLabel: string;
   /** Mostra estrelas (decorativas). */
   showRatings: boolean;
+  /** Atraso da animação de entrada (efeito escalonado na grade). */
+  revealDelayMs?: number;
   onOpen: (product: CatalogProduct) => void;
 }) {
   const imgSrc = product.images[0] ?? product.image;
   const soldOut = productSoldOut(product);
+
+  // Animação de entrada (fade-up ao aparecer na tela), como o BlurFade da referência.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setShown(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          setShown(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "0px 0px -40px 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   // Preço exibido (fardo mostra o preço do fardo quando configurado).
   const shownPrice =
@@ -737,11 +763,15 @@ function ProductCatalogCard({
 
   return (
     <div
-      className="group relative flex cursor-pointer flex-col"
+      ref={rootRef}
+      className={`group relative flex h-full cursor-pointer flex-col ${
+        shown ? "vw-fade-in-up" : "opacity-0"
+      }`}
+      style={{ animationDelay: `${revealDelayMs}ms` }}
       onClick={() => onOpen(product)}
     >
       <div
-        className="flex flex-col overflow-hidden rounded-xl border bg-white transition-all duration-200 hover:-translate-y-0.5"
+        className="flex h-full flex-col overflow-hidden rounded-xl border bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#A1CCF7] hover:shadow-[0_4px_12px_rgba(0,40,100,0.14)]"
         style={{ borderColor: EC.border }}
       >
         {/* Foto */}
@@ -840,8 +870,8 @@ function ProductCatalogCard({
             )}
             {discount != null && (
               <span
-                className="rounded px-1.5 py-0.5 text-[0.6rem] font-bold text-white"
-                style={{ backgroundColor: EC.sale }}
+                className="rounded-full px-1.5 py-0.5 text-[0.6rem] font-bold text-white"
+                style={{ backgroundColor: EC.accent }}
               >
                 -{discount}%
               </span>
@@ -869,14 +899,14 @@ function ProductCatalogCard({
 
           {showRatings && <StarRating />}
 
-          {/* Botão (abre o detalhe para escolher variação/quantidade) */}
+          {/* Botão: aparece no hover (igual à referência); abre o detalhe. */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onOpen(product);
             }}
-            className="mt-auto flex items-center justify-center gap-1.5 rounded-full py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
+            className="mt-auto flex translate-y-1 items-center justify-center gap-1.5 rounded-full py-2 text-xs font-bold text-white opacity-0 transition-all duration-200 hover:opacity-100 group-hover:translate-y-0 group-hover:opacity-100"
             style={{ backgroundColor: EC.primary }}
           >
             🛍️ {soldOut ? "Ver produto" : "Adicionar à sacola"}
@@ -2649,7 +2679,7 @@ export function LojaClient({
                   )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {promoProducts.map((product) => (
+                  {promoProducts.map((product, i) => (
                     <ProductCatalogCard
                       key={product.id}
                       product={product}
@@ -2657,6 +2687,7 @@ export function LojaClient({
                       installmentsMax={storefront.cardInstallmentsMax}
                       freeShippingLabel={storefront.cardFreeShipping}
                       showRatings={storefront.cardShowRatings}
+                      revealDelayMs={Math.min(i, 8) * 50}
                       onOpen={setSelectedProduct}
                     />
                   ))}
@@ -2698,7 +2729,7 @@ export function LojaClient({
                   </label>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {catalogSorted.map((product) => (
+                  {catalogSorted.map((product, i) => (
                     <ProductCatalogCard
                       key={product.id}
                       product={product}
@@ -2706,6 +2737,7 @@ export function LojaClient({
                       installmentsMax={storefront.cardInstallmentsMax}
                       freeShippingLabel={storefront.cardFreeShipping}
                       showRatings={storefront.cardShowRatings}
+                      revealDelayMs={Math.min(i % 5, 4) * 50}
                       onOpen={setSelectedProduct}
                     />
                   ))}
