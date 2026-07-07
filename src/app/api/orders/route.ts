@@ -108,7 +108,7 @@ export async function POST(req: Request) {
   }
 
   const orderProductSelectWithRef =
-    "id, store_id, name, price, colors, sizes, variant_stock, stock, product_reference, active";
+    "id, store_id, name, price, colors, sizes, variant_stock, stock, product_reference, barcode, active";
   const orderProductSelectNoRef =
     "id, store_id, name, price, colors, sizes, variant_stock, stock, active";
 
@@ -121,9 +121,12 @@ export async function POST(req: Request) {
   let products = q1.data as ProductRowForOrder[] | null;
   let prodErr = q1.error;
 
+  // Bases sem `product_reference` e/ou sem `barcode` (migrations não rodadas):
+  // cai no select mínimo (sem ambas). São opcionais e só enfeitam o comprovante.
   if (
     prodErr &&
-    isMissingColumnError(prodErr.message, "product_reference", prodErr.code)
+    (isMissingColumnError(prodErr.message, "product_reference", prodErr.code) ||
+      isMissingColumnError(prodErr.message, "barcode", prodErr.code))
   ) {
     const q2 = await admin
       .from("products")
@@ -200,6 +203,7 @@ export async function POST(req: Request) {
     unitPrice: l.unitPrice,
     lineTotal: l.unitPrice * l.quantity,
     productReference: l.productReference,
+    barcode: l.barcode,
   }));
 
   const subtotal = payloadLines.reduce((s, l) => s + l.lineTotal, 0);

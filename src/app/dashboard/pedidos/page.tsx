@@ -31,6 +31,7 @@ type PayloadLine = {
   unitPrice: number;
   lineTotal: number;
   productReference?: string | null;
+  barcode?: string | null;
 };
 
 type OrderRow = {
@@ -294,6 +295,7 @@ const PRINT_STYLES = `
   td { font-size: 13px; padding: 6px 0; vertical-align: top; }
   td.qty { white-space: nowrap; padding-right: 8px; font-variant-numeric: tabular-nums; }
   td.name { width: 100%; }
+  td.name .ean { font-size: 11px; color: #64748b; margin-top: 2px; font-variant-numeric: tabular-nums; }
   td.price { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   tbody tr { border-bottom: 1px solid #f1f5f9; }
   .total {
@@ -342,10 +344,14 @@ function buildReceiptHtml(store: StoreInfo, o: PrintData) {
       const opt = bits.length ? ` (${bits.join(", ")})` : "";
       const ref = line.productReference?.trim();
       const name = ref ? `${line.name} (Ref. ${ref})` : line.name;
+      const ean = line.barcode?.trim();
+      const eanHtml = ean
+        ? `<div class="ean">EAN: ${escapeHtml(ean)}</div>`
+        : "";
       return `
         <tr>
           <td class="qty">${line.quantity}×</td>
-          <td class="name">${escapeHtml(name)}${escapeHtml(opt)}</td>
+          <td class="name">${escapeHtml(name)}${escapeHtml(opt)}${eanHtml}</td>
           <td class="price">${escapeHtml(formatBRL(line.lineTotal))}</td>
         </tr>`;
     })
@@ -1126,11 +1132,17 @@ export default function PedidosPage() {
                     const opt = bits.length ? ` (${bits.join(", ")})` : "";
                     const ref = line.productReference?.trim();
                     const name = ref ? `${line.name} (Ref. ${ref})` : line.name;
+                    const ean = line.barcode?.trim();
                     return (
                       <li key={`${o.id}-${i}`} className="flex justify-between gap-4">
                         <span>
                           {line.quantity}× {name}
                           {opt}
+                          {ean && (
+                            <span className="block text-xs text-slate-400 tabular-nums">
+                              EAN: {ean}
+                            </span>
+                          )}
                         </span>
                         <span className="shrink-0 font-medium tabular-nums">
                           {formatBRL(line.lineTotal)}

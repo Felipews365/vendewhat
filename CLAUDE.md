@@ -333,7 +333,11 @@ que abre uma janela `window.open` com um recibo montado em HTML/CSS próprios (s
 **pré-visualização** com barra "Imprimir"/"Fechar" (escondida no `@media print`); no modo "todos"
 cada pedido vai numa página separada (`page-break-before`). O cabeçalho usa a **logo** (`stores.logo`)
 e os dados da loja do `storefront` (`footerPhone`, `footerEmail`, `footerWebsite`, `pickupAddress`) —
-cada linha só aparece se preenchida. Não há migration nova.
+cada linha só aparece se preenchida. Não há migration nova. Cada item mostra a **Ref.** e, quando
+cadastrado, o **EAN** (código de barras) numa sublinha — ambos vêm do `orders.payload.lines[]`
+(gravados no checkout junto do preço; ver `barcode` em [orderLines.ts](src/lib/orderLines.ts) e
+[api/orders/route.ts](src/app/api/orders/route.ts), com fallback quando a coluna `barcode` não existe).
+Pedidos antigos (sem `barcode` no payload) simplesmente não mostram o EAN.
 
 ### Painel de pedidos (status, pagamento, filtros)
 

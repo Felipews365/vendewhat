@@ -22,6 +22,7 @@ export type ProductRowForOrder = {
   variant_stock: unknown;
   stock: number;
   product_reference?: string | null;
+  barcode?: string | null;
   /** Presente nas queries da API de pedidos; usado para filtrar inativos. */
   active?: boolean | null;
 };
@@ -108,7 +109,7 @@ export function validateOrderAgainstProducts(
   lines: OrderLineInput[],
   products: ProductRowForOrder[],
   storeId: string
-): { ok: true; cart: Record<string, number>; pricedLines: Array<OrderLineInput & { unitPrice: number; name: string; productReference: string | null }> } | { ok: false; error: string } {
+): { ok: true; cart: Record<string, number>; pricedLines: Array<OrderLineInput & { unitPrice: number; name: string; productReference: string | null; barcode: string | null }> } | { ok: false; error: string } {
   const merged = mergeOrderLines(lines);
   if (merged.length === 0) {
     return { ok: false, error: "Nenhum item no pedido." };
@@ -133,6 +134,7 @@ export function validateOrderAgainstProducts(
       unitPrice: number;
       name: string;
       productReference: string | null;
+      barcode: string | null;
     }
   > = [];
 
@@ -163,11 +165,16 @@ export function validateOrderAgainstProducts(
       typeof p.product_reference === "string" && p.product_reference.trim()
         ? p.product_reference.trim()
         : null;
+    const ean =
+      typeof p.barcode === "string" && p.barcode.trim()
+        ? p.barcode.trim()
+        : null;
     pricedLines.push({
       ...l,
       unitPrice: Number(p.price),
       name: String(p.name ?? "Produto"),
       productReference: ref,
+      barcode: ean,
     });
   }
 
