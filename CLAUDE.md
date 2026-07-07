@@ -112,6 +112,24 @@ Orientações para o Claude Code trabalhar neste repositório.
     global `heroLayout`/`heroSplitPhotoSide`. Sem migration de banco: tudo no JSONB.
   - `heroLayout`/`heroSplitPhotoSide` em `StorefrontSettings` agora são só o **padrão para novas
     fotos** (não afetam o render, que é por slide).
+  - **Estilos/templates de banner (inspirados no projeto de referência `sitederoupa`):** além de
+    `overlay`/`split`, cada slide pode usar um **template** (`HeroSlide.template`): `gradient`,
+    `diagonal`, `fashion`, `magazine`, `spring`, `sale` (os 8 valores em `HERO_TEMPLATES` de
+    [storefront.ts](src/lib/storefront.ts); `strips`/`duo` da referência **ainda não** foram
+    portados). São painéis coloridos com **recortes diagonais** (clip-path), badge em círculo
+    (giratório no `spring`, pulsante no `sale`) e o **destaque cursivo em degradê animado**. Campos
+    extras por slide no JSONB (sem migration): `bgFrom`/`bgVia`/`bgTo` (gradiente), `ctaBgColor` (cor
+    do botão), `height` (altura px). Renderizados por
+    [HeroTemplateSlide.tsx](src/components/storefront/HeroTemplateSlide.tsx) — **componente único
+    compartilhado** pela loja (`HeroBannerBlock` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx),
+    quando `template` não é overlay/split, renderiza num container de altura fixa) **e** pela prévia
+    do editor (`SlidePreview` em [banner/page.tsx](src/app/dashboard/banner/page.tsx)). **Sem
+    framer-motion/magicui:** o destaque usa `.vw-anim-gradient`/`.font-script` e os badges usam
+    `.vw-spin-slow`/`.vw-pulse-soft` ([globals.css](src/app/globals.css), respeitam
+    `prefers-reduced-motion`). O editor [/dashboard/banner](src/app/dashboard/banner/page.tsx) ganhou
+    um **seletor de estilo por banner** + controles de gradiente (De/Via/Até), cor do botão, altura e
+    lado da foto (`applyTemplate` define os padrões ao trocar de estilo). Ao **adicionar**, a foto
+    entra como `overlay`; troca-se o estilo depois em cada banner.
 - **Cards promocionais abaixo do banner (`storefront.promoCards: PromoCard[]`):** faixa de até
   `MAX_PROMO_CARDS` (6) cartões coloridos (gradiente `from`→`to`) com etiqueta/título/frase/link.
   Renderizados em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) logo **abaixo do banner**
@@ -251,6 +269,31 @@ loja (promoções + catálogo). O `ProductCatalogCard` em
 `aspect-[3/4]`; a foto é `object-cover` com ponto de foco, então **não distorce** em nenhum formato
 (nem exige re-recorte das capas já enviadas). Só afeta a grade — a foto grande no **detalhe** do
 produto continua inteira (`object-contain`) de propósito.
+
+### Estilo "e-commerce" dos cards + Ofertas Relâmpago (referência `sitederoupa`)
+
+O `ProductCatalogCard` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) foi redesenhado no
+visual de e-commerce moderno (inspirado no site de referência): card branco com borda, foto no topo,
+**selo de desconto** vermelho (`-X%`) ou **"Novo"** azul (produto recente, `isRecent`), **selo "Frete
+grátis"** azul, **categoria** (eyebrow), nome, **preço em laranja** + `de` riscado + **selo `-X%`
+laranja** ao lado, **parcelamento estimado**, **5 estrelas douradas (4.9)** e botão **"Adicionar à
+sacola"** que aparece **no hover** (o card inteiro abre o detalhe). Tem **animação de entrada**
+(fade-up ao aparecer na tela via `IntersectionObserver` + `.vw-fade-in-up`, escalonada por card —
+substitui o `BlurFade`/framer-motion da referência) e **zoom da foto no hover**. A **paleta é fixa**
+(constante `EC` no arquivo: azul `#0062B8`, laranja `#FF6B00`, vermelho `#E63946`, dourado, borda
+`#DCE3EC`) — de propósito, para ficar igual à referência em **toda** loja, ignorando o tema por loja
+nesses cards. Os cabeçalhos das seções viraram **⚡ Ofertas Relâmpago** (promoções) e **Mais Produtos**
+(catálogo, com divisor). Helpers puros em [productCardMeta.ts](src/lib/productCardMeta.ts)
+(`discountPercent`; `installmentPlan`/`decorativeRating` existem mas o card usa a fórmula da referência
+inline: `~R$20/parcela`, teto 10, e 5 estrelas fixas).
+
+Config por loja no JSONB `storefront` (**sem migration**), editada no painel **"Rodapé da vitrine"** do
+[StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (bloco "Cartões de produto"):
+`flashSaleEndsAt` (data-fim ISO do **contador** "Ofertas Relâmpago" — pílula azul-escura mono
+`FlashSaleCountdown`, só aparece se futuro; monta no cliente p/ não quebrar hidratação),
+`cardInstallmentsMax` (default 10; 0 = não mostra), `cardFreeShipping` (rótulo do selo; vazio = usa a
+regra da referência: preço ≥ R$79) e `cardShowRatings` (default `true`; estrelas **decorativas**, não
+são reviews reais). Sanitizados em `storefrontFromDb`/`storefrontToDb`.
 
 ### Controlar estoque ou não (por loja)
 
