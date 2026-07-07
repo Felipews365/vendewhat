@@ -596,7 +596,7 @@ Tudo por loja. **Migration:** rode
   (`saveAiConfig` + `POST /api/whatsapp/config`).
 
 A tela [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) é dividida em **abas**
-(`tab`: Conexão · Atendente de IA · Pausar). A aba **Pausar** lista os clientes que já conversaram
+(`tab`: Conexão · IA · Conversas · Pausar). A aba **Pausar** lista os clientes que já conversaram
 (`listRecentCustomers` em [whatsappConfig.ts](src/lib/whatsappConfig.ts), das `whatsapp_messages`)
 mesclados com os pausados; cada linha mostra um **selo de status** — "IA atendendo" (verde),
 "Você assumiu" (handoff) / "Pausado por você" (manual), "IA pausada"/"IA desligada" — e um botão
@@ -604,6 +604,29 @@ mesclados com os pausados; cada linha mostra um **selo de status** — "IA atend
 por telefone) que começa no **tempo padrão** do topo (`customerDuration`) e pode ser mudado só
 naquele contato — o botão Pausar daquela linha usa esse valor. Durações: 15min/30min/1h/3h/1 dia/
 "até eu reativar". Há ainda um campo para pausar um número que ainda não apareceu (usa o tempo padrão).
+
+### Responder na mão (aba Conversas — WhatsApp Web dentro do painel)
+
+A aba **Conversas** deixa o lojista **ler o histórico e responder manualmente** um cliente, estilo
+WhatsApp Web. Componente [ConversationsPanel.tsx](src/components/dashboard/ConversationsPanel.tsx)
+(montado só quando `tab === "conversas"`; nessa aba o container da página vira `max-w-5xl`). Layout
+**duas colunas no desktop** (lista de conversas `lg:w-80` + thread) e **uma coluna no celular**
+(lista → toca no contato → thread em tela cheia com seta de voltar). Balões: cliente à esquerda
+(`role === "user"`), loja/IA à direita (`role === "assistant"`, roxo). Sem migration — usa
+`whatsapp_messages`, `whatsapp_pauses` e `store_whatsapp` que já existem.
+
+- **Dados:** a lista de contatos vem do mesmo `conversations` que a página já carrega de
+  `GET /api/whatsapp/pause` (`listRecentCustomers`); o histórico completo de um contato vem de
+  `GET /api/whatsapp/conversation?phone=` (`getFullConversation` em
+  [whatsappConfig.ts](src/lib/whatsappConfig.ts), com horário por mensagem). O thread **atualiza
+  sozinho a cada 12s** (polling) enquanto aberto.
+- **Enviar (você assume a conversa):** `POST /api/whatsapp/conversation` `{phone, text}`
+  ([route](src/app/api/whatsapp/conversation/route.ts), autentica o dono + service role) envia via
+  `sendText` (Evolution), grava a mensagem como `assistant` no histórico **e pausa a IA para aquele
+  cliente** (`setCustomerPause` com `reason='handoff'`, pelo tempo de `ai_handoff_minutes`; se
+  desativado, 30min) — o mesmo comportamento do handoff automático. O painel atualiza as pausas
+  (`onSent → loadPauses`), então o selo "você" aparece na lista. Exige o WhatsApp conectado
+  (`status === "connected"`), senão o envio é bloqueado com aviso.
 
 ### Follow-up automático (cutucar quem sumiu)
 

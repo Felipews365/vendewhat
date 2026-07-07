@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
 import { parseLatLng, isShortMapsLink } from "@/lib/geoLocation";
 import { storefrontFromDb } from "@/lib/storefront";
+import ConversationsPanel from "@/components/dashboard/ConversationsPanel";
 
 // Constantes locais (client-safe) — não importar de whatsappConfig.ts, que usa `crypto`.
 type AiTone = "simpatico" | "formal" | "descontraido";
@@ -151,7 +152,9 @@ export default function WhatsAppIaPage() {
     {}
   );
 
-  const [tab, setTab] = useState<"conexao" | "ia" | "pausar">("conexao");
+  const [tab, setTab] = useState<"conexao" | "ia" | "conversas" | "pausar">(
+    "conexao"
+  );
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -602,7 +605,11 @@ export default function WhatsAppIaPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-6">
+    <div
+      className={`mx-auto p-4 sm:p-6 space-y-6 ${
+        tab === "conversas" ? "max-w-5xl" : "max-w-2xl"
+      }`}
+    >
       <header>
         <h1 className="text-xl font-bold text-stone-800 dark:text-slate-100">WhatsApp & IA</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">
@@ -622,14 +629,15 @@ export default function WhatsAppIaPage() {
         {(
           [
             ["conexao", "Conexão"],
-            ["ia", "Atendente de IA"],
+            ["ia", "IA"],
+            ["conversas", "Conversas"],
             ["pausar", "Pausar"],
           ] as const
         ).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+            className={`flex-1 rounded-lg px-2 py-2 text-xs font-medium transition sm:px-3 sm:text-sm ${
               tab === key
                 ? "bg-white text-violet-700 shadow-sm dark:bg-slate-800 dark:text-violet-300"
                 : "text-stone-600 hover:text-stone-800 dark:text-slate-400 dark:hover:text-slate-200"
@@ -1169,6 +1177,21 @@ export default function WhatsAppIaPage() {
       )}
 
       {/* Pausar atendimento */}
+      {tab === "conversas" && (
+        <ConversationsPanel
+          conversations={conversations.map((c) => ({
+            customerPhone: c.customerPhone,
+            lastMessage: c.lastMessage,
+            lastAt: c.lastAt,
+          }))}
+          pausedPhones={
+            new Set(customerPauses.map((p) => p.customerPhone.replace(/\D/g, "")))
+          }
+          connected={status === "connected"}
+          onSent={loadPauses}
+        />
+      )}
+
       {tab === "pausar" && (
       <section className="rounded-2xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm space-y-5">
         <div>

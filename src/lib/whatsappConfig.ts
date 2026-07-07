@@ -754,6 +754,40 @@ export async function getRecentHistory(
     }));
 }
 
+export type ConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+};
+
+/**
+ * Conversa completa (ordem cronológica) com um cliente, para exibir no painel de
+ * conversas. Traz o horário de cada mensagem. Limite alto por ser uma única
+ * conversa aberta pelo lojista.
+ */
+export async function getFullConversation(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string,
+  limit = 200
+): Promise<ConversationMessage[]> {
+  const { data } = await db
+    .from("whatsapp_messages")
+    .select("role, content, created_at")
+    .eq("store_id", storeId)
+    .eq("customer_phone", customerPhone)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const rows = (data ?? []) as Record<string, unknown>[];
+  return rows
+    .reverse()
+    .map((r) => ({
+      role: r.role === "assistant" ? "assistant" : "user",
+      content: String(r.content ?? ""),
+      createdAt: typeof r.created_at === "string" ? r.created_at : "",
+    })) as ConversationMessage[];
+}
+
 /** Conteúdo das últimas respostas da IA (para reconhecer o eco da própria loja). */
 export async function getLastAssistantMessages(
   db: SupabaseClient,
