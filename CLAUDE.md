@@ -564,8 +564,11 @@ cliente escolher pelo site OU folheando o PDF. **Sem migration** (o PDF mora no 
   máximo uma vez por conversa). `parseReplyDirectives` extrai `sendCatalog`; o
   `respondToCustomer` ([src/lib/whatsappRespond.ts](src/lib/whatsappRespond.ts)) chama
   `ensureCatalogPdfUrl` (import dinâmico p/ não puxar o `@react-pdf` nas demais respostas) e
-  envia com `sendMedia` **`mediatype: "document"`** + `fileName: "Catálogo - {Loja}.pdf"` (o
-  `sendMedia` em [evolution.ts](src/lib/evolution.ts) agora aceita `fileName`).
+  envia com `sendMedia` **`mediatype: "document"`** + `fileName: "Catálogo - {Loja}.pdf"` +
+  **`mimetype: "application/pdf"`**. O `sendMedia` em [evolution.ts](src/lib/evolution.ts) aceita
+  `fileName` e `mimetype` — **documentos no Evolution v2 exigem o `mimetype`**; sem ele o anexo
+  falhava em silêncio (o try/catch em `respondToCustomer` só loga, então o texto saía e o PDF não).
+  Imagem/vídeo funcionam sem `mimetype` porque o Evolution infere o tipo.
 - **Acesso por link (humanos):** [/api/loja/[slug]/catalogo](src/app/api/loja/[slug]/catalogo/route.ts)
   (`runtime nodejs`, `maxDuration 60`) gera/reaproveita o mesmo PDF e **redireciona** para ele —
   serve para baixar/abrir no navegador com a mesma lógica de cache.
