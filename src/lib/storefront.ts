@@ -323,6 +323,28 @@ export type StorefrontSettings = {
   /** Formato da foto dos cards de produto na loja: "1:1" (quadrado) ou "3:4" (retrato). */
   productCardRatio: ProductCardRatio;
   /**
+   * Data-fim (ISO) do contador "Ofertas Relâmpago" mostrado na seção de
+   * promoções. Vazio ou no passado = sem contador (a seção continua aparecendo).
+   */
+  flashSaleEndsAt: string;
+  /**
+   * Máximo de parcelas "sem juros" exibidas (estimativa) nos cards de produto.
+   * 0 ou 1 = não mostra parcelamento. Ver `installmentPlan` em
+   * `productCardMeta.ts`.
+   */
+  cardInstallmentsMax: number;
+  /**
+   * Texto do selo de frete grátis nos cards (ex.: "Frete grátis" ou "Frete
+   * grátis acima de R$ 79"). Vazio = não mostra. É um rótulo fixo definido pelo
+   * lojista — a plataforma não calcula frete por produto.
+   */
+  cardFreeShipping: string;
+  /**
+   * Mostra estrelas + nº de avaliações **decorativos** nos cards (não são
+   * reviews reais; gerados por `decorativeRating`). Desligado por padrão.
+   */
+  cardShowRatings: boolean;
+  /**
    * A loja controla estoque. `true` (padrão): produto/variação sem estoque
    * aparece como "Esgotado" e limita a quantidade. `false`: a loja não controla
    * estoque — nunca mostra "Esgotado" e não limita a quantidade.
@@ -394,6 +416,10 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   promoCards: [],
   showCategoryNav: true,
   productCardRatio: "1:1",
+  flashSaleEndsAt: "",
+  cardInstallmentsMax: 0,
+  cardFreeShipping: "",
+  cardShowRatings: false,
   stockControlEnabled: true,
   infoBullets: [],
   themePrimary: "#c9a8ac",
@@ -444,6 +470,20 @@ export function sanitizeGoogleTagId(v: unknown): string {
     .toUpperCase()
     .replace(/[^A-Z0-9-]/g, "")
     .slice(0, 30);
+}
+
+/** Normaliza uma data ISO (contador da promoção); string inválida vira "". */
+function isoDateFromDb(v: unknown): string {
+  if (typeof v !== "string" || !v.trim()) return "";
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString();
+}
+
+/** Máximo de parcelas exibidas (0 = desligado; teto 12). */
+function installmentsMaxFromDb(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return DEFAULT_STOREFRONT.cardInstallmentsMax;
+  return Math.max(0, Math.min(12, Math.floor(n)));
 }
 
 /** Máximo de blocos de conteúdo guardados (defensivo). */
@@ -658,6 +698,13 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     promoCards: promoCardsFromDb(o.promoCards),
     showCategoryNav: boolFromDb(o.showCategoryNav, DEFAULT_STOREFRONT.showCategoryNav),
     productCardRatio: productCardRatioFromDb(o.productCardRatio),
+    flashSaleEndsAt: isoDateFromDb(o.flashSaleEndsAt),
+    cardInstallmentsMax: installmentsMaxFromDb(o.cardInstallmentsMax),
+    cardFreeShipping: strOrEmpty(o.cardFreeShipping).slice(0, 40),
+    cardShowRatings: boolFromDb(
+      o.cardShowRatings,
+      DEFAULT_STOREFRONT.cardShowRatings
+    ),
     stockControlEnabled: boolFromDb(
       o.stockControlEnabled,
       DEFAULT_STOREFRONT.stockControlEnabled
@@ -729,6 +776,10 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     promoCards: promoCardsFromDb(s.promoCards),
     showCategoryNav: s.showCategoryNav,
     productCardRatio: productCardRatioFromDb(s.productCardRatio),
+    flashSaleEndsAt: isoDateFromDb(s.flashSaleEndsAt),
+    cardInstallmentsMax: installmentsMaxFromDb(s.cardInstallmentsMax),
+    cardFreeShipping: s.cardFreeShipping.trim().slice(0, 40),
+    cardShowRatings: s.cardShowRatings,
     stockControlEnabled: s.stockControlEnabled,
     infoBullets: s.infoBullets.map((b) => b.trim()).filter(Boolean),
     themePrimary: s.themePrimary.trim(),

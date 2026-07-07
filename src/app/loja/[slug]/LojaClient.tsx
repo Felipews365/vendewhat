@@ -16,6 +16,11 @@ import {
   type StorefrontSettings,
   storefrontRichFooterVisible,
 } from "@/lib/storefront";
+import {
+  discountPercent,
+  installmentPlan,
+  decorativeRating,
+} from "@/lib/productCardMeta";
 import { StorefrontRichFooter } from "@/components/storefront/StorefrontRichFooter";
 import { BlockRenderer } from "@/components/storefront/blocks";
 import type { BlockProduct } from "@/components/storefront/blocks";
@@ -576,103 +581,193 @@ function ProductGallery({
 }
 
 /** Card simplificado: imagem uniforme + nome + preço + botão "Comprar". Clique abre detalhe. */
+/** Estrelinhas de avaliação (decorativas — ver `decorativeRating`). */
+function StarRating({ rating, count }: { rating: number; count: number }) {
+  return (
+    <div className="flex items-center gap-1 text-[11px]">
+      <span className="text-amber-400 leading-none tracking-tight" aria-hidden>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <span key={i}>{rating >= i + 0.5 ? "★" : "☆"}</span>
+        ))}
+      </span>
+      <span className="text-stone-400">({count.toLocaleString("pt-BR")})</span>
+    </div>
+  );
+}
+
+/**
+ * Contador regressivo "Ofertas Relâmpago". Só renderiza quando a data-fim está
+ * no futuro; some (retorna null) quando expira. Monta só no cliente para evitar
+ * divergência de hidratação (o horário do servidor ≠ do navegador).
+ */
+function FlashSaleCountdown({ endsAt }: { endsAt: string }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  if (now == null) return null;
+  const end = new Date(endsAt).getTime();
+  if (!Number.isFinite(end)) return null;
+  const diff = end - now;
+  if (diff <= 0) return null;
+  const totalSec = Math.floor(diff / 1000);
+  const days = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    <span
+      className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-white shadow-sm"
+      style={{ backgroundColor: "var(--store-secondary)" }}
+    >
+      <span aria-hidden>⏱</span>
+      <span className="tabular-nums">
+        Termina em: {days > 0 ? `${days}d ` : ""}
+        {pad(h)} : {pad(m)} : {pad(s)}
+      </span>
+    </span>
+  );
+}
+
 function ProductCatalogCard({
   product,
-  cardMode,
   imageRatio,
+  installmentsMax,
+  freeShippingLabel,
+  showRatings,
   onOpen,
 }: {
   product: CatalogProduct;
-  cardMode: "promotion" | "catalog";
   /** Formato da foto do card: "1:1" (quadrado) ou "3:4" (retrato). */
   imageRatio: ProductCardRatio;
+  /** Máx. de parcelas "sem juros" (estimativa); 0/1 = não mostra. */
+  installmentsMax: number;
+  /** Texto do selo de frete grátis; vazio = não mostra. */
+  freeShippingLabel: string;
+  /** Mostra estrelas decorativas. */
+  showRatings: boolean;
   onOpen: (product: CatalogProduct) => void;
 }) {
-  const btnBg =
-    cardMode === "promotion"
-      ? "var(--store-secondary)"
-      : "var(--store-primary)";
-
   const imgSrc = product.images[0] ?? product.image;
+  const soldOut = productSoldOut(product);
+
+  // Preço exibido (fardo mostra o preço do fardo quando configurado).
+  const shownPrice =
+    product.sale.saleMode === "pack" && product.sale.priceDisplay === "pack"
+      ? product.price * product.sale.packSize
+      : product.price;
+
+  const hasCompare =
+    product.isPromotion &&
+    product.compareAtPrice != null &&
+    product.compareAtPrice > product.price;
+  const discount = hasCompare
+    ? discountPercent(product.price, product.compareAtPrice)
+    : null;
+  const plan = installmentPlan(shownPrice, installmentsMax);
+  const rating = showRatings ? decorativeRating(product.id) : null;
+  const freeShipping = freeShippingLabel.trim();
 
   return (
-    <div className="flex flex-col cursor-pointer" onClick={() => onOpen(product)}>
-      {/* Cartão de produto: quadrado (1:1) ou retrato (3:4) conforme a loja escolher.
-          Foto em object-cover com ponto de foco → não distorce em nenhum formato. */}
+    <div
+      className="group flex flex-col cursor-pointer overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm transition-shadow hover:shadow-md"
+      onClick={() => onOpen(product)}
+    >
+      {/* Foto: quadrado (1:1) ou retrato (3:4). object-cover com ponto de foco → não distorce. */}
       <div
         className={`${
           imageRatio === "3:4" ? "aspect-[3/4]" : "aspect-square"
-        } relative overflow-hidden rounded-2xl shadow-sm bg-stone-200`}
+        } relative overflow-hidden bg-stone-100`}
       >
         {imgSrc ? (
           <Image
             src={imgSrc}
             alt={product.name}
             fill
-            className="object-cover w-full h-full"
+            className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-[1.03]"
             style={coverImageStyleAt(
               0,
               product.imageObjectPositions,
               product.imageObjectPosition
             )}
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-5xl text-stone-300">
             📷
           </div>
         )}
-        {productSoldOut(product) && (
-          <span className="absolute top-3 right-3 z-10 bg-boutique-wine/95 text-white text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-sm">
+        {/* Selo de desconto (canto superior esquerdo) */}
+        {discount != null && (
+          <span className="absolute top-2 left-2 z-10 rounded-md bg-red-500 px-2 py-1 text-xs font-bold text-white shadow-sm">
+            -{discount}%
+          </span>
+        )}
+        {/* Selo de frete grátis (canto superior direito) */}
+        {freeShipping && !soldOut && (
+          <span className="absolute top-2 right-2 z-10 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white shadow-sm">
+            Frete grátis
+          </span>
+        )}
+        {soldOut && (
+          <span className="absolute top-2 right-2 z-10 rounded-md bg-boutique-wine/95 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
             Esgotado
           </span>
         )}
       </div>
-      {/* Info fora do card */}
-      <div className="pt-3 px-1">
-        <h3 className="font-serif italic text-stone-800 line-clamp-2 text-sm md:text-base leading-snug">
+
+      {/* Info dentro do card */}
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        <h3 className="line-clamp-2 min-h-[2.4em] text-sm leading-snug text-stone-700">
           {product.name}
         </h3>
-        {product.category?.trim() && (
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-            {product.category.trim()}
+
+        {hasCompare && (
+          <p className="text-xs text-stone-400 line-through leading-none">
+            R${formatPrice(product.compareAtPrice as number)}
           </p>
         )}
-        <p className="font-bold text-stone-900 text-lg md:text-xl leading-tight mt-1">
-          {product.sale.saleMode === "pack" && product.sale.priceDisplay === "pack"
-            ? `R$${formatPrice(product.price * product.sale.packSize)}`
-            : `R$${formatPrice(product.price)}`}
+
+        <p className="text-lg font-bold leading-tight text-stone-900">
+          R${formatPrice(shownPrice)}
         </p>
-        {product.isPromotion &&
-          product.compareAtPrice != null &&
-          product.compareAtPrice > product.price && (
-            <p className="text-xs text-stone-400 line-through">
-              R${formatPrice(product.compareAtPrice)}
-            </p>
-          )}
+
+        {discount != null && (
+          <p className="text-xs font-semibold text-red-500 leading-none">
+            {discount}% OFF
+          </p>
+        )}
+
+        {plan && (
+          <p className="text-xs text-stone-500 leading-tight">
+            ou {plan.count}x de R${formatPrice(plan.each)} sem juros
+          </p>
+        )}
+
         {product.sale.saleMode === "pack" && (
-          <p className="text-[11px] text-stone-500 mt-0.5">
+          <p className="text-[11px] text-stone-500 leading-tight">
             {product.sale.priceDisplay === "pack"
               ? `o fardo (${product.sale.packSize} un.)`
               : `fardo de ${product.sale.packSize} un.`}
           </p>
         )}
         {product.sale.saleMode === "min" && (
-          <p className="text-[11px] text-stone-500 mt-0.5">
+          <p className="text-[11px] text-stone-500 leading-tight">
             mínimo {product.sale.minQuantity} un.
           </p>
         )}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpen(product);
-          }}
-          className="mt-2 px-6 py-2 rounded-full text-white text-sm font-semibold transition-opacity hover:opacity-90 shadow-sm"
-          style={{ backgroundColor: btnBg }}
-        >
-          Comprar
-        </button>
+
+        {freeShipping && (
+          <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 leading-tight">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
+            {freeShipping}
+          </p>
+        )}
+
+        {rating && <StarRating rating={rating.rating} count={rating.count} />}
       </div>
     </div>
   );
@@ -2425,24 +2520,26 @@ export function LojaClient({
           <div id="catalogo" className="scroll-mt-28">
             {promoProducts.length > 0 && (
               <section className="pt-3 pb-10 md:pt-4 md:pb-12">
-                <div className="mb-4 md:mb-6">
+                <div className="mb-4 md:mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <h3
-                    className="font-serif text-2xl md:text-3xl font-semibold tracking-tight"
+                    className="font-serif text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2"
                     style={{ color: "var(--store-secondary)" }}
                   >
-                    Promoções
+                    <span aria-hidden>⚡</span> Ofertas Relâmpago
                   </h3>
-                  <p className="text-sm text-stone-500 mt-1">
-                    Ofertas por tempo limitado
-                  </p>
+                  {storefront.flashSaleEndsAt && (
+                    <FlashSaleCountdown endsAt={storefront.flashSaleEndsAt} />
+                  )}
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
                   {promoProducts.map((product) => (
                     <ProductCatalogCard
                       key={product.id}
                       product={product}
-                      cardMode="promotion"
                       imageRatio={storefront.productCardRatio}
+                      installmentsMax={storefront.cardInstallmentsMax}
+                      freeShippingLabel={storefront.cardFreeShipping}
+                      showRatings={storefront.cardShowRatings}
                       onOpen={setSelectedProduct}
                     />
                   ))}
@@ -2464,7 +2561,7 @@ export function LojaClient({
                       className="font-serif text-2xl md:text-3xl font-semibold tracking-tight"
                       style={{ color: "var(--store-secondary)" }}
                     >
-                      Produtos
+                      Mais Produtos
                     </h3>
                     <p className="text-sm text-stone-500 mt-1">
                       Catálogo completo
@@ -2488,13 +2585,15 @@ export function LojaClient({
                     </select>
                   </label>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
                   {catalogSorted.map((product) => (
                     <ProductCatalogCard
                       key={product.id}
                       product={product}
-                      cardMode="catalog"
                       imageRatio={storefront.productCardRatio}
+                      installmentsMax={storefront.cardInstallmentsMax}
+                      freeShippingLabel={storefront.cardFreeShipping}
+                      showRatings={storefront.cardShowRatings}
                       onOpen={setSelectedProduct}
                     />
                   ))}

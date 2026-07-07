@@ -39,6 +39,22 @@ function formatBRL(value: number) {
   }).format(value);
 }
 
+/** ISO → valor de `<input type="datetime-local">` (no fuso do navegador). */
+function isoToLocalInput(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+/** Valor de `<input type="datetime-local">` → ISO (vazio = ""). */
+function localInputToIso(v: string): string {
+  if (!v) return "";
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString();
+}
+
 /** Valor aceito por <input type="color"> (#rrggbb). */
 function hexForColorInput(raw: string): string {
   const s = raw.trim();
@@ -2220,6 +2236,142 @@ export function StoreVisualEditor({
             })}
           </div>
         </div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-slate-700">
+              Cartões de produto (estilo loja)
+            </p>
+            <p className="text-xs text-slate-500">
+              Aparece nos cards de <strong>Ofertas Relâmpago</strong> e{" "}
+              <strong>Mais Produtos</strong> da loja. Salva na hora.
+            </p>
+          </div>
+
+          {/* Contador Ofertas Relâmpago */}
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-slate-600">
+              Contador “Ofertas Relâmpago” (data e hora do fim)
+            </span>
+            <div className="flex items-center gap-2">
+              <input
+                type="datetime-local"
+                value={isoToLocalInput(sf.flashSaleEndsAt)}
+                onChange={(e) => {
+                  const nextSf: StorefrontSettings = {
+                    ...sf,
+                    flashSaleEndsAt: localInputToIso(e.target.value),
+                  };
+                  setSf(nextSf);
+                  onAutoSaveStorefront?.(nextSf);
+                }}
+                className="flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-landing-primary focus:ring-1 focus:ring-landing-primary"
+              />
+              {sf.flashSaleEndsAt && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextSf: StorefrontSettings = {
+                      ...sf,
+                      flashSaleEndsAt: "",
+                    };
+                    setSf(nextSf);
+                    onAutoSaveStorefront?.(nextSf);
+                  }}
+                  className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
+            <span className="block text-[11px] text-slate-500">
+              Vazio ou no passado = sem contador (as promoções continuam
+              aparecendo).
+            </span>
+          </label>
+
+          {/* Parcelamento */}
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-slate-600">
+              Parcelamento estimado
+            </span>
+            <select
+              value={sf.cardInstallmentsMax}
+              onChange={(e) => {
+                const nextSf: StorefrontSettings = {
+                  ...sf,
+                  cardInstallmentsMax: Number(e.target.value),
+                };
+                setSf(nextSf);
+                onAutoSaveStorefront?.(nextSf);
+              }}
+              className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-landing-primary focus:ring-1 focus:ring-landing-primary"
+            >
+              <option value={0}>Não mostrar</option>
+              <option value={2}>até 2x sem juros</option>
+              <option value={3}>até 3x sem juros</option>
+              <option value={4}>até 4x sem juros</option>
+              <option value={6}>até 6x sem juros</option>
+              <option value={10}>até 10x sem juros</option>
+              <option value={12}>até 12x sem juros</option>
+            </select>
+            <span className="block text-[11px] text-slate-500">
+              Estimativa (preço ÷ parcelas). Não é cobrança de gateway.
+            </span>
+          </label>
+
+          {/* Frete grátis */}
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-slate-600">
+              Selo de frete grátis
+            </span>
+            <input
+              type="text"
+              maxLength={40}
+              defaultValue={sf.cardFreeShipping}
+              placeholder="Ex.: Frete grátis acima de R$ 79"
+              onBlur={(e) => {
+                const val = e.target.value.trim().slice(0, 40);
+                if (val === sf.cardFreeShipping) return;
+                const nextSf: StorefrontSettings = {
+                  ...sf,
+                  cardFreeShipping: val,
+                };
+                setSf(nextSf);
+                onAutoSaveStorefront?.(nextSf);
+              }}
+              className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-landing-primary focus:ring-1 focus:ring-landing-primary"
+            />
+            <span className="block text-[11px] text-slate-500">
+              Vazio = não mostra. É um texto fixo — a loja não calcula frete por
+              produto.
+            </span>
+          </label>
+
+          {/* Estrelas decorativas */}
+          <label className="inline-flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sf.cardShowRatings}
+              onChange={(e) => {
+                const nextSf: StorefrontSettings = {
+                  ...sf,
+                  cardShowRatings: e.target.checked,
+                };
+                setSf(nextSf);
+                onAutoSaveStorefront?.(nextSf);
+              }}
+              className="mt-0.5 rounded border-slate-300"
+            />
+            <span>
+              Mostrar estrelas de avaliação
+              <span className="block text-[11px] text-slate-500 font-normal">
+                <strong>Decorativo</strong>: a nota é gerada automaticamente (não
+                são avaliações reais de clientes).
+              </span>
+            </span>
+          </label>
+        </div>
+
         <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
           <p className="text-sm font-medium text-slate-700">Controle de estoque</p>
           <label className="inline-flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
