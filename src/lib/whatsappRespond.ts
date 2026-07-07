@@ -143,6 +143,10 @@ export async function respondToCustomer(
   if (!combinedUserText) return false; // nada do cliente para responder
   // Primeiro contato = a IA ainda não falou nada nesta conversa.
   const isFirstContact = !full.some((t) => t.role === "assistant");
+  // Cliente pediu o catálogo de forma explícita? Serve de gatilho determinístico
+  // para o PDF (a IA nem sempre emite o marcador [[ENVIAR_CATALOGO]]).
+  const customerWantsCatalog =
+    /\bcat[aá]logos?\b|lista de produtos|\bpdf\b/i.test(combinedUserText);
 
   const systemPrompt = buildSystemPrompt({
     storeName,
@@ -180,7 +184,7 @@ export async function respondToCustomer(
   let finalText = replyText;
   const mentionsLink = /\b(link|cat[aá]logo)\b/i.test(finalText);
   const hasUrl = /https?:\/\//i.test(finalText);
-  if (finalText && baseUrl && (mentionsLink || sendCatalog) && !hasUrl) {
+  if (finalText && baseUrl && (mentionsLink || sendCatalog || customerWantsCatalog) && !hasUrl) {
     finalText = `${finalText}\n\n${storeUrl}`;
   }
 
@@ -238,7 +242,7 @@ export async function respondToCustomer(
       console.error("[whatsappRespond] sendMedia video", e);
     }
   }
-  if (sendCatalog && hasCatalogPdf) {
+  if ((sendCatalog || customerWantsCatalog) && hasCatalogPdf) {
     try {
       // Gera/reaproveita o PDF do catálogo no bucket e anexa como documento. Import
       // dinâmico p/ não puxar o @react-pdf (pesado) nas demais respostas da IA.
