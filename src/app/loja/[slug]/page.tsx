@@ -187,6 +187,10 @@ export default async function LojaPublicaPage({ params }: Props) {
         (p as { compare_at_price?: number | null }).compare_at_price != null
           ? Number((p as { compare_at_price: number }).compare_at_price)
           : null,
+      cardRatio: (() => {
+        const cr = (p as { card_ratio?: string | null }).card_ratio;
+        return cr === "1:1" || cr === "3:4" ? cr : null;
+      })(),
       imageObjectPosition: legacyPos,
       imageObjectPositions,
       sale: productSaleFromDb(p as Record<string, unknown>),

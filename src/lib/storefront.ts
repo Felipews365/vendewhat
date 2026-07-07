@@ -118,7 +118,9 @@ export type HeroTemplate =
   | "fashion"
   | "magazine"
   | "spring"
-  | "sale";
+  | "sale"
+  | "strips"
+  | "duo";
 
 export const HERO_TEMPLATES: HeroTemplate[] = [
   "overlay",
@@ -129,7 +131,24 @@ export const HERO_TEMPLATES: HeroTemplate[] = [
   "magazine",
   "spring",
   "sale",
+  "strips",
+  "duo",
 ];
+
+/**
+ * Quantas fotos EXTRA (além da `url` principal) cada estilo usa. `strips`
+ * mostra 3 fotos (a principal + 2), `duo` mostra 2 (a principal + 1). Os demais
+ * usam só a foto principal. Guia o editor (quantos campos "Foto N" mostrar).
+ */
+export const HERO_TEMPLATE_EXTRA_PHOTOS: Partial<Record<HeroTemplate, number>> = {
+  strips: 2,
+  duo: 1,
+};
+
+/** Nº total de fotos que um estilo aproveita (principal + extras). */
+export function heroTemplatePhotoCount(tpl: HeroTemplate): number {
+  return 1 + (HERO_TEMPLATE_EXTRA_PHOTOS[tpl] ?? 0);
+}
 
 export function heroTemplateFromDb(v: unknown): HeroTemplate {
   return typeof v === "string" && (HERO_TEMPLATES as string[]).includes(v)
@@ -149,6 +168,16 @@ export type HeroSlide = {
   photoSide: HeroSplitPhotoSide;
   /** Estilo do banner. Vazio/ausente = usa `layout` (overlay/split) antigo. */
   template?: HeroTemplate;
+  /**
+   * Fotos EXTRA (além da `url`) para os estilos multi-foto (`strips` usa 2,
+   * `duo` usa 1). Ignorado pelos demais estilos.
+   */
+  images?: string[];
+  /**
+   * "Banner só com a foto": ignora todo texto/painel e mostra apenas a imagem
+   * preenchendo o card. Útil quando a foto já traz os dizeres embutidos.
+   */
+  noText?: boolean;
   /** Cores do gradiente do painel colorido (templates novos). */
   bgFrom?: string;
   bgVia?: string;
@@ -187,6 +216,16 @@ function heroSlideStyleFromRaw(s: Record<string, unknown>): Partial<HeroSlide> {
   if (isHexColor(s.ctaBgColor)) out.ctaBgColor = (s.ctaBgColor as string).trim();
   const h = typeof s.height === "number" ? s.height : Number(s.height);
   if (Number.isFinite(h) && h > 0) out.height = Math.max(200, Math.min(600, Math.round(h)));
+  // "Banner só com a foto": sem texto/painel, só a imagem.
+  if (s.noText === true) out.noText = true;
+  // Fotos extra (estilos multi-foto: strips/duo). Guarda no máx. 2 URLs válidas.
+  if (Array.isArray(s.images)) {
+    const extra = s.images
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .filter((v) => v.length > 0)
+      .slice(0, 2);
+    if (extra.length) out.images = extra;
+  }
   return out;
 }
 
@@ -422,6 +461,8 @@ export type StorefrontSettings = {
   themeSecondary: string;
   /** Fundo do topo da loja (logo, busca, ícones) — hex ou rgba */
   headerBackground: string;
+  /** Fundo da página inteira (atrás do banner e dos cards) — hex ou rgba */
+  pageBackground: string;
   searchPlaceholder: string;
   /** URL completa do perfil (ex. https://instagram.com/sualoja) */
   instagramUrl: string;
@@ -479,7 +520,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroCouponCode: "",
   promoCards: [],
   showCategoryNav: true,
-  productCardRatio: "1:1",
+  productCardRatio: "3:4",
   flashSaleEndsAt: "",
   cardInstallmentsMax: 10,
   cardFreeShipping: "",
@@ -489,6 +530,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   themePrimary: "#c9a8ac",
   themeSecondary: "#5c2e36",
   headerBackground: "#ffffff",
+  pageBackground: "#f7f8fa",
   searchPlaceholder: "Faça sua busca",
   instagramUrl: "",
   facebookUrl: "",
@@ -782,6 +824,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       o.headerBackground,
       DEFAULT_STOREFRONT.headerBackground
     ),
+    pageBackground: str(o.pageBackground, DEFAULT_STOREFRONT.pageBackground),
     searchPlaceholder: str(
       o.searchPlaceholder,
       DEFAULT_STOREFRONT.searchPlaceholder
@@ -851,6 +894,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     themePrimary: s.themePrimary.trim(),
     themeSecondary: s.themeSecondary.trim(),
     headerBackground: s.headerBackground.trim(),
+    pageBackground: s.pageBackground.trim(),
     searchPlaceholder: s.searchPlaceholder.trim(),
     instagramUrl: s.instagramUrl.trim(),
     facebookUrl: s.facebookUrl.trim(),

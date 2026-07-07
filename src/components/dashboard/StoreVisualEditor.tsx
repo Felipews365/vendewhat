@@ -1666,6 +1666,35 @@ export function StoreVisualEditor({
               />
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Fundo atrás do banner
+            </label>
+            <p className="text-xs text-slate-500 mb-2">
+              Cor da faixa no topo, só atrás do banner. Um cinza claro faz o
+              banner “flutuar”. Os cards promocionais ficam fora dessa faixa.
+            </p>
+            <div className="flex gap-2 items-stretch">
+              <input
+                type="color"
+                value={hexForColorInput(sf.pageBackground)}
+                onChange={(e) =>
+                  setSf((s) => ({ ...s, pageBackground: e.target.value }))
+                }
+                className="h-10 w-14 min-w-[3.5rem] shrink-0 rounded border border-slate-200 cursor-pointer p-0.5 bg-white"
+                title="Escolher cor"
+              />
+              <input
+                type="text"
+                value={sf.pageBackground}
+                onChange={(e) =>
+                  setSf((s) => ({ ...s, pageBackground: e.target.value }))
+                }
+                className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono"
+                placeholder="#f4f4f5"
+              />
+            </div>
+          </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
           <div className="min-w-0">

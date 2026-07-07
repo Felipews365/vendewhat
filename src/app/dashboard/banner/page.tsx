@@ -15,6 +15,7 @@ import {
   DEFAULT_STOREFRONT,
   bannerPhotoLimitForPlan,
   heroCropRatioForLayout,
+  heroTemplatePhotoCount,
   MAX_PROMO_CARDS,
   PROMO_CARD_COLORS,
   PROMO_CARD_PRESETS,
@@ -58,6 +59,21 @@ function SlidePreview({
   const subtitle = slide.subtitle?.trim() || "";
   const coupon = slide.couponCode?.trim() || fallback.coupon;
   const ctaLabel = slide.ctaLabel?.trim() || fallback.ctaLabel;
+
+  // "Só a foto": prévia mostra apenas a imagem preenchendo o card.
+  if (slide.noText) {
+    return (
+      <div className="relative h-40 w-full overflow-hidden rounded-lg bg-slate-200">
+        {slide.url ? (
+          <Image src={slide.url} alt="" fill className="object-cover" sizes="480px" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-2xl opacity-40">
+            🖼️
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Templates novos: prévia fiel via HeroTemplateSlide (mesmo componente da loja).
   const tpl = slide.template ?? "overlay";
@@ -331,6 +347,55 @@ export default function BannerEditPage() {
     await uploadOneHeroPhoto(file, layout, photoSide);
   }
 
+  /** Sobe uma foto EXTRA (Foto 2/3) de um estilo multi-foto (strips/duo). */
+  async function uploadExtraPhoto(
+    slideIndex: number,
+    extraIndex: number,
+    file: File
+  ) {
+    if (!storeId) return;
+    setHeroUploading(true);
+    try {
+      const supabase = createClient();
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `${storeId}/storefront-hero-extra-${Date.now()}-${Math.round(
+        Math.random() * 1e6
+      )}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("product-images")
+        .upload(fileName, file);
+      if (upErr) {
+        showToast("Erro ao enviar foto: " + upErr.message, "error");
+        return;
+      }
+      const { data } = supabase.storage.from("product-images").getPublicUrl(fileName);
+      setSf((s) => ({
+        ...s,
+        heroSlides: s.heroSlides.map((sl, j) => {
+          if (j !== slideIndex) return sl;
+          const images = [...(sl.images ?? [])];
+          while (images.length <= extraIndex) images.push("");
+          images[extraIndex] = data.publicUrl;
+          return { ...sl, images };
+        }),
+      }));
+    } finally {
+      setHeroUploading(false);
+    }
+  }
+
+  /** Remove uma foto extra (mantém as demais posições). */
+  const removeExtraPhoto = (slideIndex: number, extraIndex: number) =>
+    setSf((s) => ({
+      ...s,
+      heroSlides: s.heroSlides.map((sl, j) => {
+        if (j !== slideIndex) return sl;
+        const images = [...(sl.images ?? [])];
+        if (extraIndex < images.length) images[extraIndex] = "";
+        return { ...sl, images };
+      }),
+    }));
+
   /** Atualiza um campo de um slide (merge). */
   const patchSlide = (i: number, patch: Partial<HeroSlide>) =>
     setSf((s) => ({
@@ -349,8 +414,15 @@ export default function BannerEditPage() {
       patch.bgVia = cur?.bgVia || "#0064D2";
       patch.bgTo = cur?.bgTo || "#0086FF";
       patch.height = cur?.height || 360;
+      // Strips/Duo/Gradient/Magazine ficam com o texto à esquerda (foto à
+      // direita), como a referência.
       patch.photoSide =
-        tpl === "gradient" || tpl === "magazine" ? "right" : "left";
+        tpl === "gradient" ||
+        tpl === "magazine" ||
+        tpl === "strips" ||
+        tpl === "duo"
+          ? "right"
+          : "left";
     }
     patchSlide(i, patch);
   };
@@ -601,6 +673,26 @@ export default function BannerEditPage() {
               {/* Prévia */}
               <SlidePreview slide={slide} fallback={fallback} primary={sf.themePrimary} />
 
+              {/* Só a foto (sem texto): para fotos que já têm os dizeres embutidos */}
+              <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                <input
+                  type="checkbox"
+                  checked={slide.noText ?? false}
+                  onChange={(e) => patchSlide(i, { noText: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 accent-landing-primary"
+                />
+                <span>
+                  <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">
+                    Banner só com a foto (sem texto)
+                  </span>
+                  <span className="block text-[11px] text-slate-500 dark:text-slate-400">
+                    Mostra só a imagem, sem texto/estilo por cima. Use quando a
+                    foto já vem com os dizeres. O estilo e os textos abaixo ficam
+                    ignorados.
+                  </span>
+                </span>
+              </label>
+
               {/* Estilo do banner */}
               <p className="mt-3 mb-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                 Estilo do banner
@@ -616,6 +708,8 @@ export default function BannerEditPage() {
                     { v: "magazine", label: "Magazine", hint: "Texto colorido" },
                     { v: "spring", label: "Spring", hint: "Badge girando" },
                     { v: "sale", label: "Sale", hint: "Badge % OFF" },
+                    { v: "strips", label: "Strips", hint: "3 faixas diagonais" },
+                    { v: "duo", label: "Duo", hint: "2 fotos + cursivo" },
                   ] as { v: HeroTemplate; label: string; hint: string }[]
                 ).map((opt) => {
                   const active = (slide.template ?? "overlay") === opt.v;
@@ -677,32 +771,38 @@ export default function BannerEditPage() {
                 !["overlay", "split"].includes(slide.template) && (
                   <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-800/40">
                     <p className="mb-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      Cores e tamanho deste banner
+                      {slide.template === "strips" || slide.template === "duo"
+                        ? "Cor de destaque deste banner"
+                        : "Cores e tamanho deste banner"}
                     </p>
                     <div className="flex flex-wrap items-center gap-3">
-                      {(
-                        [
-                          { key: "bgFrom" as const, label: "De", def: "#001C45" },
-                          { key: "bgVia" as const, label: "Via", def: "#0064D2" },
-                          { key: "bgTo" as const, label: "Até", def: "#0086FF" },
-                        ]
-                      ).map((c) => (
-                        <label key={c.key} className="flex items-center gap-1.5">
-                          <input
-                            type="color"
-                            value={slide[c.key] || c.def}
-                            onChange={(e) =>
-                              patchSlide(i, {
-                                [c.key]: e.target.value,
-                              } as Partial<HeroSlide>)
-                            }
-                            className="h-8 w-8 cursor-pointer rounded border border-slate-300 p-0.5 dark:border-slate-600"
-                          />
-                          <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                            {c.label}
-                          </span>
-                        </label>
-                      ))}
+                      {/* Gradiente do painel — só nos estilos de painel colorido.
+                          Strips/Duo têm painel claro, então só a cor de destaque. */}
+                      {slide.template !== "strips" &&
+                        slide.template !== "duo" &&
+                        (
+                          [
+                            { key: "bgFrom" as const, label: "De", def: "#001C45" },
+                            { key: "bgVia" as const, label: "Via", def: "#0064D2" },
+                            { key: "bgTo" as const, label: "Até", def: "#0086FF" },
+                          ] as { key: "bgFrom" | "bgVia" | "bgTo"; label: string; def: string }[]
+                        ).map((c) => (
+                          <label key={c.key} className="flex items-center gap-1.5">
+                            <input
+                              type="color"
+                              value={slide[c.key] || c.def}
+                              onChange={(e) =>
+                                patchSlide(i, {
+                                  [c.key]: e.target.value,
+                                } as Partial<HeroSlide>)
+                              }
+                              className="h-8 w-8 cursor-pointer rounded border border-slate-300 p-0.5 dark:border-slate-600"
+                            />
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                              {c.label}
+                            </span>
+                          </label>
+                        ))}
                       <label className="flex items-center gap-1.5">
                         <input
                           type="color"
@@ -711,38 +811,72 @@ export default function BannerEditPage() {
                           className="h-8 w-8 cursor-pointer rounded border border-slate-300 p-0.5 dark:border-slate-600"
                         />
                         <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Botão
+                          {slide.template === "strips" || slide.template === "duo"
+                            ? "Destaque"
+                            : "Botão"}
                         </span>
                       </label>
-                      <div
-                        className="h-8 min-w-[80px] flex-1 rounded-lg"
-                        style={{
-                          background: `linear-gradient(to right, ${slide.bgFrom || "#001C45"}, ${slide.bgVia || slide.bgFrom || "#0064D2"}, ${slide.bgTo || "#0086FF"})`,
-                        }}
-                      />
+                      {slide.template !== "strips" && slide.template !== "duo" && (
+                        <div
+                          className="h-8 min-w-[80px] flex-1 rounded-lg"
+                          style={{
+                            background: `linear-gradient(to right, ${slide.bgFrom || "#001C45"}, ${slide.bgVia || slide.bgFrom || "#0064D2"}, ${slide.bgTo || "#0086FF"})`,
+                          }}
+                        />
+                      )}
                     </div>
-                    <label className="mt-3 block">
-                      <span className="mb-1 block text-[11px] text-slate-500 dark:text-slate-400">
-                        Altura ({slide.height ?? 360}px)
-                      </span>
-                      <input
-                        type="range"
-                        min={220}
-                        max={560}
-                        step={20}
-                        value={slide.height ?? 360}
-                        onChange={(e) =>
-                          patchSlide(i, { height: Number(e.target.value) })
-                        }
-                        className="w-full accent-landing-primary"
-                      />
-                    </label>
+                    {/* Strips/Duo usam proporção fixa (foto de corpo inteiro),
+                        então não têm barra de altura. */}
+                    {slide.template !== "strips" && slide.template !== "duo" && (
+                      <label className="mt-3 block">
+                        <span className="mb-1 block text-[11px] text-slate-500 dark:text-slate-400">
+                          Altura ({slide.height ?? 360}px)
+                        </span>
+                        <input
+                          type="range"
+                          min={220}
+                          max={560}
+                          step={20}
+                          value={slide.height ?? 360}
+                          onChange={(e) =>
+                            patchSlide(i, { height: Number(e.target.value) })
+                          }
+                          className="w-full accent-landing-primary"
+                        />
+                      </label>
+                    )}
                     <p className="mt-1 text-[10px] text-slate-400">
                       Dica: nesses estilos, use fotos de pessoa/produto em pé
                       (retrato). O texto “Destaque” ganha o degradê animado.
                     </p>
                   </div>
                 )}
+
+              {/* Fotos extras dos estilos multi-foto (Strips = 3, Duo = 2) */}
+              {(slide.template === "strips" || slide.template === "duo") && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                  <p className="mb-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Fotos deste estilo{" "}
+                    <span className="font-normal text-slate-400">
+                      (a 1ª é a foto principal enviada acima)
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-4">
+                    {Array.from({
+                      length: heroTemplatePhotoCount(slide.template) - 1,
+                    }).map((_, k) => (
+                      <ExtraPhotoSlot
+                        key={k}
+                        label={`Foto ${k + 2}`}
+                        url={slide.images?.[k] ?? ""}
+                        disabled={heroUploading}
+                        onPick={(f) => uploadExtraPhoto(i, k, f)}
+                        onRemove={() => removeExtraPhoto(i, k)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Textos deste banner (vazio = usa o texto geral) */}
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1038,6 +1172,66 @@ export default function BannerEditPage() {
           onComplete={handleHeroCropDone}
         />
       )}
+    </div>
+  );
+}
+
+/** Slot de foto extra (Foto 2/3) dos estilos multi-foto (strips/duo). */
+function ExtraPhotoSlot({
+  label,
+  url,
+  disabled,
+  onPick,
+  onRemove,
+}: {
+  label: string;
+  url: string;
+  disabled?: boolean;
+  onPick: (file: File) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div>
+      <span className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300">
+        {label}
+      </span>
+      <div className="flex items-center gap-2">
+        {url ? (
+          <div className="relative h-16 w-16 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+            <Image src={url} alt="" fill className="object-cover" sizes="64px" />
+            <button
+              type="button"
+              onClick={onRemove}
+              className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[10px] text-white hover:bg-black/80"
+              aria-label="Remover foto"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xl opacity-40 dark:border-slate-600">
+            🖼️
+          </div>
+        )}
+        <label
+          className={`cursor-pointer rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 ${
+            disabled ? "pointer-events-none opacity-50" : ""
+          }`}
+        >
+          {url ? "Trocar" : "Enviar"}
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={disabled}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onPick(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      </div>
     </div>
   );
 }

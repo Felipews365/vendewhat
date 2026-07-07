@@ -176,6 +176,45 @@ html {
   }
 }
 
+/* Faixas diagonais animadas do estilo "Strips": um leve vai-e-vem vertical
+   escalonado por faixa (o stagger vem do inline `animation-delay`). */
+@keyframes vw-strip-drift {
+  0%,
+  100% {
+    transform: translateY(-3%);
+  }
+  50% {
+    transform: translateY(3%);
+  }
+}
+.vw-strip-drift {
+  animation: vw-strip-drift 7s ease-in-out infinite;
+}
+/* Brilho que atravessa as faixas de tempos em tempos. */
+@keyframes vw-strip-shine {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.65;
+  }
+  30%,
+  100% {
+    transform: translateX(220%);
+    opacity: 0;
+  }
+}
+.vw-strip-shine {
+  animation: vw-strip-shine 6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vw-strip-drift,
+  .vw-strip-shine {
+    animation: none;
+  }
+}
+
 .vw-blob {
   animation: vw-blob 18s ease-in-out infinite;
 }

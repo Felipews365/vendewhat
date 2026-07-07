@@ -129,13 +129,18 @@ export function ProductPhotosPicker({
   onItemsChange,
   label = "Fotos do produto",
   variant = "default",
+  photoAspect = "1:1",
 }: {
   items: PhotoItem[];
   onItemsChange: (next: PhotoItem[]) => void;
   label?: string;
   /** Grelha 2×5 com + em cada vazio (estilo editor visual) */
   variant?: "default" | "editor";
+  /** Formato das miniaturas (prévia de como fica no card da loja). */
+  photoAspect?: "1:1" | "3:4";
 }) {
+  // Classe de proporção das miniaturas conforme o formato escolhido no produto.
+  const aspectClass = photoAspect === "3:4" ? "aspect-[3/4]" : "aspect-square";
   const fileRef = useRef<HTMLInputElement>(null);
   const itemsRef = useRef(items);
   itemsRef.current = items;

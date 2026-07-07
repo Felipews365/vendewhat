@@ -91,7 +91,7 @@ export function HeroTemplateSlide({
       <a
         href={content.ctaHref}
         onClick={(e) => onCta(e, content.ctaHref)}
-        className="inline-flex w-fit items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-md transition-transform hover:-translate-y-0.5"
+        className="inline-flex w-fit items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-white shadow-md transition-transform hover:-translate-y-0.5 sm:px-5 sm:py-2.5 sm:text-sm"
         style={{ background: `linear-gradient(135deg, ${btnBase}, ${btnDark})` }}
       >
         {content.ctaLabel}
@@ -401,6 +401,139 @@ export function HeroTemplateSlide({
           </h2>
           {content.subtitle && (
             <p className="mb-5 line-clamp-2 max-w-[28ch] text-sm text-white/75 sm:text-base">{content.subtitle}</p>
+          )}
+          <Cta />
+        </div>
+      </div>
+    );
+  }
+
+  // ── STRIPS (3 faixas diagonais + painel de texto CLARO, como a referência) ─
+  if (template === "strips") {
+    const photos = [img, ...(slide.images ?? [])].filter(Boolean);
+    const strips = photos.length
+      ? Array.from({ length: 3 }, (_, k) => photos[k % photos.length]!)
+      : [];
+    // Cor de destaque (eyebrow/cursivo/botão) = cor do botão ou a primária da loja.
+    const accent = btnBase;
+    return (
+      <div className="absolute inset-0 overflow-hidden bg-white">
+        {/* Faixas de foto: a borda esquerda (inclinada) contra o branco vira a
+            diagonal — por isso o painel NÃO cobre as fotos (sem sobreposição). */}
+        {strips.length > 0 && (
+          <div
+            className="absolute inset-y-0 flex w-[60%] gap-[3px] overflow-hidden"
+            style={{
+              transform: "skewX(-9deg)",
+              left: photoLeft ? "-6%" : undefined,
+              right: photoLeft ? undefined : "-6%",
+            }}
+          >
+            {strips.map((src, k) => (
+              <div
+                key={k}
+                className="vw-strip-drift relative -mt-[8%] h-[116%] flex-1 overflow-hidden"
+                style={{ animationDelay: `${k * 0.55}s` }}
+              >
+                <div
+                  className="absolute inset-0"
+                  style={{ transform: "skewX(9deg) scale(1.35)" }}
+                >
+                  <Image src={src} alt="" fill className="object-cover object-center" sizes="30vw" />
+                </div>
+              </div>
+            ))}
+            <div className="vw-strip-shine pointer-events-none absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+          </div>
+        )}
+        <div
+          className={`absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-10 flex w-[46%] flex-col justify-center px-3 sm:w-[44%] sm:px-8 lg:px-12`}
+        >
+          {content.badge && (
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-widest sm:mb-2 sm:text-sm" style={{ color: accent }}>
+              {content.badge}
+            </p>
+          )}
+          {content.title && (
+            <h2 className="font-display text-lg font-black leading-[1.1] text-gray-900 sm:text-4xl sm:leading-[1.05] lg:text-5xl">
+              {content.title}
+            </h2>
+          )}
+          {content.highlight && (
+            <p className="mt-0.5 leading-none sm:mt-1">
+              {/* Cursivo com brilho que varre o texto (shine) — visível no
+                  painel claro: rosa → tom claro do rosa → rosa, deslizando. */}
+              <span
+                className="vw-anim-gradient font-script text-2xl font-bold sm:text-5xl lg:text-6xl"
+                style={{
+                  backgroundImage: `linear-gradient(110deg, ${accent} 0%, ${accent} 38%, ${adjustHex(accent, 0.85)} 50%, ${accent} 62%, ${accent} 100%)`,
+                }}
+              >
+                {content.highlight}
+              </span>
+            </p>
+          )}
+          {content.subtitle && (
+            <p className="mb-3 mt-1.5 line-clamp-2 max-w-[32ch] text-xs text-gray-500 sm:mb-6 sm:mt-3 sm:line-clamp-3 sm:text-base">
+              {content.subtitle}
+            </p>
+          )}
+          <Cta />
+        </div>
+      </div>
+    );
+  }
+
+  // ── DUO (2 fotos lado a lado + painel claro com destaque cursivo) ──────
+  if (template === "duo") {
+    const photos = [img, ...(slide.images ?? [])].filter(Boolean);
+    const pair = photos.length
+      ? Array.from({ length: 2 }, (_, k) => photos[k % photos.length]!)
+      : [];
+    const accent = btnBase;
+    return (
+      <div className="absolute inset-0 overflow-hidden bg-white">
+        {pair.length > 0 && (
+          <div
+            className={`absolute inset-y-0 ${photoLeft ? "left-0" : "right-0"} flex w-[52%] gap-1`}
+          >
+            {pair.map((src, k) => (
+              <div key={k} className="relative flex-1 overflow-hidden">
+                <Image src={src} alt="" fill className="object-cover object-center" sizes="26vw" />
+              </div>
+            ))}
+          </div>
+        )}
+        <div
+          className={`absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-10 flex w-[50%] flex-col justify-center px-3 sm:px-8 lg:px-14`}
+        >
+          {content.badge && (
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-widest sm:text-sm" style={{ color: accent }}>
+              {content.badge}
+            </p>
+          )}
+          {content.title && (
+            <h2 className="font-display text-lg font-black leading-tight sm:text-4xl lg:text-5xl" style={{ color: "#1a1a2e" }}>
+              {content.title}
+            </h2>
+          )}
+          {content.highlight && (
+            <p className="mt-0.5 leading-none sm:mt-1">
+              {/* Cursivo com brilho que varre o texto (shine). */}
+              <span
+                className="vw-anim-gradient font-script text-2xl font-bold sm:text-4xl lg:text-5xl"
+                style={{
+                  backgroundImage: `linear-gradient(110deg, ${accent} 0%, ${accent} 38%, ${adjustHex(accent, 0.85)} 50%, ${accent} 62%, ${accent} 100%)`,
+                }}
+              >
+                {content.highlight}
+              </span>
+            </p>
+          )}
+          {content.subtitle && (
+            <p className="mb-3 mt-1.5 line-clamp-2 max-w-[34ch] text-xs text-gray-500 sm:mb-5 sm:mt-2 sm:line-clamp-3 sm:text-base">
+              {content.subtitle}
+            </p>
           )}
           <Cta />
         </div>

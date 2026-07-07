@@ -75,6 +75,8 @@ export type CatalogProduct = {
   createdAt: string;
   isPromotion: boolean;
   compareAtPrice: number | null;
+  /** Formato da foto deste produto no card ("1:1"/"3:4"); null = usa o padrão da loja. */
+  cardRatio: ProductCardRatio | null;
   /** Enquadramento da 1.ª foto no card (lista); no detalhe as fotos aparecem inteiras. */
   imageObjectPosition: string;
   /** Foco por índice de `images` (arraste no painel); mesmo comprimento que `images`. */
@@ -359,9 +361,10 @@ function HeroBannerBlock({
     </>
   );
 
-  const dots = len > 1 && (
+  // Bolinhas por DENTRO do card (embaixo, ao centro) — mesmo modelo em todos.
+  const internalDots = len > 1 && (
     <nav
-      className="w-full flex justify-center items-center gap-2 py-2.5 sm:py-3 bg-white border-b border-stone-200/90"
+      className="absolute inset-x-0 bottom-3 z-30 flex justify-center gap-2"
       aria-label="Fotos do banner"
     >
       {slides.map((_, i) => (
@@ -369,12 +372,9 @@ function HeroBannerBlock({
           key={i}
           type="button"
           onClick={() => setIdx(i)}
-          className={`h-2 rounded-full transition-all duration-300 ${
-            i === safeIdx ? "w-7 shadow-sm" : "w-2 opacity-80"
+          className={`h-2 rounded-full shadow transition-all duration-300 ${
+            i === safeIdx ? "w-6 bg-white" : "w-2 bg-white/60"
           }`}
-          style={{
-            backgroundColor: i === safeIdx ? themePrimary : "rgb(163 163 163)",
-          }}
           aria-label={`Ir para foto ${i + 1}`}
           aria-current={i === safeIdx ? "true" : undefined}
         />
@@ -382,87 +382,85 @@ function HeroBannerBlock({
     </nav>
   );
 
-  // Templates novos (gradiente/diagonal/fashion/magazine/spring/sale):
-  // renderizados por HeroTemplateSlide num container de altura fixa.
+  // TODOS os banners no MESMO modelo: card contido (max-w-6xl), arredondado, com
+  // margem (não cola nas bordas) e proporção fixa (cabe na tela sem rolar).
+  // Bolinhas por dentro. Os cards promocionais ficam FORA, abaixo, na mesma
+  // largura (seção logo após o <HeroBannerBlock/> na página).
   const template = slide.template ?? "overlay";
-  if (template !== "overlay" && template !== "split") {
-    const height = slide.height ?? 360;
-    const content: HeroSlideContent = {
-      badge,
-      title,
-      highlight,
-      subtitle,
-      ctaLabel,
-      ctaHref,
-    };
-    return (
-      <>
-        <section
-          className="relative w-full overflow-hidden"
-          style={{ height: `clamp(240px, 55vw, ${height}px)` }}
-        >
-          <HeroTemplateSlide
-            slide={slide}
-            content={content}
-            primary={themePrimary}
-            onCta={onCta}
-          />
-          {arrows}
-        </section>
-        {dots}
-      </>
-    );
-  }
+  const content: HeroSlideContent = {
+    badge,
+    title,
+    highlight,
+    subtitle,
+    ctaLabel,
+    ctaHref,
+  };
 
-  // Formato dividido: foto de um lado, texto (painel colorido) do outro.
-  if (slide.layout === "split") {
+  let inner: React.ReactNode;
+  if (slide.noText) {
+    // "Só a foto": ignora estilo/texto/painel e mostra só a imagem no card
+    // (para fotos que já vêm com os dizeres embutidos).
+    inner = <HeroSlideshowLayer images={[slide.url]} activeIndex={0} />;
+  } else if (template !== "overlay" && template !== "split") {
+    // strips/duo/gráficos: o HeroTemplateSlide já preenche (absolute inset-0).
+    inner = (
+      <HeroTemplateSlide
+        slide={slide}
+        content={content}
+        primary={themePrimary}
+        onCta={onCta}
+      />
+    );
+  } else if (template === "split" || slide.layout === "split") {
     const photo = (
-      <div className="relative w-full md:w-1/2 aspect-square md:aspect-auto md:self-stretch overflow-hidden">
+      <div className="relative h-1/2 w-full overflow-hidden md:h-full md:w-1/2">
         <HeroSlideshowLayer images={[slide.url]} activeIndex={0} />
-        {arrows}
       </div>
     );
     const text = (
       <div
-        className="w-full md:w-1/2 flex flex-col justify-center px-6 sm:px-10 md:px-12 py-8 md:py-12"
+        className="flex h-1/2 w-full flex-col justify-center px-6 py-4 sm:px-10 md:h-full md:w-1/2 md:py-12"
         style={{ backgroundColor: "var(--store-secondary)" }}
       >
         {textContent}
       </div>
     );
-    return (
+    inner = (
+      <div className="absolute inset-0 flex flex-col md:flex-row">
+        {slide.photoSide === "left" ? (
+          <>
+            {photo}
+            {text}
+          </>
+        ) : (
+          <>
+            {text}
+            {photo}
+          </>
+        )}
+      </div>
+    );
+  } else {
+    // Overlay: foto de fundo + texto por cima.
+    inner = (
       <>
-        <section className="relative w-full flex flex-col md:flex-row md:min-h-[340px] lg:min-h-[440px] overflow-hidden">
-          {slide.photoSide === "left" ? (
-            <>
-              {photo}
-              {text}
-            </>
-          ) : (
-            <>
-              {text}
-              {photo}
-            </>
-          )}
-        </section>
-        {dots}
+        <HeroSlideshowLayer images={[slide.url]} activeIndex={0} />
+        <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-r from-black/40 via-black/20 to-transparent" />
+        <div className="absolute inset-0 z-20 flex max-w-3xl flex-col justify-end px-6 pb-8 sm:px-10 md:px-14 md:pb-12">
+          {textContent}
+        </div>
       </>
     );
   }
 
-  // Formato padrão: foto de fundo com o texto por cima.
   return (
-    <>
-      <section className="relative w-full aspect-[16/9] sm:aspect-[2/1] md:aspect-[21/9] lg:aspect-[1920/600] overflow-hidden">
-        <HeroSlideshowLayer images={[slide.url]} activeIndex={0} />
+    <div className="mx-auto w-full max-w-6xl px-4 pt-3 sm:pt-4">
+      <section className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl shadow-sm sm:aspect-[16/9] sm:rounded-3xl lg:aspect-[5/2]">
+        {inner}
         {arrows}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/20 to-transparent z-10 pointer-events-none" />
-        <div className="absolute inset-0 z-20 flex flex-col justify-end px-6 sm:px-10 md:px-14 pb-6 sm:pb-10 md:pb-12 max-w-3xl">
-          {textContent}
-        </div>
+        {internalDots}
       </section>
-      {dots}
-    </>
+    </div>
   );
 }
 
@@ -2325,7 +2323,7 @@ export function LojaClient({
 
   return (
     <div
-      className="min-h-screen bg-boutique-cream pb-28 md:pb-8 text-stone-800"
+      className="min-h-screen bg-white pb-28 md:pb-8 text-stone-800"
       style={themeStyle}
     >
       {/* Topo — logo, bullets, busca (estilo vitrine) */}
@@ -2546,33 +2544,41 @@ export function LojaClient({
       )}
 
       {/* Banner: um carrossel só; cada foto tem seu formato E seu texto.
-          Texto vazio na foto → usa o texto geral (fallback). */}
+          Texto vazio na foto → usa o texto geral (fallback). O fundo cinza fica
+          numa FAIXA só atrás do banner (os cards promocionais ficam fora dela). */}
       {storefront.heroSlides.length > 0 && (
-        <HeroBannerBlock
-          slides={storefront.heroSlides}
-          themePrimary={storefront.themePrimary}
-          fallback={{
-            badge: storefront.heroSubtitle,
-            title: heroDisplayTitle,
-            subtitle: store.description ?? "",
-            couponCode: storefront.heroCouponCode,
-            ctaLabel: storefront.heroCtaLabel,
-            ctaHref: storefront.heroCtaHref,
-          }}
-          onCta={handleHeroCta}
-        />
+        <div
+          className="w-full pb-4"
+          style={{ backgroundColor: storefront.pageBackground }}
+        >
+          <HeroBannerBlock
+            slides={storefront.heroSlides}
+            themePrimary={storefront.themePrimary}
+            fallback={{
+              badge: storefront.heroSubtitle,
+              title: heroDisplayTitle,
+              subtitle: store.description ?? "",
+              couponCode: storefront.heroCouponCode,
+              ctaLabel: storefront.heroCtaLabel,
+              ctaHref: storefront.heroCtaHref,
+            }}
+            onCta={handleHeroCta}
+          />
+        </div>
       )}
 
-      {/* Cards promocionais coloridos abaixo do banner. */}
+      {/* Cards promocionais coloridos — FORA do banner, faixa própria abaixo,
+          na mesma largura. Responsivos: empilham no celular (1 por linha),
+          3 colunas no desktop (igual à referência). */}
       {storefront.promoCards.length > 0 && (
         <section className="max-w-6xl mx-auto w-full px-4 mt-4">
-          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
             {storefront.promoCards.map((c, i) => (
               <a
                 key={i}
                 href={c.href || "#catalogo"}
                 onClick={(e) => handleHeroCta(e, c.href || "#catalogo")}
-                className="group relative flex flex-col justify-end p-3 sm:p-5 rounded-2xl overflow-hidden min-h-[90px] sm:min-h-[110px] transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+                className="group relative flex flex-col justify-end p-4 sm:p-5 rounded-2xl overflow-hidden min-h-[110px] sm:min-h-[120px] transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
                 style={{
                   backgroundImage: `linear-gradient(135deg, ${c.from}, ${c.to})`,
                 }}
@@ -2581,23 +2587,23 @@ export function LojaClient({
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.15)_0%,transparent_50%)]" />
                 <div className="relative z-10">
                   {c.eyebrow && (
-                    <p className="text-[0.55rem] sm:text-[0.65rem] font-bold uppercase tracking-widest text-white/75 mb-0.5">
+                    <p className="text-[0.65rem] sm:text-[0.7rem] font-bold uppercase tracking-widest text-white/75 mb-0.5">
                       {c.eyebrow}
                     </p>
                   )}
-                  <h3 className="text-xs sm:text-base font-bold text-white leading-snug">
+                  <h3 className="text-base sm:text-lg font-bold text-white leading-snug">
                     {c.title}
                     {c.subtitle && (
                       <>
                         <br />
-                        <span className="text-white/90 font-medium text-[0.65rem] sm:text-sm">
+                        <span className="text-white/90 font-medium text-sm">
                           {c.subtitle}
                         </span>
                       </>
                     )}
                   </h3>
                   {c.ctaLabel && (
-                    <span className="text-[0.6rem] sm:text-xs text-white/70 mt-1 flex items-center gap-1 group-hover:gap-2 transition-all">
+                    <span className="text-xs sm:text-sm text-white/70 mt-1 flex items-center gap-1 group-hover:gap-2 transition-all">
                       {c.ctaLabel} <span aria-hidden>→</span>
                     </span>
                   )}
@@ -2683,7 +2689,7 @@ export function LojaClient({
                     <ProductCatalogCard
                       key={product.id}
                       product={product}
-                      imageRatio={storefront.productCardRatio}
+                      imageRatio={product.cardRatio ?? storefront.productCardRatio}
                       installmentsMax={storefront.cardInstallmentsMax}
                       freeShippingLabel={storefront.cardFreeShipping}
                       showRatings={storefront.cardShowRatings}
@@ -2733,7 +2739,7 @@ export function LojaClient({
                     <ProductCatalogCard
                       key={product.id}
                       product={product}
-                      imageRatio={storefront.productCardRatio}
+                      imageRatio={product.cardRatio ?? storefront.productCardRatio}
                       installmentsMax={storefront.cardInstallmentsMax}
                       freeShippingLabel={storefront.cardFreeShipping}
                       showRatings={storefront.cardShowRatings}

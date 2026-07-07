@@ -171,6 +171,7 @@ export default function EditarProdutoPage() {
     imageObjectPosition: "center",
     unitType: DEFAULT_UNIT_TYPE,
     barcode: "",
+    cardRatio: "",
     packHeight: "",
     packWidth: "",
     packLength: "",
@@ -286,6 +287,10 @@ export default function EditarProdutoPage() {
           ),
           unitType: unitTypeFromDb(row.unit_type),
           barcode: sanitizeBarcode(row.barcode),
+          cardRatio: ((): string => {
+            const cr = (row as { card_ratio?: string | null }).card_ratio;
+            return cr === "1:1" || cr === "3:4" ? cr : "";
+          })(),
           packHeight: dimensionToInput(row.package_height),
           packWidth: dimensionToInput(row.package_width),
           packLength: dimensionToInput(row.package_length),
@@ -518,6 +523,7 @@ export default function EditarProdutoPage() {
         tags: sanitizeTags(tags),
         unit_type: form.unitType || DEFAULT_UNIT_TYPE,
         barcode: sanitizeBarcode(form.barcode) || null,
+        card_ratio: form.cardRatio || null,
         package_height: dimensionFromInput(form.packHeight),
         package_width: dimensionFromInput(form.packWidth),
         package_length: dimensionFromInput(form.packLength),
@@ -542,6 +548,19 @@ export default function EditarProdutoPage() {
           await supabase
             .from("products")
             .update(withoutImages)
+            .eq("id", productId)
+        ).error;
+      }
+
+      if (
+        updateError &&
+        isMissingColumnError(updateError.message, "card_ratio", updateError.code)
+      ) {
+        const { card_ratio: _cr, ...withoutRatio } = updatePayload;
+        updateError = (
+          await supabase
+            .from("products")
+            .update(withoutRatio)
             .eq("id", productId)
         ).error;
       }
@@ -1131,6 +1150,43 @@ export default function EditarProdutoPage() {
                   <p className="mt-1 text-[11px] text-slate-400">
                     Como o produto é vendido. Diferente de “Unidade” aparece na loja
                     (ex.: “vendido por Kg”).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Formato da foto no card
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        { v: "", label: "Padrão da loja" },
+                        { v: "1:1", label: "1:1 Quadrado" },
+                        { v: "3:4", label: "3:4 Retrato" },
+                      ] as { v: string; label: string }[]
+                    ).map((opt) => {
+                      const active = form.cardRatio === opt.v;
+                      return (
+                        <button
+                          key={opt.v || "default"}
+                          type="button"
+                          onClick={() =>
+                            setForm((f) => ({ ...f, cardRatio: opt.v }))
+                          }
+                          className={`rounded-lg border-2 px-2 py-2 text-xs font-semibold transition-colors ${
+                            active
+                              ? "border-landing-primary bg-teal-50 text-slate-800 dark:bg-teal-900/20 dark:text-slate-100"
+                              : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Como a foto deste produto aparece na grade da loja. “Padrão da
+                    loja” segue o formato geral da vitrine.
                   </p>
                 </div>
 

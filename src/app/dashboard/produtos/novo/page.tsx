@@ -86,6 +86,7 @@ const INITIAL_FORM = {
   imageObjectPosition: "center",
   unitType: DEFAULT_UNIT_TYPE,
   barcode: "",
+  cardRatio: "",
   packHeight: "",
   packWidth: "",
   packLength: "",
@@ -162,6 +163,8 @@ export default function NovoProdutoPage() {
     {}
   );
   const [form, setForm] = useState({ ...INITIAL_FORM });
+  // Pergunta o formato da foto (1:1 ou 3:4) logo ao abrir "Novo produto".
+  const [askRatio, setAskRatio] = useState(true);
   const [saleMode, setSaleMode] = useState<SaleModeValue>({
     ...INITIAL_SALE_MODE,
   });
@@ -377,6 +380,7 @@ export default function NovoProdutoPage() {
         tags: sanitizeTags(tags),
         unit_type: form.unitType || DEFAULT_UNIT_TYPE,
         barcode: sanitizeBarcode(form.barcode) || null,
+        card_ratio: form.cardRatio || null,
         package_height: dimensionFromInput(form.packHeight),
         package_width: dimensionFromInput(form.packWidth),
         package_length: dimensionFromInput(form.packLength),
@@ -392,6 +396,15 @@ export default function NovoProdutoPage() {
       ) {
         const { images: _i, ...withoutImages } = payload;
         insertError = (await supabase.from("products").insert(withoutImages))
+          .error;
+      }
+
+      if (
+        insertError &&
+        isMissingColumnError(insertError.message, "card_ratio", insertError.code)
+      ) {
+        const { card_ratio: _cr, ...withoutRatio } = payload;
+        insertError = (await supabase.from("products").insert(withoutRatio))
           .error;
       }
 
@@ -655,6 +668,57 @@ export default function NovoProdutoPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f4f5] dark:bg-slate-950">
+      {/* Pergunta o formato da foto ao começar um novo produto. */}
+      {askRatio && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              Formato da foto deste produto
+            </h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Como a foto vai aparecer na grade da loja. Dá pra mudar depois na
+              aba Produto.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              {(
+                [
+                  { v: "1:1", label: "Quadrado", ratio: "aspect-square", hint: "1:1" },
+                  { v: "3:4", label: "Retrato", ratio: "aspect-[3/4]", hint: "3:4" },
+                ] as { v: string; label: string; ratio: string; hint: string }[]
+              ).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => {
+                    setForm((f) => ({ ...f, cardRatio: opt.v }));
+                    setAskRatio(false);
+                  }}
+                  className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 p-4 transition-colors hover:border-landing-primary hover:bg-teal-50 dark:border-slate-700 dark:hover:bg-teal-900/20"
+                >
+                  <span
+                    className={`${opt.ratio} w-16 rounded-lg bg-slate-200 dark:bg-slate-700`}
+                  />
+                  <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                    {opt.label}
+                  </span>
+                  <span className="text-[11px] text-slate-400">{opt.hint}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setForm((f) => ({ ...f, cardRatio: "" }));
+                setAskRatio(false);
+              }}
+              className="mt-4 w-full rounded-xl bg-slate-100 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+            >
+              Usar o padrão da loja
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="bg-white border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <Link
@@ -1004,6 +1068,44 @@ export default function NovoProdutoPage() {
                   <p className="mt-1 text-[11px] text-slate-400">
                     Como o produto é vendido. Diferente de “Unidade” aparece na loja
                     (ex.: “vendido por Kg”).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Formato da foto no card
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        { v: "", label: "Padrão da loja" },
+                        { v: "1:1", label: "1:1 Quadrado" },
+                        { v: "3:4", label: "3:4 Retrato" },
+                      ] as { v: string; label: string }[]
+                    ).map((opt) => {
+                      const active = form.cardRatio === opt.v;
+                      return (
+                        <button
+                          key={opt.v || "default"}
+                          type="button"
+                          onClick={() => {
+                            setForm((f) => ({ ...f, cardRatio: opt.v }));
+                            setSaveOk(false);
+                          }}
+                          className={`rounded-lg border-2 px-2 py-2 text-xs font-semibold transition-colors ${
+                            active
+                              ? "border-landing-primary bg-teal-50 text-slate-800 dark:bg-teal-900/20 dark:text-slate-100"
+                              : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Como a foto deste produto aparece na grade da loja. “Padrão da
+                    loja” segue o formato geral da vitrine.
                   </p>
                 </div>
 
