@@ -331,6 +331,16 @@ export type StorefrontSettings = {
   categories: StorefrontCategoryItem[];
   /** Endereço de retirada mostrado ao cliente quando escolhe "Retirada" no carrinho. */
   pickupAddress: string;
+  /** Instruções de como retirar (horário, levar código etc.) — entram na mensagem e no prompt da IA. */
+  pickupInstructions: string;
+  /** Mostra Pix como opção de pagamento no checkout (exige `pixKey`). */
+  checkoutPixEnabled: boolean;
+  /** Mostra "Dinheiro na entrega" como opção de pagamento no checkout. */
+  checkoutCashEnabled: boolean;
+  /** Mostra "Cartão na entrega" como opção de pagamento no checkout. */
+  checkoutCardEnabled: boolean;
+  /** Mostra "Mercado Pago" no checkout (exige também o gateway conectado). */
+  checkoutMercadoPagoEnabled: boolean;
   /** Bloco comercial abaixo do catálogo (frete, contato, pagamentos, redes). */
   footerShippingLine: string;
   footerReturnsLine: string;
@@ -379,6 +389,11 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   youtubeUrl: "",
   categories: [],
   pickupAddress: "",
+  pickupInstructions: "",
+  checkoutPixEnabled: true,
+  checkoutCashEnabled: false,
+  checkoutCardEnabled: false,
+  checkoutMercadoPagoEnabled: true,
   footerShippingLine: "",
   footerReturnsLine: "",
   footerPolicyUrl: "",
@@ -642,6 +657,23 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     youtubeUrl: strOrEmpty(o.youtubeUrl),
     categories: categoriesFromDb(o.categories),
     pickupAddress: strOrEmpty(o.pickupAddress),
+    pickupInstructions: strOrEmpty(o.pickupInstructions),
+    checkoutPixEnabled: boolFromDb(
+      o.checkoutPixEnabled,
+      DEFAULT_STOREFRONT.checkoutPixEnabled
+    ),
+    checkoutCashEnabled: boolFromDb(
+      o.checkoutCashEnabled,
+      DEFAULT_STOREFRONT.checkoutCashEnabled
+    ),
+    checkoutCardEnabled: boolFromDb(
+      o.checkoutCardEnabled,
+      DEFAULT_STOREFRONT.checkoutCardEnabled
+    ),
+    checkoutMercadoPagoEnabled: boolFromDb(
+      o.checkoutMercadoPagoEnabled,
+      DEFAULT_STOREFRONT.checkoutMercadoPagoEnabled
+    ),
     footerShippingLine: strOrEmpty(o.footerShippingLine),
     footerReturnsLine: strOrEmpty(o.footerReturnsLine),
     footerPolicyUrl: strOrEmpty(o.footerPolicyUrl),
@@ -684,6 +716,11 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     tiktokUrl: s.tiktokUrl.trim(),
     youtubeUrl: s.youtubeUrl.trim(),
     pickupAddress: s.pickupAddress.trim(),
+    pickupInstructions: s.pickupInstructions.trim(),
+    checkoutPixEnabled: s.checkoutPixEnabled,
+    checkoutCashEnabled: s.checkoutCashEnabled,
+    checkoutCardEnabled: s.checkoutCardEnabled,
+    checkoutMercadoPagoEnabled: s.checkoutMercadoPagoEnabled,
     footerShippingLine: s.footerShippingLine.trim(),
     footerReturnsLine: s.footerReturnsLine.trim(),
     footerPolicyUrl: s.footerPolicyUrl.trim(),

@@ -2,6 +2,7 @@
 export const SHIPPING_MODES = [
   { id: "excursao", label: "Excursão" },
   { id: "correios", label: "Correios" },
+  { id: "transportadora", label: "Transportadora" },
   { id: "retirada", label: "Retirada" },
 ] as const;
 

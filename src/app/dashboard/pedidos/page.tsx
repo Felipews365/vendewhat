@@ -10,6 +10,7 @@ import {
   ORDERS_MIGRATION_HINT,
 } from "@/lib/dbColumnErrors";
 import { shippingModeLabel } from "@/lib/shippingModes";
+import { paymentMethodLabel } from "@/lib/paymentMethods";
 import { storefrontFromDb } from "@/lib/storefront";
 
 type StoreInfo = {
@@ -53,6 +54,8 @@ type OrderRow = {
     shippingMode?: string;
     shippingModeLabel?: string;
     excursionName?: string;
+    carrierName?: string;
+    paymentMethod?: string;
     customerAddress?: string;
   } | null;
 };
@@ -178,6 +181,8 @@ type PrintData = {
   phone: string | null;
   shipping: string | null;
   excursion: string | null;
+  carrier: string | null;
+  paymentMethod: string | null;
   deliveryAddress: string | null;
   date: string;
   total: string;
@@ -377,7 +382,9 @@ function buildReceiptHtml(store: StoreInfo, o: PrintData) {
     ${metaRow("Telefone:", o.phone)}
     ${metaRow("Forma de envio:", o.shipping)}
     ${metaRow("Excursão:", o.excursion)}
+    ${metaRow("Transportadora:", o.carrier)}
     ${metaRow("Endereço:", o.deliveryAddress)}
+    ${metaRow("Forma de pagamento:", o.paymentMethod)}
     <hr class="divider" />
     <table>
       <tbody>
@@ -446,6 +453,8 @@ function orderToPrintData(o: OrderRow): PrintData {
       shippingModeLabel(o.payload?.shippingMode) ||
       null,
     excursion: o.payload?.excursionName?.trim() || null,
+    carrier: o.payload?.carrierName?.trim() || null,
+    paymentMethod: paymentMethodLabel(o.payload?.paymentMethod) || null,
     deliveryAddress: o.payload?.customerAddress?.trim() || null,
     date: formatDate(o.created_at),
     total: formatBRL(Number(o.subtotal)),
@@ -959,6 +968,10 @@ export default function PedidosPage() {
               null;
             const deliveryAddress = o.payload?.customerAddress?.trim() || null;
             const excursion = o.payload?.excursionName?.trim() || null;
+            const carrier = o.payload?.carrierName?.trim() || null;
+            const paymentMethodChosen = paymentMethodLabel(
+              o.payload?.paymentMethod
+            );
             const payment = paymentInfo(o.payment_provider, o.payment_status);
             const selected = selectedIds.has(o.id);
             return (
@@ -1017,12 +1030,28 @@ export default function PedidosPage() {
                         {excursion}
                       </p>
                     ) : null}
+                    {carrier ? (
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">
+                        <span className="font-medium text-slate-700 dark:text-slate-200">
+                          Transportadora:
+                        </span>{" "}
+                        {carrier}
+                      </p>
+                    ) : null}
                     {deliveryAddress ? (
                       <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">
                         <span className="font-medium text-slate-700 dark:text-slate-200">
                           Endereço:
                         </span>{" "}
                         {deliveryAddress}
+                      </p>
+                    ) : null}
+                    {paymentMethodChosen ? (
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">
+                        <span className="font-medium text-slate-700 dark:text-slate-200">
+                          Forma de pagamento:
+                        </span>{" "}
+                        {paymentMethodChosen}
                       </p>
                     ) : null}
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">

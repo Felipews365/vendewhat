@@ -12,6 +12,12 @@ const host = supabaseImageHost();
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // @react-pdf/renderer traz dependências (fontkit etc.) que quebram no bundler do
+  // Next; tratá-lo como externo faz o Node carregá-lo em runtime (gera o catálogo
+  // em PDF na rota /api/loja/[slug]/catalogo e no envio pela IA no WhatsApp).
+  experimental: {
+    serverComponentsExternalPackages: ["@react-pdf/renderer"],
+  },
   // OneDrive / rede / alguns antivírus no Windows não disparam eventos de arquivo;
   // o polling faz o hot-reload funcionar (atualiza ao salvar sem reiniciar).
   webpack: (config, { dev }) => {

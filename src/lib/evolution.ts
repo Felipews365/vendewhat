@@ -282,6 +282,8 @@ export async function sendMedia(
     url: string;
     caption?: string;
     mediatype?: "image" | "video" | "document";
+    /** Nome do arquivo mostrado no anexo (útil em documentos, ex.: catálogo.pdf). */
+    fileName?: string;
   }
 ): Promise<void> {
   await call("POST", `/message/sendMedia/${encodeURIComponent(instance)}`, {
@@ -289,5 +291,6 @@ export async function sendMedia(
     mediatype: media.mediatype ?? "image",
     media: media.url,
     caption: media.caption ?? "",
+    ...(media.fileName ? { fileName: media.fileName } : {}),
   });
 }

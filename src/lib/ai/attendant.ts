@@ -93,6 +93,12 @@ export function buildSystemPrompt(args: {
   hasStorePhoto?: boolean;
   /** A loja tem vídeo: a IA pode enviar o vídeo. */
   hasStoreVideo?: boolean;
+  /** Endereço de retirada (quando a loja oferece retirada no local). */
+  pickupAddress?: string;
+  /** Instruções de como retirar (horário, levar código etc.). */
+  pickupInstructions?: string;
+  /** A loja tem produtos: a IA pode anexar o catálogo em PDF. */
+  hasCatalogPdf?: boolean;
 }): string {
   const {
     storeName,
@@ -108,9 +114,16 @@ export function buildSystemPrompt(args: {
     hasLocationPin,
     hasStorePhoto,
     hasStoreVideo,
+    pickupAddress,
+    pickupInstructions,
+    hasCatalogPdf,
   } = args;
   const storeUrl = `${baseUrl.replace(/\/+$/, "")}/loja/${slug}`;
   const address = (storeAddress ?? "").trim();
+  // Retirada só faz sentido em loja com ponto físico.
+  const pickupAddr = onlineOnly ? "" : (pickupAddress ?? "").trim();
+  const pickupInstr = onlineOnly ? "" : (pickupInstructions ?? "").trim();
+  const hasPickup = Boolean(pickupAddr || pickupInstr);
 
   return [
     `Você é ${aiName}, atendente virtual da loja "${storeName}" no WhatsApp.`,
@@ -157,8 +170,14 @@ export function buildSystemPrompt(args: {
     hasStoreVideo
       ? "- Você PODE enviar um vídeo da loja. Quando o cliente pedir para ver a loja, os produtos, o espaço OU a localização/como chegar, responda com uma frase curta e inclua, no final, o marcador [[ENVIAR_VIDEO]]. O sistema envia o vídeo automaticamente."
       : "",
-    hasLocationPin || hasStorePhoto || hasStoreVideo
+    hasCatalogPdf
+      ? `- Você PODE anexar um CATÁLOGO EM PDF com todos os produtos (fotos, preços, cores e tamanhos) para o cliente folhear e escolher com calma. Quando o cliente pedir o catálogo, a lista de produtos, um PDF, quiser ver tudo o que a loja vende, ou você mandar o link da loja para ele conferir os produtos, ENVIE o link do site (como já explicado) E inclua, no final da mensagem, o marcador [[ENVIAR_CATALOGO]] — o sistema anexa o PDF automaticamente. Assim o cliente escolhe: ver pelo site (link) ou pelo PDF. Mencione de forma leve que está mandando o catálogo em PDF também. Envie o PDF no máximo uma vez por conversa, a não ser que o cliente peça de novo.`
+      : "",
+    hasLocationPin || hasStorePhoto || hasStoreVideo || hasCatalogPdf
       ? "- Os marcadores [[...]] são comandos internos: use-os só quando fizer sentido, nunca os explique ao cliente e nunca os escreva em outro contexto."
+      : "",
+    hasPickup
+      ? "- RETIRADA: quando o cliente escolher retirar o pedido no local (o pedido chega marcado como 'Retirada'), OU perguntar como/onde retirar, explique proativamente, sem enrolar, onde e como retirar, usando as informações em RETIRADA DE PEDIDOS abaixo (endereço e instruções). Não invente horários nem regras que não estejam ali."
       : "",
     "",
     onlineOnly
@@ -166,6 +185,14 @@ export function buildSystemPrompt(args: {
       : address
       ? `LOCALIZAÇÃO DA LOJA:\n${address}\nMapa: ${mapsLink(address)}`
       : "LOCALIZAÇÃO DA LOJA:\n(Endereço não cadastrado.)",
+    "",
+    hasPickup
+      ? `RETIRADA DE PEDIDOS:\n${
+          pickupAddr ? `Endereço de retirada: ${pickupAddr}` : ""
+        }${pickupAddr && pickupInstr ? "\n" : ""}${
+          pickupInstr ? `Como retirar: ${pickupInstr}` : ""
+        }`
+      : "",
     "",
     "PRODUTOS DA LOJA:",
     formatCatalog(products),
@@ -184,25 +211,29 @@ export type ReplyDirectives = {
   sendPhoto: boolean;
   /** A IA pediu para mandar o vídeo da loja. */
   sendVideo: boolean;
+  /** A IA pediu para anexar o catálogo em PDF. */
+  sendCatalog: boolean;
 };
 
 /**
  * Separa a resposta da IA dos marcadores internos ([[ENVIAR_LOCALIZACAO]],
- * [[ENVIAR_FOTO]], [[ENVIAR_VIDEO]]) que pedem o envio do pino do mapa / da foto
- * / do vídeo da loja.
+ * [[ENVIAR_FOTO]], [[ENVIAR_VIDEO]], [[ENVIAR_CATALOGO]]) que pedem o envio do
+ * pino do mapa / da foto / do vídeo da loja / do catálogo em PDF.
  */
 export function parseReplyDirectives(reply: string): ReplyDirectives {
   const sendLocation = /\[\[\s*ENVIAR_LOCALIZACAO\s*\]\]/i.test(reply);
   const sendPhoto = /\[\[\s*ENVIAR_FOTO\s*\]\]/i.test(reply);
   const sendVideo = /\[\[\s*ENVIAR_VIDEO\s*\]\]/i.test(reply);
+  const sendCatalog = /\[\[\s*ENVIAR_CATALOGO\s*\]\]/i.test(reply);
   const text = reply
     .replace(/\[\[\s*ENVIAR_LOCALIZACAO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_FOTO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_VIDEO\s*\]\]/gi, "")
+    .replace(/\[\[\s*ENVIAR_CATALOGO\s*\]\]/gi, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { text, sendLocation, sendPhoto, sendVideo };
+  return { text, sendLocation, sendPhoto, sendVideo, sendCatalog };
 }
 
 /** Gera a resposta do atendente. Retorna o texto, ou null se não houver conteúdo. */

@@ -94,13 +94,15 @@ export async function respondToCustomer(
 ): Promise<boolean> {
   const { data: store } = await admin
     .from("stores")
-    .select("name, slug, storefront")
+    .select("name, slug, logo, storefront")
     .eq("id", cfg.storeId)
     .maybeSingle();
   if (!store?.slug) return false;
 
   const storeName = typeof store.name === "string" ? store.name : "Loja";
-  const pickupAddress = storefrontFromDb(store.storefront).pickupAddress;
+  const sf = storefrontFromDb(store.storefront);
+  const pickupAddress = sf.pickupAddress;
+  const pickupInstructions = sf.pickupInstructions;
   // Loja só online: sem endereço/pino/foto/vídeo (a IA avisa que é só online).
   const onlineOnly = cfg.aiOnlineOnly;
   const storeAddress = onlineOnly ? "" : cfg.aiLocationAddress.trim() || pickupAddress;
@@ -116,6 +118,9 @@ export async function respondToCustomer(
     .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(60);
+
+  // Tem produto = a IA pode anexar o catálogo em PDF.
+  const hasCatalogPdf = (productRows?.length ?? 0) > 0;
 
   // Histórico + lote: as mensagens do cliente após a última resposta da IA são o
   // "lote" (chegaram juntas); o que veio antes é o contexto da conversa.
@@ -146,13 +151,21 @@ export async function respondToCustomer(
     hasLocationPin,
     hasStorePhoto,
     hasStoreVideo,
+    pickupAddress,
+    pickupInstructions,
+    hasCatalogPdf,
   });
 
   const reply = await generateReply(systemPrompt, contextHistory, combinedUserText);
   if (!reply) return false;
 
-  const { text: replyText, sendLocation: wantLocation, sendPhoto, sendVideo } =
-    parseReplyDirectives(reply);
+  const {
+    text: replyText,
+    sendLocation: wantLocation,
+    sendPhoto,
+    sendVideo,
+    sendCatalog,
+  } = parseReplyDirectives(reply);
   let sent = false;
   if (replyText) {
     // Manda em partes (vários balões), com "digitando…" antes de cada uma, para
@@ -199,6 +212,30 @@ export async function respondToCustomer(
       sent = true;
     } catch (e) {
       console.error("[whatsappRespond] sendMedia video", e);
+    }
+  }
+  if (sendCatalog && hasCatalogPdf) {
+    try {
+      // Gera/reaproveita o PDF do catálogo no bucket e anexa como documento. Import
+      // dinâmico p/ não puxar o @react-pdf (pesado) nas demais respostas da IA.
+      const { ensureCatalogPdfUrl } = await import("@/lib/catalogPdf");
+      const url = await ensureCatalogPdfUrl(admin, {
+        storeId: cfg.storeId,
+        slug: String(store.slug),
+        storeName,
+        logoUrl: typeof store.logo === "string" ? store.logo : null,
+        baseUrl: process.env.APP_BASE_URL || "",
+      });
+      if (url) {
+        await sendMedia(cfg.evolutionInstance, customerPhone, {
+          url,
+          mediatype: "document",
+          fileName: `Catálogo - ${storeName}.pdf`,
+        });
+        sent = true;
+      }
+    } catch (e) {
+      console.error("[whatsappRespond] sendCatalog", e);
     }
   }
   return sent;

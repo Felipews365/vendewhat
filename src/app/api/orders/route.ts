@@ -10,6 +10,7 @@ import { isCustomerPhoneValid, toWhatsAppNumber } from "@/lib/customerPhone";
 import { markCartConverted } from "@/lib/whatsappConfig";
 import { isMissingColumnError } from "@/lib/dbColumnErrors";
 import { isShippingModeId, shippingModeLabel } from "@/lib/shippingModes";
+import { isPaymentMethodId } from "@/lib/paymentMethods";
 
 export const runtime = "nodejs";
 
@@ -22,7 +23,11 @@ type Body = {
   shippingMode?: string;
   /** Nome da excursão (só quando shippingMode === "excursao"). */
   excursionName?: string;
-  /** Endereço de entrega informado pelo cliente (excursão / correios). */
+  /** Nome da transportadora (só quando shippingMode === "transportadora"). */
+  carrierName?: string;
+  /** Forma de pagamento escolhida pelo cliente (pix | dinheiro | cartao | mercadopago). */
+  paymentMethod?: string;
+  /** Endereço de entrega informado pelo cliente (excursão / correios / transportadora). */
   customerAddress?: string;
   lines?: OrderLineInput[];
 };
@@ -174,6 +179,18 @@ export async function POST(req: Request) {
       ? String(body.excursionName ?? "").trim().slice(0, 120)
       : "";
 
+  // Nome da transportadora só faz sentido quando a forma de envio é "transportadora".
+  const carrierName =
+    shippingMode === "transportadora"
+      ? String(body.carrierName ?? "").trim().slice(0, 120)
+      : "";
+
+  // Forma de pagamento escolhida pelo cliente (opcional; validada contra a lista).
+  const rawPaymentMethod = String(body.paymentMethod ?? "").trim();
+  const paymentMethod = isPaymentMethodId(rawPaymentMethod)
+    ? rawPaymentMethod
+    : "";
+
   const payloadLines = validated.pricedLines.map((l) => ({
     productId: l.productId,
     name: l.name,
@@ -220,6 +237,8 @@ export async function POST(req: Request) {
         shippingMode,
         shippingModeLabel: shippingModeLabelPt,
         excursionName: excursionName || undefined,
+        carrierName: carrierName || undefined,
+        paymentMethod: paymentMethod || undefined,
         customerAddress: customerAddress || undefined,
       },
     })

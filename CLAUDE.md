@@ -221,19 +221,36 @@ para o texto digitado não herdar a cor clara do tema e sumir no fundo branco.
 
 O checkout fica no carrinho de [src/app/loja/[slug]/LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx).
 As **formas de envio** estão em [src/lib/shippingModes.ts](src/lib/shippingModes.ts)
-(`SHIPPING_MODES`: excursão, correios, retirada) e definem campos extras no carrinho:
+(`SHIPPING_MODES`: excursão, correios, transportadora, retirada) e definem campos extras no carrinho:
 
-- **Excursão / Correios** → o cliente preenche o **endereço de entrega** (CEP, rua, número,
-  bairro, cidade, UF, complemento). Validação em `addressComplete`; o **CEP é obrigatório só no
-  Correios** (`cepRequired` + 8 dígitos). O endereço entra na mensagem do WhatsApp
-  (`*Endereço de entrega:*`) e no `payload.customerAddress` do pedido.
+- **Excursão / Correios / Transportadora** → o cliente preenche o **endereço de entrega** (CEP, rua,
+  número, bairro, cidade, UF, complemento). Validação em `addressComplete`; o **CEP é obrigatório no
+  Correios e na Transportadora** (`cepRequired` + 8 dígitos), não na excursão. O endereço entra na
+  mensagem do WhatsApp (`*Endereço de entrega:*`) e no `payload.customerAddress` do pedido.
 - **Excursão** → além do endereço, exige o **nome da excursão** (`excursionName`, validado por
   `excursionComplete`). Vai na mensagem do WhatsApp (`*Excursão:*`) e em `payload.excursionName`.
-  A liberação dos botões de finalizar usa `checkoutReady` (junta nome, telefone, forma de envio,
-  endereço quando aplicável e nome da excursão).
-- **Retirada** → mostra o **endereço da loja** (`storefront.pickupAddress`), configurado no editor
-  da vitrine ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), painel
-  "Rodapé da vitrine"). Se vazio, exibe aviso de combinar pelo WhatsApp.
+- **Transportadora** → além do endereço, exige o **nome da transportadora** (`carrierName`, validado
+  por `carrierComplete`). Vai na mensagem do WhatsApp (`*Transportadora:*`) e em
+  `payload.carrierName`.
+- **Retirada** → mostra o **endereço da loja** (`storefront.pickupAddress`) e as **instruções de
+  retirada** (`storefront.pickupInstructions` — "Como retirar"), configurados no editor da vitrine
+  ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), painel "Rodapé da
+  vitrine"). Se vazio, exibe aviso de combinar pelo WhatsApp. As instruções entram na mensagem
+  (`*Como retirar:*`) **e** no prompt da IA (a IA atendente explica a retirada — ver seção da IA).
+
+A liberação dos botões de finalizar usa `checkoutReady` (junta nome, telefone, forma de envio,
+endereço quando aplicável, nome da excursão/transportadora e **forma de pagamento**).
+
+**Forma de pagamento no checkout ([src/lib/paymentMethods.ts](src/lib/paymentMethods.ts)):** o cliente
+escolhe entre `pix` / `dinheiro` / `cartao` / `mercadopago` (`PAYMENT_METHODS`), mas **só aparecem as
+que a loja ativou** no painel. Os toggles moram no JSONB `storefront`: `checkoutPixEnabled` (default
+`true`, exige `pixKey`), `checkoutCashEnabled`, `checkoutCardEnabled` e `checkoutMercadoPagoEnabled`
+(default `true`), editados no painel "Rodapé da vitrine" (subseção "Formas de pagamento no checkout").
+Em LojaClient, `enabledPayMethods` deriva a lista; se estiver vazia, **não** mostra o seletor
+(retrocompatível). O **Mercado Pago** só aparece se `mpAvailable = paymentEnabled &&
+checkoutMercadoPagoEnabled` (ou seja, gateway conectado **E** ativado no painel); o botão azul "Pagar
+com Mercado Pago" só é exibido quando `paymentMethod === "mercadopago"`. A escolha vai na mensagem
+(`*Forma de pagamento:*`) e em `payload.paymentMethod`.
 
 **Formato da mensagem de pedido (`buildOrderMessage` em LojaClient):** cabeçalho, dados do cliente,
 envio/endereço e depois `*Itens do pedido:*` com **um item por bloco** (linha em branco entre eles):
@@ -244,14 +261,16 @@ minúsculos no meio) — normaliza o que foi digitado em caixa alta/baixa.
 
 **Pix na mensagem do WhatsApp:** se a loja preencher a **chave Pix** (`storefront.pixKey` + titular
 `pixName`, no mesmo painel "Rodapé da vitrine"), a mensagem do **Enviar pedido no WhatsApp** termina
-com a chave para o cliente pagar e enviar o comprovante.
+com a chave para o cliente pagar e enviar o comprovante — mas **só quando o método escolhido é Pix**
+(ou quando a loja não configurou nenhum seletor de pagamento, mantendo o comportamento antigo).
 Sem migration: mora no JSONB `stores.storefront`. É o fluxo de pagamento dos pedidos que **não**
 passam pelo Mercado Pago.
 
-O endereço e o nome da excursão aparecem no painel em
-[/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (tela e comprovante impresso). Não há
-migration: `pickupAddress` mora no JSONB `stores.storefront` e os dados do cliente
-(`customerAddress`, `excursionName`) no `orders.payload` (ver
+O endereço, o nome da excursão/transportadora e a forma de pagamento aparecem no painel em
+[/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (tela e comprovante impresso, via
+`paymentMethodLabel`). Não há migration: `pickupAddress`/`pickupInstructions` e os toggles de
+pagamento moram no JSONB `stores.storefront`; os dados do cliente (`customerAddress`, `excursionName`,
+`carrierName`, `paymentMethod`) no `orders.payload` (ver
 [src/app/api/orders/route.ts](src/app/api/orders/route.ts)).
 
 ### Impressão de pedidos
@@ -445,6 +464,18 @@ uma instância Evolution e uma config de IA por loja.
   - `CRON_SECRET` — segredo que protege o endpoint de follow-up (ver subseção abaixo). Também
     precisa estar nos **secrets do GitHub** (junto de `APP_BASE_URL`) para o workflow do cron.
 
+### Retirada de pedidos (a IA explica como retirar)
+
+Quando o pedido é de **Retirada** (ou o cliente pergunta como/onde retirar), a IA atendente explica
+proativamente o **endereço** e as **instruções de retirada**. Esses dois campos moram no JSONB
+`storefront` (`pickupAddress` + `pickupInstructions`, editados no painel "Rodapé da vitrine") e são
+passados por [whatsappRespond.ts](src/lib/whatsappRespond.ts) para
+`buildSystemPrompt({ pickupAddress, pickupInstructions })` em
+[src/lib/ai/attendant.ts](src/lib/ai/attendant.ts), que só ativa a regra + a seção "RETIRADA DE
+PEDIDOS" quando há algum dos dois **e** a loja **não** é só online (`onlineOnly` zera a retirada).
+Sem migration (JSONB). É o mesmo `pickupInstructions` que também entra na mensagem do pedido no
+carrinho (ver seção "Loja pública — carrinho e formas de envio").
+
 ### Localização e foto da loja (a IA envia quando pedem)
 
 Quando o cliente pede a localização ou para ver a loja, a IA pode mandar o **pino
@@ -501,6 +532,41 @@ loja, configurado na aba **Atendente de IA** (seção "Localização e foto da l
   para separar o texto dos marcadores e então chama `sendLocation` / `sendMedia`
   ([src/lib/evolution.ts](src/lib/evolution.ts)). O texto (sem marcadores) vai pelo
   `sendText` normal, **em partes** (com o `delayMs` do "digitando…").
+
+### Catálogo em PDF (a IA anexa quando pedem)
+
+Quando o cliente pede o catálogo/lista de produtos, a IA manda **o link do site**
+(catálogo online, como sempre) **e também anexa um PDF** com todos os produtos, para o
+cliente escolher pelo site OU folheando o PDF. **Sem migration** (o PDF mora no bucket
+`product-images` que já existe; nada novo em tabela).
+
+- **Geração:** [src/lib/catalogPdf.tsx](src/lib/catalogPdf.tsx) monta o PDF com
+  **`@react-pdf/renderer`** (JS puro, roda no serverless da Vercel — sem Chrome/puppeteer).
+  Cada produto vira um card: **foto de capa + nome + preço** (com risco no preço antigo em
+  promoção) **+ cores + tamanhos + descrição**. O cabeçalho tem **logo + nome da loja** e um
+  **QR code** (lib `qrcode`) que abre a loja; o rodapé traz a URL e a paginação. O
+  `@react-pdf` só lê **JPG/PNG** — como as fotos passam pelo crop que exporta JPEG, dá para
+  embutir direto (as fotos são baixadas como data URI, com concorrência limitada; formato não
+  suportado, ex.: logo WebP, é ignorado). Como `@react-pdf` traz deps que quebram no bundler,
+  ele está em `experimental.serverComponentsExternalPackages` no
+  [next.config.mjs](next.config.mjs).
+- **Cache no bucket:** `ensureCatalogPdfUrl` (em [catalogPdf.tsx](src/lib/catalogPdf.tsx))
+  gera e guarda o PDF em `product-images/catalogos/{slug}.pdf` e devolve a **URL pública**
+  (com `?v=` para furar cache de CDN). Regenera só se não existir ou se o cache passar de
+  **30 min** (edições do lojista aparecem em até meia hora) — evita regerar a cada pedido no
+  WhatsApp. Retorna `null` se a loja não tem produtos (não manda catálogo vazio).
+- **Envio pela IA:** o `buildSystemPrompt`
+  ([src/lib/ai/attendant.ts](src/lib/ai/attendant.ts)) recebe `hasCatalogPdf` (true quando a
+  loja tem produtos) e instrui a IA a incluir o marcador **`[[ENVIAR_CATALOGO]]`** no fim da
+  mensagem quando o cliente pede o catálogo/lista/PDF (além de mandar o link do site; no
+  máximo uma vez por conversa). `parseReplyDirectives` extrai `sendCatalog`; o
+  `respondToCustomer` ([src/lib/whatsappRespond.ts](src/lib/whatsappRespond.ts)) chama
+  `ensureCatalogPdfUrl` (import dinâmico p/ não puxar o `@react-pdf` nas demais respostas) e
+  envia com `sendMedia` **`mediatype: "document"`** + `fileName: "Catálogo - {Loja}.pdf"` (o
+  `sendMedia` em [evolution.ts](src/lib/evolution.ts) agora aceita `fileName`).
+- **Acesso por link (humanos):** [/api/loja/[slug]/catalogo](src/app/api/loja/[slug]/catalogo/route.ts)
+  (`runtime nodejs`, `maxDuration 60`) gera/reaproveita o mesmo PDF e **redireciona** para ele —
+  serve para baixar/abrir no navegador com a mesma lógica de cache.
 
 ### Pausar o atendimento da IA (assumir a conversa)
 

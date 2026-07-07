@@ -1963,6 +1963,23 @@ export function StoreVisualEditor({
             className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm resize-none"
             placeholder="Ex.: Rua das Flores, 123 — Centro, São Paulo/SP. Seg–Sex 9h–18h."
           />
+          <label className="block text-sm font-medium text-slate-700 pt-1">
+            Como retirar (instruções)
+          </label>
+          <p className="text-xs text-slate-500">
+            Aparece no carrinho e na mensagem do WhatsApp quando o cliente
+            escolhe <strong>Retirada</strong>. A IA do WhatsApp também usa isso
+            para explicar a retirada.
+          </p>
+          <textarea
+            value={sf.pickupInstructions}
+            onChange={(e) =>
+              setSf((s) => ({ ...s, pickupInstructions: e.target.value }))
+            }
+            rows={2}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm resize-none"
+            placeholder="Ex.: Retire de Seg–Sex, 9h–18h. Apresente o código do pedido no balcão."
+          />
         </div>
         <label className="block text-sm font-medium text-slate-700">
           Frete / envio (linha superior)
@@ -2092,6 +2109,69 @@ export function StoreVisualEditor({
           Quando o cliente finalizar por <strong>Enviar pedido no WhatsApp</strong>,
           a chave Pix entra na mensagem para ele pagar e enviar o comprovante.
         </p>
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+          <p className="text-sm font-medium text-slate-700">
+            Formas de pagamento no checkout
+          </p>
+          <p className="text-xs text-slate-500">
+            O cliente escolhe uma dessas opções ao finalizar o pedido. Só
+            aparecem as que você marcar aqui.
+          </p>
+          <div className="flex flex-col gap-2 pt-0.5">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sf.checkoutPixEnabled}
+                onChange={(e) =>
+                  setSf((s) => ({ ...s, checkoutPixEnabled: e.target.checked }))
+                }
+                className="rounded border-slate-300"
+              />
+              Pix <span className="text-xs text-slate-400">(precisa da chave Pix acima)</span>
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sf.checkoutCashEnabled}
+                onChange={(e) =>
+                  setSf((s) => ({ ...s, checkoutCashEnabled: e.target.checked }))
+                }
+                className="rounded border-slate-300"
+              />
+              Dinheiro na entrega
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sf.checkoutCardEnabled}
+                onChange={(e) =>
+                  setSf((s) => ({ ...s, checkoutCardEnabled: e.target.checked }))
+                }
+                className="rounded border-slate-300"
+              />
+              Cartão na entrega
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sf.checkoutMercadoPagoEnabled}
+                onChange={(e) =>
+                  setSf((s) => ({
+                    ...s,
+                    checkoutMercadoPagoEnabled: e.target.checked,
+                  }))
+                }
+                className="rounded border-slate-300"
+              />
+              Mercado Pago (online)
+            </label>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            O <strong>Mercado Pago</strong> só aparece na loja se você também
+            conectar o gateway em <strong>Pagamentos</strong>{" "}
+            (/dashboard/pagamentos).
+          </p>
+        </div>
         <p className="text-[11px] text-slate-500">
           Instagram, Facebook, TikTok e YouTube ficam em{" "}
           <button

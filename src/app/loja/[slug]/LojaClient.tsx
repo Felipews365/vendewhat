@@ -26,6 +26,11 @@ import {
   shippingModeLabel,
   type ShippingModeId,
 } from "@/lib/shippingModes";
+import {
+  PAYMENT_METHODS,
+  paymentMethodLabel,
+  type PaymentMethodId,
+} from "@/lib/paymentMethods";
 import { coverImageStyleAt, type ImageFocusPoint } from "@/lib/productImageFocus";
 import {
   type ProductSale,
@@ -1510,6 +1515,8 @@ export function LojaClient({
     complement: "",
   });
   const [excursionName, setExcursionName] = useState("");
+  const [carrierName, setCarrierName] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId | null>(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("new");
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
@@ -1758,12 +1765,17 @@ export function LojaClient({
     });
   }
 
-  /** Excursão e Correios pedem o endereço do cliente; Retirada mostra o da loja. */
-  const needsAddress = shippingMode === "excursao" || shippingMode === "correios";
+  /** Excursão, Correios e Transportadora pedem o endereço do cliente; Retirada mostra o da loja. */
+  const needsAddress =
+    shippingMode === "excursao" ||
+    shippingMode === "correios" ||
+    shippingMode === "transportadora";
   const pickupAddress = storefront.pickupAddress.trim();
+  const pickupInstructions = storefront.pickupInstructions.trim();
 
-  // Correios precisa de CEP válido (8 dígitos); excursão não exige.
-  const cepRequired = shippingMode === "correios";
+  // Correios e Transportadora precisam de CEP válido (8 dígitos); excursão não exige.
+  const cepRequired =
+    shippingMode === "correios" || shippingMode === "transportadora";
   const cepValid = address.cep.replace(/\D/g, "").length === 8;
 
   const addressComplete =
@@ -1777,13 +1789,41 @@ export function LojaClient({
   // Excursão exige o nome da excursão.
   const excursionComplete =
     shippingMode !== "excursao" || excursionName.trim().length > 0;
+  // Transportadora exige o nome da transportadora.
+  const carrierComplete =
+    shippingMode !== "transportadora" || carrierName.trim().length > 0;
+
+  // Mercado Pago só entra se o gateway está conectado E a loja ativou no painel.
+  const mpAvailable = paymentEnabled && storefront.checkoutMercadoPagoEnabled;
+  // Formas de pagamento que a loja habilitou para aparecer no checkout.
+  const enabledPayMethods = useMemo<PaymentMethodId[]>(() => {
+    const list: PaymentMethodId[] = [];
+    if (storefront.checkoutPixEnabled && storefront.pixKey.trim())
+      list.push("pix");
+    if (storefront.checkoutCashEnabled) list.push("dinheiro");
+    if (storefront.checkoutCardEnabled) list.push("cartao");
+    if (mpAvailable) list.push("mercadopago");
+    return list;
+  }, [
+    storefront.checkoutPixEnabled,
+    storefront.checkoutCashEnabled,
+    storefront.checkoutCardEnabled,
+    storefront.pixKey,
+    mpAvailable,
+  ]);
+  const paymentComplete =
+    enabledPayMethods.length === 0 ||
+    (paymentMethod != null && enabledPayMethods.includes(paymentMethod));
+
   // Condição única para liberar o envio/pagamento do pedido.
   const checkoutReady =
     customerName.trim().length >= 2 &&
     isCustomerPhoneValid(customerPhone) &&
     !!shippingMode &&
     (!needsAddress || addressComplete) &&
-    excursionComplete;
+    excursionComplete &&
+    carrierComplete &&
+    paymentComplete;
 
   function setAddressField(field: keyof typeof address, value: string) {
     setAddress((a) => ({ ...a, [field]: value }));
@@ -1821,11 +1861,20 @@ export function LojaClient({
     if (shippingMode === "excursao" && excursionName.trim()) {
       lines.push(`*Excursão:* ${excursionName.trim()}`);
     }
+    if (shippingMode === "transportadora" && carrierName.trim()) {
+      lines.push(`*Transportadora:* ${carrierName.trim()}`);
+    }
     if (needsAddress) {
       const addr = formatCustomerAddress();
       if (addr) lines.push(`*Endereço de entrega:* ${addr}`);
-    } else if (shippingMode === "retirada" && pickupAddress) {
-      lines.push(`*Retirada em:* ${pickupAddress}`);
+    } else if (shippingMode === "retirada") {
+      if (pickupAddress) lines.push(`*Retirada em:* ${pickupAddress}`);
+      if (pickupInstructions)
+        lines.push(`*Como retirar:* ${pickupInstructions}`);
+    }
+    if (paymentMethod) {
+      const payLabel = paymentMethodLabel(paymentMethod);
+      if (payLabel) lines.push(`*Forma de pagamento:* ${payLabel}`);
     }
     const money = (v: number) =>
       v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -1853,8 +1902,12 @@ export function LojaClient({
     if (notes.trim()) {
       lines.push("", `Obs: ${notes.trim()}`);
     }
+    // A chave Pix só entra quando o cliente escolheu Pix (ou quando a loja não
+    // configurou um seletor de pagamento — mantém o comportamento anterior).
+    const pixSelected =
+      enabledPayMethods.length === 0 || paymentMethod === "pix";
     const pixKey = storefront.pixKey.trim();
-    if (pixKey) {
+    if (pixKey && pixSelected) {
       lines.push("", "*Pagamento via Pix:*", `Chave: ${pixKey}`);
       const pixName = storefront.pixName.trim();
       if (pixName) lines.push(`Titular: ${pixName}`);
@@ -1882,6 +1935,8 @@ export function LojaClient({
     if (!shippingMode) return empty;
     if (needsAddress && !addressComplete) return empty;
     if (!excursionComplete) return empty;
+    if (!carrierComplete) return empty;
+    if (!paymentComplete) return empty;
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -1893,6 +1948,9 @@ export function LojaClient({
           shippingMode,
           excursionName:
             shippingMode === "excursao" ? excursionName.trim() : "",
+          carrierName:
+            shippingMode === "transportadora" ? carrierName.trim() : "",
+          paymentMethod: paymentMethod ?? "",
           customerAddress: needsAddress ? formatCustomerAddress() : "",
           notes: notes.trim(),
           lines: items.map((i) => ({
@@ -2797,6 +2855,22 @@ export function LojaClient({
                         />
                       </div>
                     )}
+                    {shippingMode === "transportadora" && (
+                      <div className="space-y-1.5 min-w-0">
+                        <label className="text-sm font-medium text-boutique-wine">
+                          Nome da transportadora{" "}
+                          <span className="text-red-600">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={carrierName}
+                          onChange={(e) => setCarrierName(e.target.value)}
+                          placeholder="Ex.: Jadlog, Braspress, Correios…"
+                          maxLength={120}
+                          className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none"
+                        />
+                      </div>
+                    )}
                     {needsAddress && (
                       <div className="space-y-2 min-w-0">
                         <p className="text-sm font-medium text-boutique-wine">
@@ -2890,7 +2964,54 @@ export function LojaClient({
                             A loja vai combinar o local de retirada pelo WhatsApp.
                           </p>
                         )}
+                        {pickupInstructions && (
+                          <>
+                            <p className="font-medium text-boutique-wine mt-2 mb-1">
+                              Como retirar
+                            </p>
+                            <p className="text-stone-700 whitespace-pre-line break-words">
+                              {pickupInstructions}
+                            </p>
+                          </>
+                        )}
                       </div>
+                    )}
+                    {enabledPayMethods.length > 0 && (
+                      <fieldset className="space-y-2 min-w-0">
+                        <legend className="text-sm font-medium text-boutique-wine">
+                          Forma de pagamento{" "}
+                          <span className="text-red-600">*</span>
+                        </legend>
+                        <div className="flex flex-col gap-2">
+                          {PAYMENT_METHODS.filter((m) =>
+                            enabledPayMethods.includes(m.id)
+                          ).map((m) => {
+                            const sel = paymentMethod === m.id;
+                            return (
+                              <label
+                                key={m.id}
+                                className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                                  sel
+                                    ? "border-boutique-dark bg-boutique-light/80 ring-2 ring-boutique/30"
+                                    : "border-stone-200 bg-white hover:border-stone-300"
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="vw-payment-method"
+                                  value={m.id}
+                                  checked={sel}
+                                  onChange={() => setPaymentMethod(m.id)}
+                                  className="h-4 w-4 shrink-0 accent-boutique-dark"
+                                />
+                                <span className="font-medium text-stone-800">
+                                  {m.label}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </fieldset>
                     )}
                   </div>
                   <div>
@@ -2951,7 +3072,9 @@ export function LojaClient({
                   </svg>
                   Enviar pedido no WhatsApp
                 </button>
-                {paymentEnabled && (
+                {mpAvailable &&
+                  (enabledPayMethods.length === 0 ||
+                    paymentMethod === "mercadopago") && (
                   <button
                     type="button"
                     onClick={handlePayOnline}
@@ -2987,21 +3110,29 @@ export function LojaClient({
                     ) : !shippingMode ? (
                       <>
                         Selecione a <strong>forma de envio</strong> (excursão,
-                        Correios ou retirada).
+                        Correios, transportadora ou retirada).
                       </>
                     ) : !excursionComplete ? (
                       <>
                         Informe o <strong>nome da excursão</strong>.
                       </>
-                    ) : cepRequired && !cepValid ? (
+                    ) : !carrierComplete ? (
                       <>
-                        Para Correios, informe um <strong>CEP válido</strong> (8
-                        dígitos) e o endereço completo.
+                        Informe o <strong>nome da transportadora</strong>.
                       </>
-                    ) : (
+                    ) : needsAddress && cepRequired && !cepValid ? (
+                      <>
+                        Informe um <strong>CEP válido</strong> (8 dígitos) e o
+                        endereço completo.
+                      </>
+                    ) : needsAddress && !addressComplete ? (
                       <>
                         Informe o <strong>endereço de entrega</strong> (rua, número,
                         bairro, cidade e UF).
+                      </>
+                    ) : (
+                      <>
+                        Escolha a <strong>forma de pagamento</strong>.
                       </>
                     )}
                   </p>
