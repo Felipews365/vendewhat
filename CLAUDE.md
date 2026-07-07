@@ -452,6 +452,15 @@ uma instância Evolution e uma config de IA por loja.
   Segue o link…" / URL / "Dá uma olhada com calma…"). Combinado com a resposta em partes, cada bloco
   vira um balão; o balão do link ganha a **prévia rica** (card de Open Graph) que o WhatsApp gera da
   página `/loja/[slug]`.
+- **Rede de segurança do link (determinística, não depende do modelo):** o gpt-4o-mini às vezes
+  ANUNCIA o link ("segue o link", "confira o catálogo") mas **esquece de colar a URL** — o cliente
+  recebia só a promessa. Em `respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)),
+  se o texto menciona `link`/`catálogo` (ou o cliente pediu o catálogo, ou a IA emitiu
+  `[[ENVIAR_CATALOGO]]`) e **não há nenhuma URL** no texto, o sistema **anexa a `storeUrl`** como bloco
+  próprio (vira um balão com prévia rica). O loop que envia os balões é isolado em `try/catch`: se um
+  balão falha, os demais e os anexos (localização/foto/vídeo/catálogo) ainda saem. A `baseUrl` cai no
+  `VERCEL_URL` quando `APP_BASE_URL` está vazio (o cron não tem request, então não pode ler o host —
+  evita montar link relativo quebrado); reaproveitada no prompt e no QR do PDF.
 - **Fechamento assertivo (não deixa a venda no colo do cliente):** o `buildSystemPrompt` instrui a
   IA a **conduzir para o fechamento** com pergunta direta ("Vamos fechar seu pedido?", "Bora fechar
   seu pedido?", "Posso seguir com o fechamento?") depois que o cliente demonstra interesse, e
@@ -613,7 +622,11 @@ cliente escolher pelo site OU folheando o PDF. **Sem migration** (o PDF mora no 
   ([src/lib/ai/attendant.ts](src/lib/ai/attendant.ts)) recebe `hasCatalogPdf` (true quando a
   loja tem produtos) e instrui a IA a incluir o marcador **`[[ENVIAR_CATALOGO]]`** no fim da
   mensagem quando o cliente pede o catálogo/lista/PDF (além de mandar o link do site; no
-  máximo uma vez por conversa). `parseReplyDirectives` extrai `sendCatalog`; o
+  máximo uma vez por conversa). `parseReplyDirectives` extrai `sendCatalog`. **Gatilho
+  determinístico:** como a IA nem sempre emite o marcador, o `respondToCustomer` também detecta
+  quando **o cliente pediu** explicitamente (`customerWantsCatalog` = regex `catálogo`/`lista de
+  produtos`/`pdf` no texto do cliente) e envia o PDF mesmo sem o marcador (`sendCatalog ||
+  customerWantsCatalog`). O
   `respondToCustomer` ([src/lib/whatsappRespond.ts](src/lib/whatsappRespond.ts)) chama
   `ensureCatalogPdfUrl` (import dinâmico p/ não puxar o `@react-pdf` nas demais respostas) e
   envia com `sendMedia` **`mediatype: "document"`** + `fileName: "Catálogo - {Loja}.pdf"` +
