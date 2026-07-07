@@ -122,6 +122,13 @@ export async function respondToCustomer(
   // Tem produto = a IA pode anexar o catálogo em PDF.
   const hasCatalogPdf = (productRows?.length ?? 0) > 0;
 
+  // Base pública do app (o cron não tem request, então depende do APP_BASE_URL;
+  // cai no VERCEL_URL como último recurso para nunca montar um link relativo/quebrado).
+  const baseUrl =
+    process.env.APP_BASE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  const storeUrl = `${baseUrl.replace(/\/+$/, "")}/loja/${store.slug}`;
+
   // Histórico + lote: as mensagens do cliente após a última resposta da IA são o
   // "lote" (chegaram juntas); o que veio antes é o contexto da conversa.
   const full = await getRecentHistory(admin, cfg.storeId, customerPhone, 20);
@@ -144,7 +151,7 @@ export async function respondToCustomer(
     aiName: cfg.aiName,
     aiTone: cfg.aiTone,
     products: mapProducts((productRows ?? []) as AnyObj[]),
-    baseUrl: process.env.APP_BASE_URL || "",
+    baseUrl,
     isFirstContact,
     storeAddress,
     onlineOnly,
@@ -166,19 +173,36 @@ export async function respondToCustomer(
     sendVideo,
     sendCatalog,
   } = parseReplyDirectives(reply);
+  // Rede de segurança do link: o gpt-4o-mini às vezes ANUNCIA o link ("segue o
+  // link", "confira o catálogo") mas esquece de colar a URL (o cliente recebe só a
+  // promessa). Se o texto fala de link/catálogo e não tem nenhuma URL, anexa a URL
+  // da loja como bloco próprio (vira um balão com prévia rica). Não depende da IA.
+  let finalText = replyText;
+  const mentionsLink = /\b(link|cat[aá]logo)\b/i.test(finalText);
+  const hasUrl = /https?:\/\//i.test(finalText);
+  if (finalText && baseUrl && (mentionsLink || sendCatalog) && !hasUrl) {
+    finalText = `${finalText}\n\n${storeUrl}`;
+  }
+
   let sent = false;
-  if (replyText) {
+  if (finalText) {
     // Manda em partes (vários balões), com "digitando…" antes de cada uma, para
     // parecer um atendente humano digitando aos poucos. Cada parte também vira uma
     // linha no histórico (importante p/ a detecção de eco do handoff no webhook).
-    const parts = splitReplyIntoParts(replyText);
+    // Cada balão é isolado num try/catch: se um falhar, os demais (e os anexos de
+    // localização/foto/vídeo/catálogo abaixo) ainda saem, sem abortar a resposta.
+    const parts = splitReplyIntoParts(finalText);
     for (const part of parts) {
       // "Digitando…" proporcional ao tamanho da parte (entre 1,2s e 5s).
       const typingMs = Math.min(Math.max(part.length * 45, 1200), 5000);
-      await sendText(cfg.evolutionInstance, customerPhone, part, typingMs);
-      await appendMessage(admin, cfg.storeId, customerPhone, "assistant", part);
+      try {
+        await sendText(cfg.evolutionInstance, customerPhone, part, typingMs);
+        await appendMessage(admin, cfg.storeId, customerPhone, "assistant", part);
+        sent = true;
+      } catch (e) {
+        console.error("[whatsappRespond] sendText parte", e);
+      }
     }
-    sent = true;
   }
   if (wantLocation && hasLocationPin) {
     try {
@@ -224,7 +248,7 @@ export async function respondToCustomer(
         slug: String(store.slug),
         storeName,
         logoUrl: typeof store.logo === "string" ? store.logo : null,
-        baseUrl: process.env.APP_BASE_URL || "",
+        baseUrl,
       });
       if (url) {
         await sendMedia(cfg.evolutionInstance, customerPhone, {
