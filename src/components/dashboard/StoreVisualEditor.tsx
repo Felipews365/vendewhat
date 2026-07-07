@@ -2178,9 +2178,16 @@ export function StoreVisualEditor({
             <input
               type="checkbox"
               checked={sf.stockControlEnabled}
-              onChange={(e) =>
-                setSf((s) => ({ ...s, stockControlEnabled: e.target.checked }))
-              }
+              onChange={(e) => {
+                // Salva na hora (igual aos toggles/ordem de categoria), sem
+                // esperar o "Salvar loja".
+                const nextSf: StorefrontSettings = {
+                  ...sf,
+                  stockControlEnabled: e.target.checked,
+                };
+                setSf(nextSf);
+                onAutoSaveStorefront?.(nextSf);
+              }}
               className="mt-0.5 rounded border-slate-300"
             />
             <span>
