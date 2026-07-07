@@ -217,6 +217,29 @@ Na aba **Variações** do formulário, três componentes compartilhados montam c
 Obs.: esses três cards ainda são **claros** (sem `dark:`), então os inputs forçam `text-slate-900`
 para o texto digitado não herdar a cor clara do tema e sumir no fundo branco.
 
+### Detalhes do produto: tags, tipo de unidade, EAN, dimensões
+
+Campos extras do produto (eram placeholders "em breve" no formulário). **Migration:** rode
+[supabase-migration-product-details.sql](supabase-migration-product-details.sql) (adiciona `tags`
+jsonb, `unit_type`, `barcode`, `package_height/width/length` e `package_weight` em `products`).
+Helpers e o catálogo `UNIT_TYPES` moram em [src/lib/productDetails.ts](src/lib/productDetails.ts).
+
+- **Onde:** as duas páginas de produto ([novo](src/app/dashboard/produtos/novo/page.tsx) e
+  [id](src/app/dashboard/produtos/[id]/page.tsx)). **Tags** reusam o `ProductOptionsEditor` (lista de
+  chips, guardadas em `tags`, sanitizadas por `sanitizeTags`). **Tipo de unidade** é um `<select>`
+  (`UNIT_TYPES`: unidade/kg/g/l/ml/m/par/caixa/pacote). **EAN** é um texto (`sanitizeBarcode`).
+  **Dimensões** são 4 inputs numéricos (Alt × Larg × Comp em cm + Peso em kg; `dimensionFromInput`).
+- **Save com fallback de coluna ausente:** as 7 colunas vêm da mesma migration, então **um único**
+  ramo (`isMissingProductDetailColumn` em [dbColumnErrors.ts](src/lib/dbColumnErrors.ts)) tira todas e
+  reenvia, sem derrubar o resto (imagens, etc.). O hint é `PRODUCT_DETAILS_MIGRATION_HINT`. Na página
+  nova ainda há o "retry mínimo" como última rede; a de edição depende desse ramo.
+- **Uso na loja pública:** [loja/[slug]/page.tsx](src/app/loja/[slug]/page.tsx) mapeia para
+  `CatalogProduct` os campos `tags`, `unitShort` (abreviação; vazio p/ "Unidade") e `barcode`. A
+  **busca** da loja ([LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx), `filteredProducts`) passa a
+  considerar as **tags** além de nome/descrição/categoria. No **detalhe** do produto, o preço mostra a
+  unidade (`/Kg` etc. em vez de `/un.`) e o **EAN** aparece abaixo da referência. Dimensões/peso ficam
+  **só armazenadas** por enquanto (não há cálculo de frete que as consuma).
+
 ### Formato da foto dos produtos (1:1 ou 3:4)
 
 Toggle `storefront.productCardRatio` (`"1:1"` quadrado — default — ou `"3:4"` retrato; JSONB, **sem

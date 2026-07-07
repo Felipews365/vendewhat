@@ -74,6 +74,25 @@ export const PRODUCT_IMAGE_POSITION_MIGRATION_HINT =
 export const PRODUCT_IMAGE_POSITIONS_ARRAY_MIGRATION_HINT =
   "Enquadramento por foto (arraste no painel): rode supabase-migration-product-image-positions-array.sql no SQL Editor e recarregue o schema da API.";
 
+/** Colunas de detalhes do produto (tags, unidade, EAN, dimensões) ausentes na API. */
+export function isMissingProductDetailColumn(
+  message: string,
+  code?: string | null
+): boolean {
+  return (
+    isMissingColumnError(message, "tags", code) ||
+    isMissingColumnError(message, "unit_type", code) ||
+    isMissingColumnError(message, "barcode", code) ||
+    isMissingColumnError(message, "package_height", code) ||
+    isMissingColumnError(message, "package_width", code) ||
+    isMissingColumnError(message, "package_length", code) ||
+    isMissingColumnError(message, "package_weight", code)
+  );
+}
+
+export const PRODUCT_DETAILS_MIGRATION_HINT =
+  "Detalhes do produto (tags, tipo de unidade, código de barras, dimensões/peso): no Supabase → SQL Editor, rode supabase-migration-product-details.sql e recarregue o schema da API (Settings → API → Reload schema).";
+
 /** Pedidos: tabela antiga sem order_number / cliente (erro SQL 42703 ou PostgREST equivalente). */
 export function isMissingOrdersColumnError(
   message: string,

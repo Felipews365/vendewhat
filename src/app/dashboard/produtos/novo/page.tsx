@@ -27,10 +27,19 @@ import {
   PRODUCT_IMAGE_POSITION_MIGRATION_HINT,
   PRODUCT_IMAGE_POSITIONS_ARRAY_MIGRATION_HINT,
   COLOR_HEXES_MIGRATION_HINT,
+  PRODUCT_DETAILS_MIGRATION_HINT,
   isMissingColumnError,
   isMissingOptionsOrVariantStockColumn,
+  isMissingProductDetailColumn,
   isRlsPolicyError,
 } from "@/lib/dbColumnErrors";
+import {
+  UNIT_TYPES,
+  DEFAULT_UNIT_TYPE,
+  sanitizeTags,
+  sanitizeBarcode,
+  dimensionFromInput,
+} from "@/lib/productDetails";
 import { ProductChooseCategoryModal } from "@/components/ProductChooseCategoryModal";
 import { CategoryAutocompleteField } from "@/components/dashboard/CategoryAutocompleteField";
 import {
@@ -75,6 +84,12 @@ const INITIAL_FORM = {
   stock: "0",
   category: "",
   imageObjectPosition: "center",
+  unitType: DEFAULT_UNIT_TYPE,
+  barcode: "",
+  packHeight: "",
+  packWidth: "",
+  packLength: "",
+  packWeight: "",
 };
 
 function TabButton({
@@ -138,6 +153,7 @@ export default function NovoProdutoPage() {
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [colorEntries, setColorEntries] = useState<ColorOptionEntry[]>([]);
   const [sizes, setSizes] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const colors = useMemo(
     () => colorEntries.map((e) => e.name.trim()).filter(Boolean),
     [colorEntries]
@@ -246,6 +262,7 @@ export default function NovoProdutoPage() {
     setPhotos([]);
     setColorEntries([]);
     setSizes([]);
+    setTags([]);
     setVariantStockMap({});
     setIsPromotion(false);
   }
@@ -357,6 +374,13 @@ export default function NovoProdutoPage() {
           form.imageObjectPosition
         ),
         image_object_positions: serializeImageObjectPositions(photos),
+        tags: sanitizeTags(tags),
+        unit_type: form.unitType || DEFAULT_UNIT_TYPE,
+        barcode: sanitizeBarcode(form.barcode) || null,
+        package_height: dimensionFromInput(form.packHeight),
+        package_width: dimensionFromInput(form.packWidth),
+        package_length: dimensionFromInput(form.packLength),
+        package_weight: dimensionFromInput(form.packWeight),
         ...saleModeToDbColumns(saleMode),
       };
 
@@ -514,6 +538,26 @@ export default function NovoProdutoPage() {
           .error;
       }
 
+      // Colunas de detalhes (tags, unidade, EAN, dimensões) — todas da mesma
+      // migration, então some/estão juntas: um único fallback tira as 7.
+      if (
+        insertError &&
+        isMissingProductDetailColumn(insertError.message, insertError.code)
+      ) {
+        const {
+          tags: _tg,
+          unit_type: _ut,
+          barcode: _bc,
+          package_height: _ph,
+          package_width: _pw,
+          package_length: _pl,
+          package_weight: _pwt,
+          ...withoutDetails
+        } = payload;
+        insertError = (await supabase.from("products").insert(withoutDetails))
+          .error;
+      }
+
       if (insertError && !isRlsPolicyError(insertError.message, insertError.code)) {
         const minimal: Record<string, unknown> = {
           store_id: store.id,
@@ -574,6 +618,8 @@ export default function NovoProdutoPage() {
           setError(
             `${PRODUCT_IMAGE_POSITIONS_ARRAY_MIGRATION_HINT}\n\nDetalhe: ${msg}`
           );
+        } else if (isMissingProductDetailColumn(msg, code)) {
+          setError(`${PRODUCT_DETAILS_MIGRATION_HINT}\n\nDetalhe: ${msg}`);
         } else {
           const hint = [insertError.hint, insertError.details]
             .filter(Boolean)
@@ -920,12 +966,14 @@ export default function NovoProdutoPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                    Tags para busca
-                  </label>
-                  <div className={`${inputClass} text-slate-400 cursor-not-allowed`}>
-                    Em breve
-                  </div>
+                  <ProductOptionsEditor
+                    title="Tags para busca"
+                    description="Palavras-chave que ajudam o cliente a achar o produto na busca da loja (ex.: sinônimos, marca, ocasião)."
+                    items={tags}
+                    onItemsChange={setTags}
+                    placeholder="Ex.: verão, presente, algodão"
+                    addButtonLabel="Adicionar tag"
+                  />
                 </div>
               </div>
 
@@ -939,7 +987,41 @@ export default function NovoProdutoPage() {
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     Tipo de unidade
                   </label>
-                  <div className={inputClass}>Unidade</div>
+                  <select
+                    value={form.unitType}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, unitType: e.target.value }));
+                      setSaveOk(false);
+                    }}
+                    className={inputClass}
+                  >
+                    {UNIT_TYPES.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Como o produto é vendido. Diferente de “Unidade” aparece na loja
+                    (ex.: “vendido por Kg”).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Código de barras (EAN)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.barcode}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, barcode: e.target.value }));
+                      setSaveOk(false);
+                    }}
+                    placeholder="Ex.: 7891234567890"
+                    className={inputClass}
+                  />
                 </div>
 
                 <div>
@@ -947,13 +1029,36 @@ export default function NovoProdutoPage() {
                     Dimensões da embalagem
                   </label>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className={`${inputClass} text-slate-400 text-xs py-2`}>
-                      Largura (cm) — em breve
-                    </div>
-                    <div className={`${inputClass} text-slate-400 text-xs py-2`}>
-                      Peso — em breve
-                    </div>
+                    {(
+                      [
+                        { key: "packHeight", label: "Altura (cm)" },
+                        { key: "packWidth", label: "Largura (cm)" },
+                        { key: "packLength", label: "Comprimento (cm)" },
+                        { key: "packWeight", label: "Peso (kg)" },
+                      ] as const
+                    ).map((d) => (
+                      <div key={d.key}>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={form[d.key]}
+                          onChange={(e) => {
+                            setForm((f) => ({ ...f, [d.key]: e.target.value }));
+                            setSaveOk(false);
+                          }}
+                          placeholder={d.label}
+                          className={`${inputClass} text-sm`}
+                        />
+                        <span className="mt-0.5 block text-[10px] text-slate-400">
+                          {d.label}
+                        </span>
+                      </div>
+                    ))}
                   </div>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Opcional. Guardado para um futuro cálculo de frete.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -971,11 +1076,6 @@ export default function NovoProdutoPage() {
                     icon="📦"
                     label="Estoque"
                     onClick={() => setTab("estoque")}
-                  />
-                  <SidebarRow
-                    icon="▤"
-                    label="Código de barras (EAN)"
-                    onClick={() => {}}
                   />
                 </div>
               </div>

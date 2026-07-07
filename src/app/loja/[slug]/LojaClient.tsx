@@ -60,6 +60,12 @@ export type CatalogProduct = {
   sizes: string[];
   /** Estoque por combinação; vazio = usa só `stock` (legado). */
   variantStock: VariantStockRow[];
+  /** Palavras-chave para a busca da loja (além de nome/descrição/categoria). */
+  tags: string[];
+  /** Abreviação do tipo de unidade (ex.: "Kg"); vazio quando é "Unidade" (padrão). */
+  unitShort: string;
+  /** Código de barras (EAN), se cadastrado. */
+  barcode: string | null;
   stock: number;
   createdAt: string;
   isPromotion: boolean;
@@ -1002,6 +1008,13 @@ function ProductDetailModal({
               </p>
             )}
 
+            {product.barcode?.trim() && (
+              <p className="mt-1 text-xs text-stone-400">
+                <span className="font-medium text-stone-500">Cód. de barras</span>{" "}
+                {product.barcode.trim()}
+              </p>
+            )}
+
             <div className="mt-4 flex items-baseline gap-3 flex-wrap">
               {product.isPromotion &&
                 product.compareAtPrice != null &&
@@ -1024,7 +1037,10 @@ function ProductDetailModal({
                 <>
                   <span className="text-2xl font-bold text-stone-900">
                     R$ {formatPrice(product.price)}
-                    <span className="text-sm font-normal text-stone-500"> /un.</span>
+                    <span className="text-sm font-normal text-stone-500">
+                      {" "}
+                      /{product.unitShort || "un."}
+                    </span>
                   </span>
                   {product.sale.saleMode === "pack" && (
                     <span className="text-sm text-stone-500">
@@ -1587,7 +1603,8 @@ export function LojaClient({
       (p) =>
         p.name.toLowerCase().includes(q) ||
         (p.description?.toLowerCase().includes(q) ?? false) ||
-        (p.category?.toLowerCase().includes(q) ?? false)
+        (p.category?.toLowerCase().includes(q) ?? false) ||
+        p.tags.some((t) => t.toLowerCase().includes(q))
     );
   }, [products, search, categoryFilter, storefront.categories]);
 

@@ -14,6 +14,11 @@ import { storefrontFromDb } from "@/lib/storefront";
 import { normalizeImageObjectPosition } from "@/lib/productImagePosition";
 import { parseImageObjectPositionsDb } from "@/lib/productImageFocus";
 import { productSaleFromDb } from "@/lib/saleMode";
+import {
+  sanitizeTags,
+  sanitizeBarcode,
+  unitTypeShort,
+} from "@/lib/productDetails";
 import { StoreTrackingScripts } from "@/components/StoreTrackingScripts";
 import { LojaClient, type CatalogProduct } from "./LojaClient";
 
@@ -171,6 +176,10 @@ export default async function LojaPublicaPage({ params }: Props) {
       ),
       sizes: optionArrayFromDb(p.sizes),
       variantStock: variantStockFromDb(p.variant_stock),
+      tags: sanitizeTags((p as { tags?: unknown }).tags),
+      unitShort: unitTypeShort((p as { unit_type?: string | null }).unit_type),
+      barcode:
+        sanitizeBarcode((p as { barcode?: string | null }).barcode) || null,
       stock: Number(p.stock),
       createdAt: String(p.created_at ?? ""),
       isPromotion: Boolean((p as { is_promotion?: boolean }).is_promotion),
