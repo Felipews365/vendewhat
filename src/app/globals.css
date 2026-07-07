@@ -148,6 +148,34 @@ html {
   }
 }
 
+/* Badges dos templates de banner (giratório / pulsante). */
+@keyframes vw-spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes vw-pulse-soft {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+.vw-spin-slow {
+  animation: vw-spin-slow 10s linear infinite;
+}
+.vw-pulse-soft {
+  animation: vw-pulse-soft 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vw-spin-slow,
+  .vw-pulse-soft {
+    animation: none;
+  }
+}
+
 .vw-blob {
   animation: vw-blob 18s ease-in-out infinite;
 }

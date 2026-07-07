@@ -21,11 +21,16 @@ import {
   type HeroLayout,
   type HeroSlide,
   type HeroSplitPhotoSide,
+  type HeroTemplate,
   type PromoCard,
   type StorefrontSettings,
   storefrontFromDb,
   storefrontToDb,
 } from "@/lib/storefront";
+import {
+  HeroTemplateSlide,
+  type HeroSlideContent,
+} from "@/components/storefront/HeroTemplateSlide";
 import { ProductImageCropModal } from "@/components/ProductImageCropModal";
 import { useToast } from "@/components/Toast";
 
@@ -40,9 +45,12 @@ type HeroCropSession = {
 function SlidePreview({
   slide,
   fallback,
+  primary,
 }: {
   slide: HeroSlide;
   fallback: { badge: string; title: string; ctaLabel: string; coupon: string };
+  /** Cor primária da loja (para os templates). */
+  primary: string;
 }) {
   const badge = slide.badge?.trim() || fallback.badge;
   const title = slide.title?.trim() || fallback.title;
@@ -50,6 +58,29 @@ function SlidePreview({
   const subtitle = slide.subtitle?.trim() || "";
   const coupon = slide.couponCode?.trim() || fallback.coupon;
   const ctaLabel = slide.ctaLabel?.trim() || fallback.ctaLabel;
+
+  // Templates novos: prévia fiel via HeroTemplateSlide (mesmo componente da loja).
+  const tpl = slide.template ?? "overlay";
+  if (tpl !== "overlay" && tpl !== "split") {
+    const content: HeroSlideContent = {
+      badge,
+      title: title || "Título do banner",
+      highlight,
+      subtitle,
+      ctaLabel,
+      ctaHref: slide.ctaHref?.trim() || "#catalogo",
+    };
+    return (
+      <div className="relative h-44 w-full overflow-hidden rounded-lg">
+        <HeroTemplateSlide
+          slide={slide}
+          content={content}
+          primary={primary}
+          onCta={(e) => e.preventDefault()}
+        />
+      </div>
+    );
+  }
 
   const text = (
     <div className="flex flex-col justify-center gap-1">
@@ -307,6 +338,23 @@ export default function BannerEditPage() {
       heroSlides: s.heroSlides.map((sl, j) => (j === i ? { ...sl, ...patch } : sl)),
     }));
 
+  /** Troca o estilo do banner, aplicando gradiente/altura/lado padrão se faltar. */
+  const applyTemplate = (i: number, tpl: HeroTemplate) => {
+    const cur = sf.heroSlides[i];
+    const patch: Partial<HeroSlide> = { template: tpl };
+    if (tpl === "overlay" || tpl === "split") {
+      patch.layout = tpl;
+    } else {
+      patch.bgFrom = cur?.bgFrom || "#001C45";
+      patch.bgVia = cur?.bgVia || "#0064D2";
+      patch.bgTo = cur?.bgTo || "#0086FF";
+      patch.height = cur?.height || 360;
+      patch.photoSide =
+        tpl === "gradient" || tpl === "magazine" ? "right" : "left";
+    }
+    patchSlide(i, patch);
+  };
+
   const removeSlide = (i: number) =>
     setSf((s) => ({ ...s, heroSlides: s.heroSlides.filter((_, j) => j !== i) }));
 
@@ -551,34 +599,61 @@ export default function BannerEditPage() {
               </div>
 
               {/* Prévia */}
-              <SlidePreview slide={slide} fallback={fallback} />
+              <SlidePreview slide={slide} fallback={fallback} primary={sf.themePrimary} />
 
-              {/* Formato */}
-              <div className="mt-3 flex flex-wrap gap-2">
+              {/* Estilo do banner */}
+              <p className="mt-3 mb-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                Estilo do banner
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {(
                   [
-                    { v: "overlay" as const, label: "Foto de fundo" },
-                    { v: "split" as const, label: "Foto ao lado" },
-                  ]
-                ).map((opt) => (
-                  <button
-                    key={opt.v}
-                    type="button"
-                    onClick={() => patchSlide(i, { layout: opt.v })}
-                    className={`rounded-lg border-2 px-3 py-1.5 text-xs font-semibold ${
-                      slide.layout === opt.v
-                        ? "border-landing-primary bg-teal-50 dark:bg-teal-900/20 text-slate-800 dark:text-slate-100"
-                        : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-                {slide.layout === "split" &&
-                  (
+                    { v: "overlay", label: "Foto de fundo", hint: "Texto por cima" },
+                    { v: "split", label: "Foto ao lado", hint: "Foto + texto" },
+                    { v: "gradient", label: "Gradiente", hint: "Fundo colorido" },
+                    { v: "diagonal", label: "Diagonal", hint: "Recorte diagonal" },
+                    { v: "fashion", label: "Fashion", hint: "Foto + badge" },
+                    { v: "magazine", label: "Magazine", hint: "Texto colorido" },
+                    { v: "spring", label: "Spring", hint: "Badge girando" },
+                    { v: "sale", label: "Sale", hint: "Badge % OFF" },
+                  ] as { v: HeroTemplate; label: string; hint: string }[]
+                ).map((opt) => {
+                  const active = (slide.template ?? "overlay") === opt.v;
+                  return (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => applyTemplate(i, opt.v)}
+                      className={`rounded-lg border-2 p-2 text-left ${
+                        active
+                          ? "border-landing-primary bg-teal-50 dark:bg-teal-900/20"
+                          : "border-slate-200 dark:border-slate-700"
+                      }`}
+                    >
+                      <span className="block text-xs font-bold text-slate-800 dark:text-slate-100">
+                        {opt.label}
+                      </span>
+                      <span className="block text-[10px] text-slate-500 dark:text-slate-400">
+                        {opt.hint}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Lado da foto: split (legado) e templates novos usam photoSide */}
+              {(slide.template === "split" ||
+                slide.layout === "split" ||
+                (slide.template &&
+                  !["overlay", "split"].includes(slide.template))) && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="self-center text-[11px] text-slate-500 dark:text-slate-400">
+                    Foto:
+                  </span>
+                  {(
                     [
-                      { v: "left" as const, label: "◧ Esq." },
-                      { v: "right" as const, label: "Dir. ◨" },
+                      { v: "left" as const, label: "◧ Esquerda" },
+                      { v: "right" as const, label: "Direita ◨" },
                     ]
                   ).map((opt) => (
                     <button
@@ -594,7 +669,80 @@ export default function BannerEditPage() {
                       {opt.label}
                     </button>
                   ))}
-              </div>
+                </div>
+              )}
+
+              {/* Controles de cor/altura — só para os templates novos */}
+              {slide.template &&
+                !["overlay", "split"].includes(slide.template) && (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                    <p className="mb-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                      Cores e tamanho deste banner
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {(
+                        [
+                          { key: "bgFrom" as const, label: "De", def: "#001C45" },
+                          { key: "bgVia" as const, label: "Via", def: "#0064D2" },
+                          { key: "bgTo" as const, label: "Até", def: "#0086FF" },
+                        ]
+                      ).map((c) => (
+                        <label key={c.key} className="flex items-center gap-1.5">
+                          <input
+                            type="color"
+                            value={slide[c.key] || c.def}
+                            onChange={(e) =>
+                              patchSlide(i, {
+                                [c.key]: e.target.value,
+                              } as Partial<HeroSlide>)
+                            }
+                            className="h-8 w-8 cursor-pointer rounded border border-slate-300 p-0.5 dark:border-slate-600"
+                          />
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {c.label}
+                          </span>
+                        </label>
+                      ))}
+                      <label className="flex items-center gap-1.5">
+                        <input
+                          type="color"
+                          value={slide.ctaBgColor || sf.themePrimary}
+                          onChange={(e) => patchSlide(i, { ctaBgColor: e.target.value })}
+                          className="h-8 w-8 cursor-pointer rounded border border-slate-300 p-0.5 dark:border-slate-600"
+                        />
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Botão
+                        </span>
+                      </label>
+                      <div
+                        className="h-8 min-w-[80px] flex-1 rounded-lg"
+                        style={{
+                          background: `linear-gradient(to right, ${slide.bgFrom || "#001C45"}, ${slide.bgVia || slide.bgFrom || "#0064D2"}, ${slide.bgTo || "#0086FF"})`,
+                        }}
+                      />
+                    </div>
+                    <label className="mt-3 block">
+                      <span className="mb-1 block text-[11px] text-slate-500 dark:text-slate-400">
+                        Altura ({slide.height ?? 360}px)
+                      </span>
+                      <input
+                        type="range"
+                        min={220}
+                        max={560}
+                        step={20}
+                        value={slide.height ?? 360}
+                        onChange={(e) =>
+                          patchSlide(i, { height: Number(e.target.value) })
+                        }
+                        className="w-full accent-landing-primary"
+                      />
+                    </label>
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      Dica: nesses estilos, use fotos de pessoa/produto em pé
+                      (retrato). O texto “Destaque” ganha o degradê animado.
+                    </p>
+                  </div>
+                )}
 
               {/* Textos deste banner (vazio = usa o texto geral) */}
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">

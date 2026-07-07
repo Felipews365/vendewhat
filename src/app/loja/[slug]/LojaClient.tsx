@@ -17,6 +17,10 @@ import {
   storefrontRichFooterVisible,
 } from "@/lib/storefront";
 import { discountPercent } from "@/lib/productCardMeta";
+import {
+  HeroTemplateSlide,
+  type HeroSlideContent,
+} from "@/components/storefront/HeroTemplateSlide";
 import { StorefrontRichFooter } from "@/components/storefront/StorefrontRichFooter";
 import { BlockRenderer } from "@/components/storefront/blocks";
 import type { BlockProduct } from "@/components/storefront/blocks";
@@ -377,6 +381,38 @@ function HeroBannerBlock({
       ))}
     </nav>
   );
+
+  // Templates novos (gradiente/diagonal/fashion/magazine/spring/sale):
+  // renderizados por HeroTemplateSlide num container de altura fixa.
+  const template = slide.template ?? "overlay";
+  if (template !== "overlay" && template !== "split") {
+    const height = slide.height ?? 360;
+    const content: HeroSlideContent = {
+      badge,
+      title,
+      highlight,
+      subtitle,
+      ctaLabel,
+      ctaHref,
+    };
+    return (
+      <>
+        <section
+          className="relative w-full overflow-hidden"
+          style={{ height: `clamp(240px, 55vw, ${height}px)` }}
+        >
+          <HeroTemplateSlide
+            slide={slide}
+            content={content}
+            primary={themePrimary}
+            onCta={onCta}
+          />
+          {arrows}
+        </section>
+        {dots}
+      </>
+    );
+  }
 
   // Formato dividido: foto de um lado, texto (painel colorido) do outro.
   if (slide.layout === "split") {

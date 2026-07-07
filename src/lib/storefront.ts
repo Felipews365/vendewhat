@@ -105,11 +105,58 @@ export function heroImageProportionWarning(
  * (`heroSubtitle`/`heroTitle`/… em `StorefrontSettings`), então lojas simples
  * podem ter um texto só para todas as fotos.
  */
+/**
+ * Estilo do banner (inspirado no projeto de referência). `overlay`/`split` são
+ * os formatos antigos (foto de fundo / foto ao lado); os demais são os
+ * "templates" com recortes diagonais + painel de gradiente colorido.
+ */
+export type HeroTemplate =
+  | "overlay"
+  | "split"
+  | "gradient"
+  | "diagonal"
+  | "fashion"
+  | "magazine"
+  | "spring"
+  | "sale";
+
+export const HERO_TEMPLATES: HeroTemplate[] = [
+  "overlay",
+  "split",
+  "gradient",
+  "diagonal",
+  "fashion",
+  "magazine",
+  "spring",
+  "sale",
+];
+
+export function heroTemplateFromDb(v: unknown): HeroTemplate {
+  return typeof v === "string" && (HERO_TEMPLATES as string[]).includes(v)
+    ? (v as HeroTemplate)
+    : "overlay";
+}
+
+/** Cor #rrggbb válida? (defensivo, para gravar só cor real). */
+function isHexColor(v: unknown): v is string {
+  return typeof v === "string" && /^#[0-9a-fA-F]{3,8}$/.test(v.trim());
+}
+
 export type HeroSlide = {
   url: string;
   layout: HeroLayout;
   /** Só usado quando `layout === "split"`. */
   photoSide: HeroSplitPhotoSide;
+  /** Estilo do banner. Vazio/ausente = usa `layout` (overlay/split) antigo. */
+  template?: HeroTemplate;
+  /** Cores do gradiente do painel colorido (templates novos). */
+  bgFrom?: string;
+  bgVia?: string;
+  bgTo?: string;
+  /** Cor do botão (CTA); vazio = cor primária da loja. */
+  ctaBgColor?: string;
+  /** Altura do banner em px (templates novos). */
+  height?: number;
   /** Etiqueta pequena (linha de cima, em maiúsculas). */
   badge?: string;
   /** Título grande. */
@@ -125,6 +172,23 @@ export type HeroSlide = {
   /** Link do botão (âncora #catalogo ou URL). */
   ctaHref?: string;
 };
+
+/** Altura padrão do banner (px) para os templates novos. */
+export const HERO_DEFAULT_HEIGHT = 360;
+
+/** Extrai/normaliza os campos de estilo (template, cores, altura) de um slide. */
+function heroSlideStyleFromRaw(s: Record<string, unknown>): Partial<HeroSlide> {
+  const out: Partial<HeroSlide> = {};
+  const template = heroTemplateFromDb(s.template);
+  if (template !== "overlay") out.template = template;
+  if (isHexColor(s.bgFrom)) out.bgFrom = (s.bgFrom as string).trim();
+  if (isHexColor(s.bgVia)) out.bgVia = (s.bgVia as string).trim();
+  if (isHexColor(s.bgTo)) out.bgTo = (s.bgTo as string).trim();
+  if (isHexColor(s.ctaBgColor)) out.ctaBgColor = (s.ctaBgColor as string).trim();
+  const h = typeof s.height === "number" ? s.height : Number(s.height);
+  if (Number.isFinite(h) && h > 0) out.height = Math.max(200, Math.min(600, Math.round(h)));
+  return out;
+}
 
 /** Campos de texto por slide (para ler/gravar mantendo só os preenchidos). */
 const HERO_SLIDE_TEXT_KEYS = [
@@ -628,6 +692,7 @@ function heroSlidesFromDb(o: Record<string, unknown>): HeroSlide[] {
         url,
         layout: heroLayoutFromDb(s.layout),
         photoSide: heroSplitPhotoSideFromDb(s.photoSide),
+        ...heroSlideStyleFromRaw(s),
         ...heroSlideTextFromRaw(s),
       });
       if (out.length >= MAX_BANNER_PHOTOS_ABS) break;
@@ -653,6 +718,7 @@ function heroSlidesToDb(slides: HeroSlide[]): HeroSlide[] {
       url,
       layout: heroLayoutFromDb(s.layout),
       photoSide: heroSplitPhotoSideFromDb(s.photoSide),
+      ...heroSlideStyleFromRaw(s as unknown as Record<string, unknown>),
       ...heroSlideTextFromRaw(s as unknown as Record<string, unknown>),
     });
     if (out.length >= MAX_BANNER_PHOTOS_ABS) break;
