@@ -195,6 +195,28 @@ imagens ao bucket `product-images` e guarda a ordem em `products.images` + o foc
   (só a coluna). O limite real de tamanho do arquivo depende do bucket no Supabase (Storage →
   `product-images` → File size limit).
 
+### Variações (cores, tamanhos e estoque por combinação)
+
+Na aba **Variações** do formulário, três componentes compartilhados montam cor/tamanho/estoque:
+
+- **Cores** ([ProductColorsEditor.tsx](src/components/ProductColorsEditor.tsx)): cada cor tem
+  **nome** + **tom da bolinha** (`<input type="color">`, guardado em `products.color_hexes`). Tem
+  **chips de cores prontas** (`COLOR_PRESETS`) que adicionam/removem com 1 clique, com a bolinha já na
+  cor certa (`hexForColorLabel`/`defaultPickerHex` de [colorSwatch.ts](src/lib/colorSwatch.ts)); dá
+  para ajustar o tom depois.
+- **Tamanhos** ([ProductOptionsEditor.tsx](src/components/ProductOptionsEditor.tsx)): lista simples de
+  strings. A prop opcional `presetGroups` mostra **chips prontos** — `SIZE_PRESET_GROUPS` (Letras
+  PP–XGG, Números 36–50, "Tamanho único") passado pelas duas páginas de produto.
+- **Estoque** ([VariantStockEditor.tsx](src/components/VariantStockEditor.tsx)): quantidade por
+  combinação (`buildVariantCombinations` + `variantStockKey`, guardado em `products.variant_stock`).
+  Com cor **E** tamanho, **agrupa por tamanho** (cada tamanho lista as cores com bolinha + Qtd +
+  subtotal); com só uma dimensão, vira lista simples. Os helpers de linha são **funções chamadas
+  inline** (não componentes) de propósito — como componentes, o `<input>` remontaria e perderia o
+  foco a cada dígito.
+
+Obs.: esses três cards ainda são **claros** (sem `dark:`), então os inputs forçam `text-slate-900`
+para o texto digitado não herdar a cor clara do tema e sumir no fundo branco.
+
 ## Loja pública — carrinho e formas de envio
 
 O checkout fica no carrinho de [src/app/loja/[slug]/LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx).
@@ -213,9 +235,16 @@ As **formas de envio** estão em [src/lib/shippingModes.ts](src/lib/shippingMode
   da vitrine ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), painel
   "Rodapé da vitrine"). Se vazio, exibe aviso de combinar pelo WhatsApp.
 
+**Formato da mensagem de pedido (`buildOrderMessage` em LojaClient):** cabeçalho, dados do cliente,
+envio/endereço e depois `*Itens do pedido:*` com **um item por bloco** (linha em branco entre eles):
+`1x Nome — Cor — Tam. P — R$ 90,00` (dinheiro em BRL com vírgula via `toLocaleString`, sem o antigo
+"(un. R$ x)"); fecha com `*Total parcial: R$ …*`. O **nome do cliente e do produto** passam por
+`titleCasePtBr` (1ª letra de cada palavra maiúscula, mantendo conectores `da/de/do/das/dos/e/di/du`
+minúsculos no meio) — normaliza o que foi digitado em caixa alta/baixa.
+
 **Pix na mensagem do WhatsApp:** se a loja preencher a **chave Pix** (`storefront.pixKey` + titular
-`pixName`, no mesmo painel "Rodapé da vitrine"), a mensagem do **Enviar pedido no WhatsApp**
-(`buildOrderMessage` em LojaClient) termina com a chave para o cliente pagar e enviar o comprovante.
+`pixName`, no mesmo painel "Rodapé da vitrine"), a mensagem do **Enviar pedido no WhatsApp** termina
+com a chave para o cliente pagar e enviar o comprovante.
 Sem migration: mora no JSONB `stores.storefront`. É o fluxo de pagamento dos pedidos que **não**
 passam pelo Mercado Pago.
 
@@ -356,7 +385,10 @@ uma instância Evolution e uma config de IA por loja.
   IA a **conduzir para o fechamento** com pergunta direta ("Vamos fechar seu pedido?", "Bora fechar
   seu pedido?", "Posso seguir com o fechamento?") depois que o cliente demonstra interesse, e
   **proíbe** encerramentos passivos ("se quiser, é só avisar", "fico no aguardo"). O mesmo tom vale
-  no `generateFollowupReply` (cutucar quem sumiu). Fixo para todas as lojas (sem config no painel).
+  no `generateFollowupReply` (cutucar quem sumiu). Há também uma regra para o **cliente indeciso**
+  ("estou na dúvida", "não sei qual escolher"): em vez de responder passivo, a IA se oferece para
+  **comparar** modelos/cores/tamanhos ou pergunta o que ele procura, sempre conduzindo à decisão.
+  Fixo para todas as lojas (sem config no painel).
 - **Espera + agrupamento de mensagens (debounce por tabela + cron):** para o cliente que manda
   várias mensagens seguidas, a IA espera ele parar de digitar e responde tudo de uma vez. O
   [webhook](src/app/api/whatsapp/webhook/route.ts) **não gera resposta** — ele grava a mensagem e
