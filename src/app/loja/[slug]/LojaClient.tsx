@@ -1797,23 +1797,27 @@ export function LojaClient({
     } else if (shippingMode === "retirada" && pickupAddress) {
       lines.push(`*Retirada em:* ${pickupAddress}`);
     }
+    const money = (v: number) =>
+      v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const itemLines = items.map((i) => {
+      const ref = i.productReference?.trim();
+      const namePart = ref ? `${i.name} (Ref. ${ref})` : i.name;
+      const seg: string[] = [`${i.quantity}x ${namePart}`];
+      if (i.color) seg.push(i.color);
+      if (i.size) seg.push(`Tam. ${i.size}`);
+      if (i.sale.saleMode === "pack" && i.sale.packSize > 1) {
+        seg.push(quantityLabel(i.sale, i.quantity));
+      }
+      seg.push(money(i.lineTotal));
+      return seg.join(" — ");
+    });
     lines.push(
       "",
-      ...items.map((i) => {
-        const bits: string[] = [];
-        if (i.color) bits.push(`Cor: ${i.color}`);
-        if (i.size) bits.push(`Tam: ${i.size}`);
-        const opt = bits.length ? ` (${bits.join(", ")})` : "";
-        const ref = i.productReference?.trim();
-        const namePart = ref ? `${i.name} (Ref. ${ref})` : i.name;
-        const packPart =
-          i.sale.saleMode === "pack" && i.sale.packSize > 1
-            ? ` [${quantityLabel(i.sale, i.quantity)}]`
-            : "";
-        return `${i.quantity}x ${namePart}${opt}${packPart} — R$ ${i.lineTotal.toFixed(2)} (un. R$ ${i.price.toFixed(2)})`;
-      }),
+      "*Itens do pedido:*",
       "",
-      `*Subtotal: R$ ${subtotal.toFixed(2)}*`
+      itemLines.join("\n\n"),
+      "",
+      `*Total parcial: ${money(subtotal)}*`
     );
     if (notes.trim()) {
       lines.push("", `Obs: ${notes.trim()}`);
