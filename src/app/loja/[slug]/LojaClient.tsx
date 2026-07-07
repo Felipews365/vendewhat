@@ -1489,7 +1489,7 @@ type SortKey = "new" | "name-asc" | "name-desc" | "price-asc" | "price-desc";
 export function LojaClient({
   store,
   storefront,
-  products,
+  products: rawProducts,
   paymentEnabled = false,
 }: {
   store: StoreInfo;
@@ -1497,6 +1497,18 @@ export function LojaClient({
   products: CatalogProduct[];
   paymentEnabled?: boolean;
 }) {
+  // Sem controle de estoque: a loja nunca mostra "Esgotado" nem limita a
+  // quantidade. Normalizamos aqui (estoque "infinito", sem estoque por variação)
+  // para que toda a tela — cards, detalhe, carrinho — trate os produtos como
+  // sempre disponíveis, sem espalhar a flag por dezenas de componentes.
+  const products = useMemo(() => {
+    if (storefront.stockControlEnabled) return rawProducts;
+    return rawProducts.map((p) => ({
+      ...p,
+      stock: 999999,
+      variantStock: [],
+    }));
+  }, [rawProducts, storefront.stockControlEnabled]);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [paying, setPaying] = useState(false);

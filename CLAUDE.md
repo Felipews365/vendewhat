@@ -217,6 +217,19 @@ Na aba **Variações** do formulário, três componentes compartilhados montam c
 Obs.: esses três cards ainda são **claros** (sem `dark:`), então os inputs forçam `text-slate-900`
 para o texto digitado não herdar a cor clara do tema e sumir no fundo branco.
 
+### Controlar estoque ou não (por loja)
+
+Toggle `storefront.stockControlEnabled` (default `true`, JSONB — **sem migration**), editado no painel
+**"Rodapé da vitrine"** do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
+(caixa "Controle de estoque"). Marcado = comportamento de sempre: produto/variação sem estoque
+aparece como **"Esgotado"** e limita a quantidade. Desmarcado = a loja **não controla estoque**:
+nunca mostra "Esgotado" e não limita a quantidade (para quem faz sob encomenda / repõe sempre).
+Em vez de espalhar a flag por dezenas de componentes, a [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)
+**normaliza os produtos** num `useMemo` quando desativado (estoque "infinito" 999999 + `variantStock: []`),
+então `productSoldOut`/`maxQtyForCartLine` e os avisos de variação tratam tudo como disponível. Para
+manter a **IA** consistente, [whatsappRespond.ts](src/lib/whatsappRespond.ts) também zera o "sem estoque"
+do catálogo do prompt quando `stockControlEnabled` é `false`.
+
 ## Loja pública — carrinho e formas de envio
 
 O checkout fica no carrinho de [src/app/loja/[slug]/LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx).

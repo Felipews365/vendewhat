@@ -313,6 +313,12 @@ export type StorefrontSettings = {
   promoCards: PromoCard[];
   /** Mostra a barra de menu de categorias no topo (abaixo do cabeçalho). */
   showCategoryNav: boolean;
+  /**
+   * A loja controla estoque. `true` (padrão): produto/variação sem estoque
+   * aparece como "Esgotado" e limita a quantidade. `false`: a loja não controla
+   * estoque — nunca mostra "Esgotado" e não limita a quantidade.
+   */
+  stockControlEnabled: boolean;
   /** Frases curtas abaixo do logo (ex.: pedido mínimo) */
   infoBullets: string[];
   /** Cor de destaque (botões catálogo, detalhes) — ex. rosa pó */
@@ -378,6 +384,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroCouponCode: "",
   promoCards: [],
   showCategoryNav: true,
+  stockControlEnabled: true,
   infoBullets: [],
   themePrimary: "#c9a8ac",
   themeSecondary: "#5c2e36",
@@ -640,6 +647,10 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     heroCouponCode: strOrEmpty(o.heroCouponCode),
     promoCards: promoCardsFromDb(o.promoCards),
     showCategoryNav: boolFromDb(o.showCategoryNav, DEFAULT_STOREFRONT.showCategoryNav),
+    stockControlEnabled: boolFromDb(
+      o.stockControlEnabled,
+      DEFAULT_STOREFRONT.stockControlEnabled
+    ),
     infoBullets: bulletsFromDb(o.infoBullets),
     themePrimary: str(o.themePrimary, DEFAULT_STOREFRONT.themePrimary),
     themeSecondary: str(o.themeSecondary, DEFAULT_STOREFRONT.themeSecondary),
@@ -706,6 +717,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     heroCouponCode: s.heroCouponCode.trim(),
     promoCards: promoCardsFromDb(s.promoCards),
     showCategoryNav: s.showCategoryNav,
+    stockControlEnabled: s.stockControlEnabled,
     infoBullets: s.infoBullets.map((b) => b.trim()).filter(Boolean),
     themePrimary: s.themePrimary.trim(),
     themeSecondary: s.themeSecondary.trim(),

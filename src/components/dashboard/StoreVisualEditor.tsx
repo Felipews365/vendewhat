@@ -2172,6 +2172,28 @@ export function StoreVisualEditor({
             (/dashboard/pagamentos).
           </p>
         </div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+          <p className="text-sm font-medium text-slate-700">Controle de estoque</p>
+          <label className="inline-flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sf.stockControlEnabled}
+              onChange={(e) =>
+                setSf((s) => ({ ...s, stockControlEnabled: e.target.checked }))
+              }
+              className="mt-0.5 rounded border-slate-300"
+            />
+            <span>
+              Controlar estoque dos produtos
+              <span className="block text-[11px] text-slate-500 font-normal">
+                Marcado: produto/variação sem estoque aparece como{" "}
+                <strong>Esgotado</strong> e limita a quantidade. Desmarcado: a
+                loja nunca mostra “Esgotado” e não limita a quantidade (útil para
+                quem faz sob encomenda ou repõe sempre).
+              </span>
+            </span>
+          </label>
+        </div>
         <p className="text-[11px] text-slate-500">
           Instagram, Facebook, TikTok e YouTube ficam em{" "}
           <button

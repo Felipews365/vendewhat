@@ -122,6 +122,13 @@ export async function respondToCustomer(
   // Tem produto = a IA pode anexar o catálogo em PDF.
   const hasCatalogPdf = (productRows?.length ?? 0) > 0;
 
+  // Loja sem controle de estoque: a IA não deve dizer "sem estoque" (trata tudo
+  // como disponível, igual à loja pública). Só afeta o texto do catálogo no prompt.
+  let products = mapProducts((productRows ?? []) as AnyObj[]);
+  if (!sf.stockControlEnabled) {
+    products = products.map((p) => ({ ...p, stock: p.stock > 0 ? p.stock : 999999 }));
+  }
+
   // Base pública do app (o cron não tem request, então depende do APP_BASE_URL;
   // cai no VERCEL_URL como último recurso para nunca montar um link relativo/quebrado).
   const baseUrl =
@@ -154,7 +161,7 @@ export async function respondToCustomer(
     faq: cfg.faq,
     aiName: cfg.aiName,
     aiTone: cfg.aiTone,
-    products: mapProducts((productRows ?? []) as AnyObj[]),
+    products,
     baseUrl,
     isFirstContact,
     storeAddress,
