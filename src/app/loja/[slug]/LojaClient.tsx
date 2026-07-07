@@ -16,11 +16,7 @@ import {
   type StorefrontSettings,
   storefrontRichFooterVisible,
 } from "@/lib/storefront";
-import {
-  discountPercent,
-  installmentPlan,
-  decorativeRating,
-} from "@/lib/productCardMeta";
+import { discountPercent } from "@/lib/productCardMeta";
 import { StorefrontRichFooter } from "@/components/storefront/StorefrontRichFooter";
 import { BlockRenderer } from "@/components/storefront/blocks";
 import type { BlockProduct } from "@/components/storefront/blocks";
@@ -580,25 +576,41 @@ function ProductGallery({
   );
 }
 
-/** Card simplificado: imagem uniforme + nome + preço + botão "Comprar". Clique abre detalhe. */
-/** Estrelinhas de avaliação (decorativas — ver `decorativeRating`). */
-function StarRating({ rating, count }: { rating: number; count: number }) {
+/* ── Paleta do estilo "e-commerce" (referência sitederoupa) ─────────────
+   Fixa de propósito para os cards ficarem idênticos à referência em toda
+   loja (azul primário, laranja no preço, vermelho no desconto, dourado nas
+   estrelas), independente do tema por loja. */
+const EC = {
+  primary: "#0062B8",
+  primaryDark: "#002962",
+  primaryHl: "#A1CCF7",
+  accent: "#FF6B00", // preço
+  sale: "#E63946", // selo de desconto
+  gold: "#F5A623", // estrelas
+  border: "#DCE3EC",
+  foreground: "#1A1A2E",
+  muted: "#4A5E78",
+  imgBg: "#E8ECF2",
+} as const;
+
+/** 5 estrelas cheias + nota — decorativo, igual à referência (não são reviews reais). */
+function StarRating() {
   return (
-    <div className="flex items-center gap-1 text-[11px]">
-      <span className="text-amber-400 leading-none tracking-tight" aria-hidden>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <span key={i}>{rating >= i + 0.5 ? "★" : "☆"}</span>
-        ))}
+    <div className="flex items-center gap-1">
+      <span className="leading-none tracking-tight text-[13px]" style={{ color: EC.gold }} aria-hidden>
+        ★★★★★
       </span>
-      <span className="text-stone-400">({count.toLocaleString("pt-BR")})</span>
+      <span className="text-[0.65rem]" style={{ color: EC.muted }}>
+        (4.9)
+      </span>
     </div>
   );
 }
 
 /**
- * Contador regressivo "Ofertas Relâmpago". Só renderiza quando a data-fim está
- * no futuro; some (retorna null) quando expira. Monta só no cliente para evitar
- * divergência de hidratação (o horário do servidor ≠ do navegador).
+ * Contador regressivo "Ofertas Relâmpago" (pílula azul-escura, igual à
+ * referência). Só renderiza quando a data-fim está no futuro; some quando
+ * expira. Monta só no cliente para evitar divergência de hidratação.
  */
 function FlashSaleCountdown({ endsAt }: { endsAt: string }) {
   const [now, setNow] = useState<number | null>(null);
@@ -620,16 +632,24 @@ function FlashSaleCountdown({ endsAt }: { endsAt: string }) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return (
     <span
-      className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-white shadow-sm"
-      style={{ backgroundColor: "var(--store-secondary)" }}
+      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white"
+      style={{ backgroundColor: EC.primaryDark }}
     >
       <span aria-hidden>⏱</span>
-      <span className="tabular-nums">
-        Termina em: {days > 0 ? `${days}d ` : ""}
-        {pad(h)} : {pad(m)} : {pad(s)}
+      Termina em:&nbsp;
+      <span className="font-mono tabular-nums">
+        {days > 0 ? `${days}d ` : ""}
+        {pad(h)}:{pad(m)}:{pad(s)}
       </span>
     </span>
   );
+}
+
+/** Produto criado nos últimos N dias? (para o selo "Novo", igual à referência). */
+function isRecent(createdAt: string, days = 21): boolean {
+  const t = new Date(createdAt).getTime();
+  if (!Number.isFinite(t)) return false;
+  return Date.now() - t <= days * 86400 * 1000;
 }
 
 function ProductCatalogCard({
@@ -645,9 +665,9 @@ function ProductCatalogCard({
   imageRatio: ProductCardRatio;
   /** Máx. de parcelas "sem juros" (estimativa); 0/1 = não mostra. */
   installmentsMax: number;
-  /** Texto do selo de frete grátis; vazio = não mostra. */
+  /** Texto do selo de frete grátis (vazio = usa o padrão da referência: preço ≥ R$79). */
   freeShippingLabel: string;
-  /** Mostra estrelas decorativas. */
+  /** Mostra estrelas (decorativas). */
   showRatings: boolean;
   onOpen: (product: CatalogProduct) => void;
 }) {
@@ -667,107 +687,165 @@ function ProductCatalogCard({
   const discount = hasCompare
     ? discountPercent(product.price, product.compareAtPrice)
     : null;
-  const plan = installmentPlan(shownPrice, installmentsMax);
-  const rating = showRatings ? decorativeRating(product.id) : null;
-  const freeShipping = freeShippingLabel.trim();
+
+  // Parcelamento estimado (mesma fórmula da referência: ~R$20/parcela, teto 10).
+  const maxN = installmentsMax > 0 ? installmentsMax : 0;
+  const installN = maxN >= 2 ? Math.min(Math.floor(shownPrice / 20), maxN) : 0;
+  const showInstall = shownPrice >= 40 && installN >= 2;
+
+  // Frete grátis (badge): rótulo do lojista OU regra padrão da referência (≥ R$79).
+  const freeShip = freeShippingLabel.trim();
+  const showFrete = !soldOut && (freeShip.length > 0 || shownPrice >= 79);
+
+  const isNew = discount == null && isRecent(product.createdAt);
 
   return (
     <div
-      className="group flex flex-col cursor-pointer overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm transition-shadow hover:shadow-md"
+      className="group relative flex cursor-pointer flex-col"
       onClick={() => onOpen(product)}
     >
-      {/* Foto: quadrado (1:1) ou retrato (3:4). object-cover com ponto de foco → não distorce. */}
       <div
-        className={`${
-          imageRatio === "3:4" ? "aspect-[3/4]" : "aspect-square"
-        } relative overflow-hidden bg-stone-100`}
+        className="flex flex-col overflow-hidden rounded-xl border bg-white transition-all duration-200 hover:-translate-y-0.5"
+        style={{ borderColor: EC.border }}
       >
-        {imgSrc ? (
-          <Image
-            src={imgSrc}
-            alt={product.name}
-            fill
-            className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-[1.03]"
-            style={coverImageStyleAt(
-              0,
-              product.imageObjectPositions,
-              product.imageObjectPosition
+        {/* Foto */}
+        <div
+          className={`${
+            imageRatio === "1:1" ? "aspect-square" : "aspect-[3/4]"
+          } relative overflow-hidden`}
+          style={{ backgroundColor: EC.imgBg }}
+        >
+          {imgSrc ? (
+            <Image
+              src={imgSrc}
+              alt={product.name}
+              fill
+              className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
+              style={coverImageStyleAt(
+                0,
+                product.imageObjectPositions,
+                product.imageObjectPosition
+              )}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-5xl text-stone-300">
+              📷
+            </div>
+          )}
+
+          {/* Selo desconto (vermelho) OU "Novo" (azul), canto superior esquerdo */}
+          {discount != null ? (
+            <span
+              className="absolute left-3 top-3 z-10 rounded px-2 py-0.5 text-xs font-bold text-white"
+              style={{ backgroundColor: EC.sale }}
+            >
+              -{discount}%
+            </span>
+          ) : isNew ? (
+            <span
+              className="absolute left-3 top-3 z-10 rounded px-2 py-0.5 text-xs font-bold text-white"
+              style={{ backgroundColor: EC.primary }}
+            >
+              Novo
+            </span>
+          ) : null}
+
+          {/* Selo frete grátis (azul), canto superior direito */}
+          {showFrete && (
+            <span
+              className="absolute right-3 top-3 z-10 rounded px-2 py-0.5 text-[0.6rem] font-bold text-white"
+              style={{ backgroundColor: EC.primary }}
+            >
+              Frete grátis
+            </span>
+          )}
+
+          {/* Esgotado */}
+          {soldOut && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40">
+              <span
+                className="rounded-full bg-white px-3 py-1.5 text-xs font-bold shadow"
+                style={{ color: EC.foreground }}
+              >
+                Esgotado
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex flex-1 flex-col gap-1.5 p-3">
+          {product.category?.trim() && (
+            <p
+              className="text-[0.65rem] uppercase tracking-wider"
+              style={{ color: EC.muted }}
+            >
+              {product.category.trim()}
+            </p>
+          )}
+
+          <h3
+            className="line-clamp-2 min-h-[2.4em] text-sm font-medium leading-snug"
+            style={{ color: EC.foreground }}
+          >
+            {product.name}
+          </h3>
+
+          {/* Preço: atual (laranja) + "de" riscado + selo -X% */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-base font-bold" style={{ color: EC.accent }}>
+              R${formatPrice(shownPrice)}
+            </span>
+            {hasCompare && (
+              <span className="text-xs line-through" style={{ color: EC.muted }}>
+                R${formatPrice(product.compareAtPrice as number)}
+              </span>
             )}
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-5xl text-stone-300">
-            📷
+            {discount != null && (
+              <span
+                className="rounded px-1.5 py-0.5 text-[0.6rem] font-bold text-white"
+                style={{ backgroundColor: EC.sale }}
+              >
+                -{discount}%
+              </span>
+            )}
           </div>
-        )}
-        {/* Selo de desconto (canto superior esquerdo) */}
-        {discount != null && (
-          <span className="absolute top-2 left-2 z-10 rounded-md bg-red-500 px-2 py-1 text-xs font-bold text-white shadow-sm">
-            -{discount}%
-          </span>
-        )}
-        {/* Selo de frete grátis (canto superior direito) */}
-        {freeShipping && !soldOut && (
-          <span className="absolute top-2 right-2 z-10 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white shadow-sm">
-            Frete grátis
-          </span>
-        )}
-        {soldOut && (
-          <span className="absolute top-2 right-2 z-10 rounded-md bg-boutique-wine/95 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
-            Esgotado
-          </span>
-        )}
-      </div>
 
-      {/* Info dentro do card */}
-      <div className="flex flex-1 flex-col gap-1 p-3">
-        <h3 className="line-clamp-2 min-h-[2.4em] text-sm leading-snug text-stone-700">
-          {product.name}
-        </h3>
+          {showInstall && (
+            <p className="text-[0.65rem]" style={{ color: EC.muted }}>
+              ou {installN}x de R${formatPrice(shownPrice / installN)} sem juros
+            </p>
+          )}
 
-        {hasCompare && (
-          <p className="text-xs text-stone-400 line-through leading-none">
-            R${formatPrice(product.compareAtPrice as number)}
-          </p>
-        )}
+          {product.sale.saleMode === "pack" && (
+            <p className="text-[0.65rem]" style={{ color: EC.muted }}>
+              {product.sale.priceDisplay === "pack"
+                ? `o fardo (${product.sale.packSize} un.)`
+                : `fardo de ${product.sale.packSize} un.`}
+            </p>
+          )}
+          {product.sale.saleMode === "min" && (
+            <p className="text-[0.65rem]" style={{ color: EC.muted }}>
+              mínimo {product.sale.minQuantity} un.
+            </p>
+          )}
 
-        <p className="text-lg font-bold leading-tight text-stone-900">
-          R${formatPrice(shownPrice)}
-        </p>
+          {showRatings && <StarRating />}
 
-        {discount != null && (
-          <p className="text-xs font-semibold text-red-500 leading-none">
-            {discount}% OFF
-          </p>
-        )}
-
-        {plan && (
-          <p className="text-xs text-stone-500 leading-tight">
-            ou {plan.count}x de R${formatPrice(plan.each)} sem juros
-          </p>
-        )}
-
-        {product.sale.saleMode === "pack" && (
-          <p className="text-[11px] text-stone-500 leading-tight">
-            {product.sale.priceDisplay === "pack"
-              ? `o fardo (${product.sale.packSize} un.)`
-              : `fardo de ${product.sale.packSize} un.`}
-          </p>
-        )}
-        {product.sale.saleMode === "min" && (
-          <p className="text-[11px] text-stone-500 leading-tight">
-            mínimo {product.sale.minQuantity} un.
-          </p>
-        )}
-
-        {freeShipping && (
-          <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 leading-tight">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
-            {freeShipping}
-          </p>
-        )}
-
-        {rating && <StarRating rating={rating.rating} count={rating.count} />}
+          {/* Botão (abre o detalhe para escolher variação/quantidade) */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(product);
+            }}
+            className="mt-auto flex items-center justify-center gap-1.5 rounded-full py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: EC.primary }}
+          >
+            🛍️ {soldOut ? "Ver produto" : "Adicionar à sacola"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2520,18 +2598,21 @@ export function LojaClient({
           <div id="catalogo" className="scroll-mt-28">
             {promoProducts.length > 0 && (
               <section className="pt-3 pb-10 md:pt-4 md:pb-12">
-                <div className="mb-4 md:mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="mb-4 flex flex-wrap items-center gap-4">
                   <h3
-                    className="font-serif text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2"
-                    style={{ color: "var(--store-secondary)" }}
+                    className="flex items-center gap-2 text-xl font-bold tracking-tight"
+                    style={{ color: EC.foreground }}
                   >
-                    <span aria-hidden>⚡</span> Ofertas Relâmpago
+                    <span aria-hidden style={{ color: EC.accent }}>
+                      ⚡
+                    </span>{" "}
+                    Ofertas Relâmpago
                   </h3>
                   {storefront.flashSaleEndsAt && (
                     <FlashSaleCountdown endsAt={storefront.flashSaleEndsAt} />
                   )}
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {promoProducts.map((product) => (
                     <ProductCatalogCard
                       key={product.id}
@@ -2555,18 +2636,13 @@ export function LojaClient({
                     : "pt-3 md:pt-4"
                 }`}
               >
-                <div className="mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-                  <div>
-                    <h3
-                      className="font-serif text-2xl md:text-3xl font-semibold tracking-tight"
-                      style={{ color: "var(--store-secondary)" }}
-                    >
-                      Mais Produtos
-                    </h3>
-                    <p className="text-sm text-stone-500 mt-1">
-                      Catálogo completo
-                    </p>
-                  </div>
+                <div className="mb-4 md:mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <h3
+                    className="flex flex-1 items-center gap-3 text-xl font-bold tracking-tight after:h-px after:flex-1 after:bg-[#DCE3EC] after:content-['']"
+                    style={{ color: EC.foreground }}
+                  >
+                    Mais Produtos
+                  </h3>
                   <label className="inline-flex items-center gap-2 text-sm text-stone-600">
                     <span className="text-base opacity-70" aria-hidden>
                       ✦
@@ -2585,7 +2661,7 @@ export function LojaClient({
                     </select>
                   </label>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {catalogSorted.map((product) => (
                     <ProductCatalogCard
                       key={product.id}
