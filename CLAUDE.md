@@ -217,6 +217,18 @@ Na aba **Variações** do formulário, três componentes compartilhados montam c
 Obs.: esses três cards ainda são **claros** (sem `dark:`), então os inputs forçam `text-slate-900`
 para o texto digitado não herdar a cor clara do tema e sumir no fundo branco.
 
+### Formato da foto dos produtos (1:1 ou 3:4)
+
+Toggle `storefront.productCardRatio` (`"1:1"` quadrado — default — ou `"3:4"` retrato; JSONB, **sem
+migration**), editado no painel **"Rodapé da vitrine"** do
+[StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (seletor "Formato da foto dos
+produtos", **salva na hora** via `onAutoSaveStorefront`). Vale para **todos** os cards de produto da
+loja (promoções + catálogo). O `ProductCatalogCard` em
+[LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) recebe `imageRatio` e troca `aspect-square` ↔
+`aspect-[3/4]`; a foto é `object-cover` com ponto de foco, então **não distorce** em nenhum formato
+(nem exige re-recorte das capas já enviadas). Só afeta a grade — a foto grande no **detalhe** do
+produto continua inteira (`object-contain`) de propósito.
+
 ### Controlar estoque ou não (por loja)
 
 Toggle `storefront.stockControlEnabled` (default `true`, JSONB — **sem migration**), editado no painel

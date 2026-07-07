@@ -2173,6 +2173,54 @@ export function StoreVisualEditor({
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+          <p className="text-sm font-medium text-slate-700">Formato da foto dos produtos</p>
+          <p className="text-xs text-slate-500">
+            Como as fotos aparecem nos cards da loja. Vale para todos os produtos.
+          </p>
+          <div className="flex gap-2 pt-0.5">
+            {(
+              [
+                { id: "1:1", label: "Quadrado", sub: "1:1", box: "h-8 w-8" },
+                { id: "3:4", label: "Retrato", sub: "3:4", box: "h-10 w-[30px]" },
+              ] as const
+            ).map((opt) => {
+              const active = sf.productCardRatio === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    if (sf.productCardRatio === opt.id) return;
+                    // Salva na hora, igual ao controle de estoque.
+                    const nextSf: StorefrontSettings = {
+                      ...sf,
+                      productCardRatio: opt.id,
+                    };
+                    setSf(nextSf);
+                    onAutoSaveStorefront?.(nextSf);
+                  }}
+                  className={`flex-1 flex flex-col items-center gap-1.5 rounded-lg border px-3 py-2.5 transition-colors ${
+                    active
+                      ? "border-landing-primary bg-landing-primary/5 ring-1 ring-landing-primary"
+                      : "border-slate-200 hover:border-slate-400 bg-white"
+                  }`}
+                >
+                  <span
+                    className={`${opt.box} rounded bg-slate-300 ${
+                      active ? "bg-landing-primary/60" : ""
+                    }`}
+                    aria-hidden
+                  />
+                  <span className="text-xs font-medium text-slate-700">
+                    {opt.label}{" "}
+                    <span className="text-slate-400 font-normal">({opt.sub})</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
           <p className="text-sm font-medium text-slate-700">Controle de estoque</p>
           <label className="inline-flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
             <input

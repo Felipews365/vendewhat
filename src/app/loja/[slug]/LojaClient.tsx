@@ -11,6 +11,7 @@ import {
 } from "@/lib/productVariants";
 import {
   type HeroSlide,
+  type ProductCardRatio,
   type StorefrontCategoryItem,
   type StorefrontSettings,
   storefrontRichFooterVisible,
@@ -572,10 +573,13 @@ function ProductGallery({
 function ProductCatalogCard({
   product,
   cardMode,
+  imageRatio,
   onOpen,
 }: {
   product: CatalogProduct;
   cardMode: "promotion" | "catalog";
+  /** Formato da foto do card: "1:1" (quadrado) ou "3:4" (retrato). */
+  imageRatio: ProductCardRatio;
   onOpen: (product: CatalogProduct) => void;
 }) {
   const btnBg =
@@ -587,8 +591,13 @@ function ProductCatalogCard({
 
   return (
     <div className="flex flex-col cursor-pointer" onClick={() => onOpen(product)}>
-      {/* Cartão de produto: quadrado (não confundir com a bolinha só na faixa «Categorias»). */}
-      <div className="aspect-square relative overflow-hidden rounded-2xl shadow-sm bg-stone-200">
+      {/* Cartão de produto: quadrado (1:1) ou retrato (3:4) conforme a loja escolher.
+          Foto em object-cover com ponto de foco → não distorce em nenhum formato. */}
+      <div
+        className={`${
+          imageRatio === "3:4" ? "aspect-[3/4]" : "aspect-square"
+        } relative overflow-hidden rounded-2xl shadow-sm bg-stone-200`}
+      >
         {imgSrc ? (
           <Image
             src={imgSrc}
@@ -2416,6 +2425,7 @@ export function LojaClient({
                       key={product.id}
                       product={product}
                       cardMode="promotion"
+                      imageRatio={storefront.productCardRatio}
                       onOpen={setSelectedProduct}
                     />
                   ))}
@@ -2467,6 +2477,7 @@ export function LojaClient({
                       key={product.id}
                       product={product}
                       cardMode="catalog"
+                      imageRatio={storefront.productCardRatio}
                       onOpen={setSelectedProduct}
                     />
                   ))}

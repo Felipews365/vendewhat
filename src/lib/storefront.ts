@@ -289,6 +289,13 @@ export type StorefrontCategoryItem = {
   parentLabel?: string;
 };
 
+/** Formato da foto nos cards de produto da loja: quadrado (1:1) ou retrato (3:4). */
+export type ProductCardRatio = "1:1" | "3:4";
+
+export function productCardRatioFromDb(v: unknown): ProductCardRatio {
+  return v === "3:4" ? "3:4" : "1:1";
+}
+
 export type StorefrontSettings = {
   heroSubtitle: string;
   /** Título grande do banner; vazio = usa o nome da loja */
@@ -313,6 +320,8 @@ export type StorefrontSettings = {
   promoCards: PromoCard[];
   /** Mostra a barra de menu de categorias no topo (abaixo do cabeçalho). */
   showCategoryNav: boolean;
+  /** Formato da foto dos cards de produto na loja: "1:1" (quadrado) ou "3:4" (retrato). */
+  productCardRatio: ProductCardRatio;
   /**
    * A loja controla estoque. `true` (padrão): produto/variação sem estoque
    * aparece como "Esgotado" e limita a quantidade. `false`: a loja não controla
@@ -384,6 +393,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroCouponCode: "",
   promoCards: [],
   showCategoryNav: true,
+  productCardRatio: "1:1",
   stockControlEnabled: true,
   infoBullets: [],
   themePrimary: "#c9a8ac",
@@ -647,6 +657,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     heroCouponCode: strOrEmpty(o.heroCouponCode),
     promoCards: promoCardsFromDb(o.promoCards),
     showCategoryNav: boolFromDb(o.showCategoryNav, DEFAULT_STOREFRONT.showCategoryNav),
+    productCardRatio: productCardRatioFromDb(o.productCardRatio),
     stockControlEnabled: boolFromDb(
       o.stockControlEnabled,
       DEFAULT_STOREFRONT.stockControlEnabled
@@ -717,6 +728,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     heroCouponCode: s.heroCouponCode.trim(),
     promoCards: promoCardsFromDb(s.promoCards),
     showCategoryNav: s.showCategoryNav,
+    productCardRatio: productCardRatioFromDb(s.productCardRatio),
     stockControlEnabled: s.stockControlEnabled,
     infoBullets: s.infoBullets.map((b) => b.trim()).filter(Boolean),
     themePrimary: s.themePrimary.trim(),
