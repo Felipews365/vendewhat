@@ -231,6 +231,7 @@ export async function respondToCustomer(
           url,
           mediatype: "document",
           fileName: `Catálogo - ${storeName}.pdf`,
+          mimetype: "application/pdf",
         });
         sent = true;
       }

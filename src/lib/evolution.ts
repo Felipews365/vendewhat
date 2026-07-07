@@ -284,6 +284,8 @@ export async function sendMedia(
     mediatype?: "image" | "video" | "document";
     /** Nome do arquivo mostrado no anexo (útil em documentos, ex.: catálogo.pdf). */
     fileName?: string;
+    /** MIME do arquivo. Documentos no Evolution v2 exigem (ex.: application/pdf). */
+    mimetype?: string;
   }
 ): Promise<void> {
   await call("POST", `/message/sendMedia/${encodeURIComponent(instance)}`, {
@@ -292,5 +294,6 @@ export async function sendMedia(
     media: media.url,
     caption: media.caption ?? "",
     ...(media.fileName ? { fileName: media.fileName } : {}),
+    ...(media.mimetype ? { mimetype: media.mimetype } : {}),
   });
 }
