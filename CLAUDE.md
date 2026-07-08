@@ -49,6 +49,26 @@ Orientações para o Claude Code trabalhar neste repositório.
   painel, **sempre adicionar variantes `dark:`** (ex.: `bg-white dark:bg-slate-900`).
 - **Animações:** keyframes/utilitários (`vw-fade-in-up`, `vw-pop-in`, `vw-aurora`) em
   [src/app/globals.css](src/app/globals.css); respeitam `prefers-reduced-motion`.
+  - **Reveal estilo Magic UI (`BlurFade`) — CSS puro, sem framer-motion:** o keyframe
+    `vw-blur-fade` (sobe + fade + sai do desfoque, vars `--vw-bf-y`/`--vw-bf-blur`) alimenta o
+    componente [src/components/magicui/blur-fade.tsx](src/components/magicui/blur-fade.tsx)
+    (`inView` via `IntersectionObserver`, `delay`/`yOffset`/`blur` — parâmetros iguais aos do
+    `sitederoupa`: blur 6px, subida 8px, 0.4s, `rootMargin -50px`). Usado na loja pública
+    ([LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)) para revelar seções ao rolar (faixa
+    de categorias, blocos de conteúdo, cards promo escalonados), como a referência. **Cuidado:**
+    o `filter` residual (`blur(0)`) cria containing block — **não** envolver elementos que tenham
+    `position: fixed` dentro (por isso o menu de categorias do topo, cujo dropdown usa backdrop
+    `fixed inset-0`, ficou **sem** `BlurFade`).
+  - **Cascata de texto (`vw-reveal-stagger`):** revela os filhos diretos em cascata (blur-fade
+    com atrasos por `nth-child`) — usado no **texto do banner** (selo → título → destaque →
+    subtítulo → botão) em todos os formatos (overlay/split em LojaClient e os templates em
+    [HeroTemplateSlide.tsx](src/components/storefront/HeroTemplateSlide.tsx)). Re-dispara a cada
+    troca de slide porque o container do banner remonta por `key`.
+  - **Foto surgindo:** `vw-photo-in` (leve zoom-out + fade na entrada, fotos recortadas dos
+    templates) e `vw-ken-burns` (zoom lento contínuo nas fotos de fundo overlay/split, deixa a
+    foto "viva"). A **prévia do editor de banner**
+    ([/dashboard/banner](src/app/dashboard/banner/page.tsx), `SlidePreview`) usa as mesmas
+    classes (cascata + ken-burns) para bater 1:1 com a loja.
 - **Avisos flutuantes (toast):** [src/components/Toast.tsx](src/components/Toast.tsx) expõe
   `ToastProvider` (montado no [layout raiz](src/app/layout.tsx), cobre painel + admin + loja) e o
   hook `useToast()` → `showToast(mensagem, "success" | "error")`. Ao criar uma nova tela que salva,
@@ -288,6 +308,16 @@ formato (3:4 recomendado). O `ProductPhotosPicker` recebe `photoAspect` → as *
 seguem o formato escolhido (3:4 recorta em retrato). Na loja, o card usa
 `product.cardRatio ?? storefront.productCardRatio`.
 
+- **Escolher o formato DENTRO do recorte:** o
+  [ProductImageCropModal.tsx](src/components/ProductImageCropModal.tsx) tem um seletor **Retrato 3:4 /
+  Quadrado 1:1** (prop `showRatioToggle`) que troca o quadro do `Cropper` na hora (estado
+  `activeAspect`); ao trocar, `onRatioChange` avisa o pai. No `ProductPhotosPicker` isso vira o prop
+  **`onPhotoAspectChange`** (o toggle só aparece quando o pai o passa — retrocompatível; o modal do
+  banner segue sem toggle), que as duas páginas de produto ligam a `setForm({ cardRatio })`. Ou seja,
+  **escolher o formato no recorte sincroniza o `card_ratio` do produto** e vale para as **fotos
+  seguintes** (o `cropAspect` do picker deriva de `form.cardRatio`). O modal do variant `editor` do
+  picker passou a receber `aspect={cropAspect}` também (antes ia sempre 1:1).
+
 O `ProductCatalogCard` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) recebe `imageRatio` e
 troca `aspect-square` ↔ `aspect-[3/4]`; a foto é `object-cover` com ponto de foco, então **não
 distorce** em nenhum formato. Só afeta a grade — a foto grande no **detalhe** do
@@ -314,15 +344,20 @@ está reservado pelo `pb-28` do wrapper. SVGs inline (casa/pessoa/sacola/hambúr
 
 ### Componentes Magic UI (portados do `sitederoupa`)
 
-Deps `clsx` + `tailwind-merge`; helper **`cn`** em [src/lib/utils.ts](src/lib/utils.ts). Três
-componentes em [src/components/magicui/](src/components/magicui/): `border-beam.tsx`,
-`animated-gradient-text.tsx`, `shimmer-button.tsx`. As animações (`border-beam`, `gradient`,
+Deps `clsx` + `tailwind-merge`; helper **`cn`** em [src/lib/utils.ts](src/lib/utils.ts). Em
+[src/components/magicui/](src/components/magicui/): `border-beam.tsx`, `animated-gradient-text.tsx`,
+`shimmer-button.tsx` e **`blur-fade.tsx`**. As animações (`border-beam`, `gradient`,
 `shimmer-slide`, `spin-around`) estão em `theme.extend.keyframes`/`animation` do
 [tailwind.config.ts](tailwind.config.ts) (**Tailwind v3**). Obs.: o `shimmer-button` usa
 `animate-shimmer-slide` (corrigido do `animate-shimmer` do arquivo original, que não batia com a
-config). **Aplicados:** `ShimmerButton` no **CTA do banner** (`HeroTemplateSlide`), `BorderBeam` no
-**1º card** das "Ofertas Relâmpago" (`featured={i===0}`) e `AnimatedGradientText` no **título "Ofertas
-Relâmpago"**. Ainda não aplicados nos demais botões/títulos.
+config). O **`BlurFade`** é a exceção: como o `sitederoupa` usa **framer-motion** (que este projeto
+evita de propósito), ele foi portado para **CSS puro** (usa o keyframe `vw-blur-fade` do
+[globals.css](src/app/globals.css); ver a seção de Animações acima) — mesmo efeito visual, sem a
+dependência. **Aplicados:** `ShimmerButton` no **CTA do banner** (`HeroTemplateSlide`), `BorderBeam`
+no **1º card** das "Ofertas Relâmpago" (`featured={i===0}`), `AnimatedGradientText` no **título
+"Ofertas Relâmpago"** e `BlurFade` no **reveal por seção ao rolar** + cards promo. Ainda **não**
+portados (a referência tem, aqui não): `NumberTicker` (contadores animados) e `Marquee` (faixa
+rolando).
 
 ### Estilo "e-commerce" dos cards + Ofertas Relâmpago (referência `sitederoupa`)
 
@@ -332,7 +367,7 @@ visual de e-commerce moderno (inspirado no site de referência): card branco com
 grátis"** azul, **categoria** (eyebrow), nome, **preço em laranja** + `de` riscado + **selo `-X%`
 laranja** ao lado, **parcelamento estimado**, **5 estrelas douradas (4.9)** e botão **"Adicionar à
 sacola"** que aparece **no hover** (o card inteiro abre o detalhe). Tem **animação de entrada**
-(fade-up ao aparecer na tela via `IntersectionObserver` + `.vw-fade-in-up`, escalonada por card —
+(blur-fade ao aparecer na tela via `IntersectionObserver` + `.vw-blur-fade`, escalonada por card —
 substitui o `BlurFade`/framer-motion da referência) e **zoom da foto no hover**. A **paleta é fixa**
 (constante `EC` no arquivo: azul `#0062B8`, laranja `#FF6B00`, vermelho `#E63946`, dourado, borda
 `#DCE3EC`) — de propósito, para ficar igual à referência em **toda** loja, ignorando o tema por loja
