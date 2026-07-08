@@ -40,6 +40,8 @@ type HeroCropSession = {
   current: number;
   layout: HeroLayout;
   photoSide: HeroSplitPhotoSide;
+  /** Quando setado, o recorte SUBSTITUI a foto do banner nesse índice (em vez de adicionar). */
+  replaceIndex?: number;
 };
 
 /** Prévia fiel de um banner (usa as cores da loja via CSS vars do wrapper). */
@@ -65,7 +67,7 @@ function SlidePreview({
     return (
       <div className="relative h-40 w-full overflow-hidden rounded-lg bg-slate-200">
         {slide.url ? (
-          <Image src={slide.url} alt="" fill className="object-cover" sizes="480px" />
+          <Image src={slide.url} alt="" fill className="vw-ken-burns object-cover" sizes="480px" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-2xl opacity-40">
             🖼️
@@ -99,7 +101,7 @@ function SlidePreview({
   }
 
   const text = (
-    <div className="flex flex-col justify-center gap-1">
+    <div className="vw-reveal-stagger flex flex-col justify-center gap-1">
       {badge && (
         <span className="text-[9px] font-semibold uppercase tracking-widest text-white/85 line-clamp-1">
           {badge}
@@ -144,7 +146,7 @@ function SlidePreview({
   const photo = (
     <div className="relative h-full w-full overflow-hidden bg-slate-200">
       {slide.url ? (
-        <Image src={slide.url} alt="" fill className="object-cover" sizes="480px" />
+        <Image src={slide.url} alt="" fill className="vw-ken-burns object-cover" sizes="480px" />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-2xl opacity-40">
           🖼️
@@ -207,6 +209,9 @@ export default function BannerEditPage() {
   const [nextLayout, setNextLayout] = useState<HeroLayout>("overlay");
   const [nextSide, setNextSide] = useState<HeroSplitPhotoSide>("right");
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  // Trocar a foto de um banner existente (input dedicado + índice alvo).
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const replaceIndexRef = useRef<number | null>(null);
   // Banner recém-adicionado: rola até ele e destaca para o lojista configurar.
   const [highlightUrl, setHighlightUrl] = useState<string | null>(null);
   const highlightRef = useRef<HTMLDivElement | null>(null);
@@ -343,8 +348,51 @@ export default function BannerEditPage() {
   async function handleHeroCropDone(file: File) {
     const layout = heroCrop?.layout ?? "overlay";
     const photoSide = heroCrop?.photoSide ?? "right";
+    const replaceIndex = heroCrop?.replaceIndex;
     advanceHeroCrop();
-    await uploadOneHeroPhoto(file, layout, photoSide);
+    if (replaceIndex != null) {
+      await uploadReplaceHeroPhoto(file, replaceIndex);
+    } else {
+      await uploadOneHeroPhoto(file, layout, photoSide);
+    }
+  }
+
+  /** Abre o seletor para TROCAR a foto principal do banner `i`. */
+  function startReplacePhoto(i: number) {
+    replaceIndexRef.current = i;
+    replaceInputRef.current?.click();
+  }
+
+  /** Sobe a nova foto e substitui a `url` do banner `index` (mantém texto/estilo). */
+  async function uploadReplaceHeroPhoto(file: File, index: number) {
+    if (!storeId) return;
+    setHeroUploading(true);
+    try {
+      const supabase = createClient();
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `${storeId}/storefront-hero-${Date.now()}-${Math.round(
+        Math.random() * 1e6
+      )}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("product-images")
+        .upload(fileName, file);
+      if (upErr) {
+        showToast("Erro ao enviar foto: " + upErr.message, "error");
+        return;
+      }
+      const { data } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(fileName);
+      setSf((s) => ({
+        ...s,
+        heroSlides: s.heroSlides.map((sl, j) =>
+          j === index ? { ...sl, url: data.publicUrl } : sl
+        ),
+      }));
+      showToast("Foto trocada!");
+    } finally {
+      setHeroUploading(false);
+    }
   }
 
   /** Sobe uma foto EXTRA (Foto 2/3) de um estilo multi-foto (strips/duo). */
@@ -516,6 +564,29 @@ export default function BannerEditPage() {
           e.target.value = "";
         }}
       />
+      {/* Input dedicado a TROCAR a foto de um banner existente (recorta pelo formato dele). */}
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          const idx = replaceIndexRef.current;
+          if (f && idx != null) {
+            const sl = sf.heroSlides[idx];
+            setHeroCrop({
+              files: [f],
+              current: 0,
+              layout: sl?.layout ?? "overlay",
+              photoSide: sl?.photoSide ?? "right",
+              replaceIndex: idx,
+            });
+          }
+          e.target.value = "";
+        }}
+      />
 
       {/* Cabeçalho */}
       <div className="mb-5 flex items-center justify-between gap-3">
@@ -672,6 +743,16 @@ export default function BannerEditPage() {
 
               {/* Prévia */}
               <SlidePreview slide={slide} fallback={fallback} primary={sf.themePrimary} />
+
+              {/* Trocar a foto principal deste banner (recorta pelo formato dele) */}
+              <button
+                type="button"
+                onClick={() => startReplacePhoto(i)}
+                disabled={heroUploading}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                🖼️ {heroUploading ? "Enviando…" : "Trocar foto"}
+              </button>
 
               {/* Só a foto (sem texto): para fotos que já têm os dizeres embutidos */}
               <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-800/40">

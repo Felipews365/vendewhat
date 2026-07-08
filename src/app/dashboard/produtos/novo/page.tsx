@@ -86,7 +86,7 @@ const INITIAL_FORM = {
   imageObjectPosition: "center",
   unitType: DEFAULT_UNIT_TYPE,
   barcode: "",
-  cardRatio: "",
+  cardRatio: "3:4",
   packHeight: "",
   packWidth: "",
   packLength: "",
@@ -682,9 +682,9 @@ export default function NovoProdutoPage() {
             <div className="mt-5 grid grid-cols-2 gap-3">
               {(
                 [
-                  { v: "1:1", label: "Quadrado", ratio: "aspect-square", hint: "1:1" },
-                  { v: "3:4", label: "Retrato", ratio: "aspect-[3/4]", hint: "3:4" },
-                ] as { v: string; label: string; ratio: string; hint: string }[]
+                  { v: "3:4", label: "Retrato", ratio: "aspect-[3/4]", hint: "3:4", recommended: true },
+                  { v: "1:1", label: "Quadrado", ratio: "aspect-square", hint: "1:1", recommended: false },
+                ] as { v: string; label: string; ratio: string; hint: string; recommended: boolean }[]
               ).map((opt) => (
                 <button
                   key={opt.v}
@@ -693,8 +693,17 @@ export default function NovoProdutoPage() {
                     setForm((f) => ({ ...f, cardRatio: opt.v }));
                     setAskRatio(false);
                   }}
-                  className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 p-4 transition-colors hover:border-landing-primary hover:bg-teal-50 dark:border-slate-700 dark:hover:bg-teal-900/20"
+                  className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-colors hover:bg-teal-50 dark:hover:bg-teal-900/20 ${
+                    opt.recommended
+                      ? "border-landing-primary bg-teal-50/50 dark:bg-teal-900/10"
+                      : "border-slate-200 hover:border-landing-primary dark:border-slate-700"
+                  }`}
                 >
+                  {opt.recommended && (
+                    <span className="absolute -top-2 right-2 rounded-full bg-landing-primary px-2 py-0.5 text-[10px] font-bold text-white">
+                      Recomendado
+                    </span>
+                  )}
                   <span
                     className={`${opt.ratio} w-16 rounded-lg bg-slate-200 dark:bg-slate-700`}
                   />
@@ -861,6 +870,7 @@ export default function NovoProdutoPage() {
                   onItemsChange={setPhotos}
                   label="Fotos do produto"
                   variant="editor"
+                  photoAspect={form.cardRatio === "1:1" ? "1:1" : "3:4"}
                 />
                 <div>
                   <label

@@ -22,6 +22,10 @@ import {
   type HeroSlideContent,
 } from "@/components/storefront/HeroTemplateSlide";
 import { StorefrontRichFooter } from "@/components/storefront/StorefrontRichFooter";
+import { BorderBeam } from "@/components/magicui/border-beam";
+import { AnimatedGradientText } from "@/components/magicui/animated-gradient-text";
+import { ShimmerButton } from "@/components/magicui/shimmer-button";
+import { BlurFade } from "@/components/magicui/blur-fade";
 import { BlockRenderer } from "@/components/storefront/blocks";
 import type { BlockProduct } from "@/components/storefront/blocks";
 import { swatchNeedsStrongBorder } from "@/lib/colorSwatch";
@@ -224,7 +228,9 @@ function HeroSlideshowLayer({
             src={url}
             alt=""
             fill
-            className="object-cover object-center"
+            className={`object-cover object-center ${
+              i === safeIdx ? "vw-ken-burns" : ""
+            }`}
             sizes="100vw"
             priority={i === 0}
           />
@@ -382,7 +388,7 @@ function HeroBannerBlock({
     </nav>
   );
 
-  // TODOS os banners no MESMO modelo: card contido (max-w-6xl), arredondado, com
+  // TODOS os banners no MESMO modelo: card contido (max-w-[1260px]), arredondado, com
   // margem (não cola nas bordas) e proporção fixa (cabe na tela sem rolar).
   // Bolinhas por dentro. Os cards promocionais ficam FORA, abaixo, na mesma
   // largura (seção logo após o <HeroBannerBlock/> na página).
@@ -402,7 +408,8 @@ function HeroBannerBlock({
     // (para fotos que já vêm com os dizeres embutidos).
     inner = <HeroSlideshowLayer images={[slide.url]} activeIndex={0} />;
   } else if (template !== "overlay" && template !== "split") {
-    // strips/duo/gráficos: o HeroTemplateSlide já preenche (absolute inset-0).
+    // strips/duo/gráficos: layout completo (texto + fotos lado a lado) também no
+    // celular, igual à referência — o HeroTemplateSlide preenche (absolute inset-0).
     inner = (
       <HeroTemplateSlide
         slide={slide}
@@ -419,7 +426,7 @@ function HeroBannerBlock({
     );
     const text = (
       <div
-        className="flex h-1/2 w-full flex-col justify-center px-6 py-4 sm:px-10 md:h-full md:w-1/2 md:py-12"
+        className="vw-reveal-stagger flex h-1/2 w-full flex-col justify-center px-6 py-4 sm:px-10 md:h-full md:w-1/2 md:py-12"
         style={{ backgroundColor: "var(--store-secondary)" }}
       >
         {textContent}
@@ -446,7 +453,7 @@ function HeroBannerBlock({
       <>
         <HeroSlideshowLayer images={[slide.url]} activeIndex={0} />
         <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-r from-black/40 via-black/20 to-transparent" />
-        <div className="absolute inset-0 z-20 flex max-w-3xl flex-col justify-end px-6 pb-8 sm:px-10 md:px-14 md:pb-12">
+        <div className="vw-reveal-stagger absolute inset-0 z-20 flex max-w-3xl flex-col justify-end px-6 pb-8 sm:px-10 md:px-14 md:pb-12">
           {textContent}
         </div>
       </>
@@ -454,9 +461,19 @@ function HeroBannerBlock({
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 pt-3 sm:pt-4">
-      <section className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl shadow-sm sm:aspect-[16/9] sm:rounded-3xl lg:aspect-[5/2]">
-        {inner}
+    <div className="mx-auto w-full max-w-[1260px] px-4 pt-3 sm:pt-4">
+      {/* Altura FLUIDA (técnica da referência): acompanha a largura (55vw),
+          nunca passa de 460px e no celular tem mínimo de 420px pra o layout
+          completo (texto + fotos) caber sem cortar. */}
+      <section
+        style={{ height: "clamp(240px, 55vw, 460px)" }}
+        className="relative min-h-[420px] w-full overflow-hidden rounded-2xl shadow-sm sm:min-h-0 sm:rounded-3xl"
+      >
+        {/* key = índice do slide: ao trocar, o React remonta e a animação
+            (vw-banner-in) toca de novo, dando a transição do carrossel. */}
+        <div key={safeIdx} className="vw-banner-in absolute inset-0">
+          {inner}
+        </div>
         {arrows}
         {internalDots}
       </section>
@@ -693,6 +710,7 @@ function ProductCatalogCard({
   freeShippingLabel,
   showRatings,
   revealDelayMs = 0,
+  featured = false,
   onOpen,
 }: {
   product: CatalogProduct;
@@ -706,6 +724,8 @@ function ProductCatalogCard({
   showRatings: boolean;
   /** Atraso da animação de entrada (efeito escalonado na grade). */
   revealDelayMs?: number;
+  /** Card em destaque: ganha o feixe de luz na borda (BorderBeam). */
+  featured?: boolean;
   onOpen: (product: CatalogProduct) => void;
 }) {
   const imgSrc = product.images[0] ?? product.image;
@@ -763,15 +783,23 @@ function ProductCatalogCard({
     <div
       ref={rootRef}
       className={`group relative flex h-full cursor-pointer flex-col ${
-        shown ? "vw-fade-in-up" : "opacity-0"
+        shown ? "vw-blur-fade" : "opacity-0"
       }`}
       style={{ animationDelay: `${revealDelayMs}ms` }}
       onClick={() => onOpen(product)}
     >
       <div
-        className="flex h-full flex-col overflow-hidden rounded-xl border bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#A1CCF7] hover:shadow-[0_4px_12px_rgba(0,40,100,0.14)]"
+        className="relative flex h-full flex-col overflow-hidden rounded-xl border bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#A1CCF7] hover:shadow-[0_4px_12px_rgba(0,40,100,0.14)]"
         style={{ borderColor: EC.border }}
       >
+        {featured && (
+          <BorderBeam
+            size={150}
+            duration={12}
+            colorFrom={EC.primary}
+            colorTo={EC.accent}
+          />
+        )}
         {/* Foto */}
         <div
           className={`${
@@ -1568,42 +1596,118 @@ function scrollToCatalogo() {
   });
 }
 
+/** Emoji para a categoria (chute por palavra-chave, estilo da referência). */
+function categoryEmoji(label: string): string {
+  const l = label.toLowerCase();
+  const map: [RegExp, string][] = [
+    [/camiset|blusa|regata|t-?shirt|polo|top\b/, "👕"],
+    [/cal[çc]a|jeans|legging/, "👖"],
+    [/short|bermuda/, "🩳"],
+    [/vestido/, "👗"],
+    [/saia/, "👚"],
+    [/moletom|casaco|jaqueta|blazer|su[ée]ter|inverno|frio/, "🧥"],
+    [/t[êe]nis|sapat|cal[çc]ad|sand[áa]lia|bota|chinelo/, "👟"],
+    [/bolsa|mochila|carteira|acess[óo]ri/, "👜"],
+    [/[óo]culos/, "🕶️"],
+    [/rel[óo]gio/, "⌚"],
+    [/eletr[ôo]nic|celular|fone|smart|tech/, "📱"],
+    [/biqu[íi]ni|praia|mai[ôo]|sunga/, "👙"],
+    [/infantil|beb[êe]|kids|crian[çc]/, "🧸"],
+    [/joia|bijou|colar|brinco|an[eé]l|pulseira/, "💍"],
+    [/perfume|beleza|cosm[ée]tic|maquiagem/, "💄"],
+  ];
+  for (const [re, emoji] of map) if (re.test(l)) return emoji;
+  return "🛍️";
+}
+
+/** Parse "#rgb"/"#rrggbb" → [r,g,b] ou null (para derivar a cor da barra). */
+function parseHexRgb(v: string): [number, number, number] | null {
+  const m = v.trim().replace("#", "");
+  if (/^[0-9a-fA-F]{3}$/.test(m)) {
+    return [
+      parseInt(m[0] + m[0], 16),
+      parseInt(m[1] + m[1], 16),
+      parseInt(m[2] + m[2], 16),
+    ];
+  }
+  if (/^[0-9a-fA-F]{6}$/.test(m)) {
+    return [
+      parseInt(m.slice(0, 2), 16),
+      parseInt(m.slice(2, 4), 16),
+      parseInt(m.slice(4, 6), 16),
+    ];
+  }
+  return null;
+}
+
+/** Clareia uma cor rumo ao branco (amount 0..1). */
+function lightenRgb([r, g, b]: [number, number, number], amount: number): string {
+  const f = (c: number) => Math.round(c + (255 - c) * amount);
+  return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+}
+
+/** Cor escura? (brilho percebido). */
+function isDarkRgb([r, g, b]: [number, number, number]): boolean {
+  return 0.299 * r + 0.587 * g + 0.114 * b < 140;
+}
+
 /** Menu de categorias no topo (barra horizontal, rola no celular). */
 function CategoryNavBar({
   items,
   selectedLabel,
   onSelect,
+  barBg,
+  barDark,
+  promoActive,
+  onSelectPromo,
 }: {
   items: StorefrontCategoryItem[];
   selectedLabel: string | null;
   onSelect: (label: string | null) => void;
+  /** Cor de fundo da barra (derivada do topo, mais clara). */
+  barBg?: string;
+  /** Fundo escuro? define a cor do texto dos itens (e o dourado no ativo). */
+  barDark: boolean;
+  /** "🔥 Promoções" selecionado. */
+  promoActive: boolean;
+  /** Alterna o filtro de promoções. */
+  onSelectPromo: () => void;
 }) {
-  const itemClass = (active: boolean) =>
-    `shrink-0 whitespace-nowrap px-3 py-3 text-sm font-medium border-b-2 transition-colors ${
-      active
-        ? "font-semibold"
-        : "border-transparent text-stone-600 hover:text-stone-900"
-    }`;
+  const [allOpen, setAllOpen] = useState(false);
+  // Barra = cor do topo (mais clara). Ativo em DOURADO no fundo escuro (igual à
+  // referência) ou na cor primária no fundo claro; inativos seguem o contraste.
+  const base =
+    "flex items-center gap-1.5 shrink-0 whitespace-nowrap px-4 py-3 text-xs sm:text-[13px] font-medium border-b-2 transition-colors";
+  const inactive = barDark
+    ? "border-transparent text-white/75 hover:text-white hover:border-white/40"
+    : "border-transparent text-stone-600 hover:text-stone-900 hover:border-stone-300";
+  const activeStyle: React.CSSProperties = barDark
+    ? { color: "#FFD600", borderColor: "#FFD600" }
+    : { color: "var(--store-primary)", borderColor: "var(--store-primary)" };
+  const novidadesActive = selectedLabel == null && !promoActive;
   return (
     <nav
-      className="w-full bg-white border-b border-stone-200/80"
+      className="w-full"
+      style={{
+        backgroundColor: barBg ?? "var(--store-secondary)",
+        borderTop: barDark
+          ? "1px solid rgba(255,255,255,0.08)"
+          : "1px solid rgba(0,0,0,0.06)",
+      }}
       aria-label="Categorias"
     >
-      <div className="max-w-6xl mx-auto px-2 sm:px-4 flex items-stretch gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="max-w-[1260px] mx-auto px-3 sm:px-6 flex items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button
           type="button"
           onClick={() => onSelect(null)}
-          className={itemClass(selectedLabel == null)}
-          style={
-            selectedLabel == null
-              ? { color: "var(--store-primary)", borderColor: "var(--store-primary)" }
-              : undefined
-          }
+          className={`${base} ${novidadesActive ? "" : inactive}`}
+          style={novidadesActive ? activeStyle : undefined}
         >
-          ✨ Novidades
+          <span aria-hidden>✨</span> Novidades
         </button>
         {items.map((it) => {
           const active =
+            !promoActive &&
             selectedLabel != null &&
             it.label.localeCompare(selectedLabel, "pt", {
               sensitivity: "base",
@@ -1613,20 +1717,78 @@ function CategoryNavBar({
               key={it.label}
               type="button"
               onClick={() => onSelect(it.label)}
-              className={itemClass(active)}
-              style={
-                active
-                  ? {
-                      color: "var(--store-primary)",
-                      borderColor: "var(--store-primary)",
-                    }
-                  : undefined
-              }
+              className={`${base} ${active ? "" : inactive}`}
+              style={active ? activeStyle : undefined}
             >
-              {it.label}
+              <span aria-hidden>{categoryEmoji(it.label)}</span> {it.label}
             </button>
           );
         })}
+
+        {/* Ver todas ▾ — menu com todas as categorias (acesso rápido) */}
+        {items.length > 0 && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setAllOpen((v) => !v)}
+              className={`${base} ${inactive}`}
+              aria-haspopup="menu"
+              aria-expanded={allOpen}
+            >
+              Ver todas <span aria-hidden>▾</span>
+            </button>
+            {allOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setAllOpen(false)}
+                  aria-hidden
+                />
+                <div
+                  className="absolute left-0 top-full z-30 mt-1 max-h-72 w-56 overflow-y-auto rounded-xl border border-black/10 bg-white py-2 shadow-xl"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelect(null);
+                      setAllOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-stone-700 hover:bg-stone-100"
+                    role="menuitem"
+                  >
+                    <span aria-hidden>✨</span> Novidades
+                  </button>
+                  {items.map((it) => (
+                    <button
+                      key={it.label}
+                      type="button"
+                      onClick={() => {
+                        onSelect(it.label);
+                        setAllOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-stone-700 hover:bg-stone-100"
+                      role="menuitem"
+                    >
+                      <span aria-hidden>{categoryEmoji(it.label)}</span>{" "}
+                      {it.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* 🔥 Promoções — sempre por último */}
+        <button
+          type="button"
+          onClick={onSelectPromo}
+          className={`${base} ${promoActive ? "" : inactive}`}
+          style={promoActive ? activeStyle : undefined}
+        >
+          <span aria-hidden>🔥</span> Promoções
+        </button>
       </div>
     </nav>
   );
@@ -1656,7 +1818,7 @@ function StorefrontCategoriesStrip({
       className="w-full bg-white/90 border-b border-stone-200/70 pt-3 pb-2 sm:pt-4 sm:pb-2.5 scroll-mt-28"
       aria-label="Categorias"
     >
-      <div className="max-w-6xl mx-auto px-4">
+      <div className="max-w-[1260px] mx-auto px-4">
         <h2 className="text-base sm:text-lg font-semibold text-stone-800 tracking-tight mb-1">
           Categorias
         </h2>
@@ -1796,6 +1958,8 @@ export function LojaClient({
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
   /** Filtro da faixa de categorias (null = todos) */
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  /** Filtro "🔥 Promoções" da barra do topo (só produtos em promoção). */
+  const [promoOnly, setPromoOnly] = useState(false);
 
   /** Registra uma visita ao abrir a loja (uma vez por carregamento). */
   const visitPinged = useRef(false);
@@ -1834,6 +1998,7 @@ export function LojaClient({
         );
       });
     }
+    if (promoOnly) list = list.filter((p) => p.isPromotion);
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter(
@@ -1843,7 +2008,7 @@ export function LojaClient({
         (p.category?.toLowerCase().includes(q) ?? false) ||
         p.tags.some((t) => t.toLowerCase().includes(q))
     );
-  }, [products, search, categoryFilter, storefront.categories]);
+  }, [products, search, categoryFilter, promoOnly, storefront.categories]);
 
   const promoProducts = useMemo(
     () => filteredProducts.filter((p) => p.isPromotion),
@@ -2319,11 +2484,18 @@ export function LojaClient({
   const themeStyle = {
     "--store-primary": storefront.themePrimary,
     "--store-secondary": storefront.themeSecondary,
+    backgroundColor: storefront.pageBackground,
   } as React.CSSProperties;
+
+  // Barra de categorias = cor do topo, porém MAIS CLARA (ex.: topo escuro →
+  // barra um tom acima). Texto claro/escuro conforme o brilho do fundo.
+  const headerRgb = parseHexRgb(storefront.headerBackground);
+  const categoryBarBg = headerRgb ? lightenRgb(headerRgb, 0.12) : undefined;
+  const categoryBarDark = headerRgb ? isDarkRgb(headerRgb) : true;
 
   return (
     <div
-      className="min-h-screen bg-white pb-28 md:pb-8 text-stone-800"
+      className="min-h-screen pb-28 md:pb-8 text-stone-800"
       style={themeStyle}
     >
       {/* Topo — logo, bullets, busca (estilo vitrine) */}
@@ -2331,7 +2503,7 @@ export function LojaClient({
         className="z-40 border-b border-stone-200/80 shadow-[0_1px_0_rgba(92,46,54,0.04)] backdrop-blur-md md:sticky md:top-0"
         style={{ backgroundColor: storefront.headerBackground }}
       >
-        <div className="max-w-6xl mx-auto px-4 py-3 md:py-4">
+        <div className="max-w-[1260px] mx-auto px-4 py-3 md:py-4">
           <div className="flex flex-col gap-3 lg:gap-4">
             {/* Linha superior: logo | atalhos (mobile) — no desktop: logo | busca + atalhos na mesma linha */}
             <div className="flex flex-col gap-3 min-w-0 lg:flex-row lg:items-center lg:gap-6">
@@ -2539,90 +2711,106 @@ export function LojaClient({
         <CategoryNavBar
           items={categoryStripItems}
           selectedLabel={categoryFilter}
-          onSelect={setCategoryFilter}
+          onSelect={(label) => {
+            setCategoryFilter(label);
+            setPromoOnly(false);
+          }}
+          barBg={categoryBarBg}
+          barDark={categoryBarDark}
+          promoActive={promoOnly}
+          onSelectPromo={() => {
+            setPromoOnly((v) => !v);
+            setCategoryFilter(null);
+            scrollToCatalogo();
+          }}
         />
       )}
 
       {/* Banner: um carrossel só; cada foto tem seu formato E seu texto.
-          Texto vazio na foto → usa o texto geral (fallback). O fundo cinza fica
-          numa FAIXA só atrás do banner (os cards promocionais ficam fora dela). */}
+          Texto vazio na foto → usa o texto geral (fallback). A página toda tem o
+          fundo cinza (pageBackground), que separa os cards brancos. */}
       {storefront.heroSlides.length > 0 && (
-        <div
-          className="w-full pb-4"
-          style={{ backgroundColor: storefront.pageBackground }}
-        >
-          <HeroBannerBlock
-            slides={storefront.heroSlides}
-            themePrimary={storefront.themePrimary}
-            fallback={{
-              badge: storefront.heroSubtitle,
-              title: heroDisplayTitle,
-              subtitle: store.description ?? "",
-              couponCode: storefront.heroCouponCode,
-              ctaLabel: storefront.heroCtaLabel,
-              ctaHref: storefront.heroCtaHref,
-            }}
-            onCta={handleHeroCta}
-          />
-        </div>
+        <HeroBannerBlock
+          slides={storefront.heroSlides}
+          themePrimary={storefront.themePrimary}
+          fallback={{
+            badge: storefront.heroSubtitle,
+            title: heroDisplayTitle,
+            subtitle: store.description ?? "",
+            couponCode: storefront.heroCouponCode,
+            ctaLabel: storefront.heroCtaLabel,
+            ctaHref: storefront.heroCtaHref,
+          }}
+          onCta={handleHeroCta}
+        />
       )}
 
-      {/* Cards promocionais coloridos — FORA do banner, faixa própria abaixo,
-          na mesma largura. Responsivos: empilham no celular (1 por linha),
-          3 colunas no desktop (igual à referência). */}
+      {/* Cards promocionais coloridos — FORA do banner, faixa própria abaixo, na
+          mesma largura. 3 colunas em TODAS as telas (igual à referência). */}
       {storefront.promoCards.length > 0 && (
-        <section className="max-w-6xl mx-auto w-full px-4 mt-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        <section className="max-w-[1260px] mx-auto w-full px-4 mt-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
             {storefront.promoCards.map((c, i) => (
+              <BlurFade key={i} delay={i * 0.08} yOffset={20} className="h-full">
               <a
-                key={i}
                 href={c.href || "#catalogo"}
                 onClick={(e) => handleHeroCta(e, c.href || "#catalogo")}
-                className="group relative flex flex-col justify-end p-4 sm:p-5 rounded-2xl overflow-hidden min-h-[110px] sm:min-h-[120px] transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+                className="group relative flex h-full flex-col justify-end p-3 sm:p-5 rounded-2xl overflow-hidden min-h-[90px] sm:min-h-[110px] transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
                 style={{
                   backgroundImage: `linear-gradient(135deg, ${c.from}, ${c.to})`,
                 }}
               >
+                <BorderBeam
+                  colorFrom="#ffffff"
+                  colorTo="rgba(255,255,255,0.25)"
+                  duration={8}
+                />
                 {/* brilho radial no canto superior */}
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.15)_0%,transparent_50%)]" />
                 <div className="relative z-10">
                   {c.eyebrow && (
-                    <p className="text-[0.65rem] sm:text-[0.7rem] font-bold uppercase tracking-widest text-white/75 mb-0.5">
+                    <p className="text-[0.55rem] sm:text-[0.65rem] font-bold uppercase tracking-widest text-white/75 mb-0.5">
                       {c.eyebrow}
                     </p>
                   )}
-                  <h3 className="text-base sm:text-lg font-bold text-white leading-snug">
+                  <h3 className="text-xs sm:text-base font-bold text-white leading-snug">
                     {c.title}
                     {c.subtitle && (
                       <>
                         <br />
-                        <span className="text-white/90 font-medium text-sm">
+                        <span className="text-white/90 font-medium text-[0.65rem] sm:text-sm">
                           {c.subtitle}
                         </span>
                       </>
                     )}
                   </h3>
                   {c.ctaLabel && (
-                    <span className="text-xs sm:text-sm text-white/70 mt-1 flex items-center gap-1 group-hover:gap-2 transition-all">
+                    <span className="text-[0.6rem] sm:text-xs text-white/70 mt-1 flex items-center gap-1 group-hover:gap-2 transition-all">
                       {c.ctaLabel} <span aria-hidden>→</span>
                     </span>
                   )}
                 </div>
               </a>
+              </BlurFade>
             ))}
           </div>
         </section>
       )}
 
       {categoryStripItems.length > 0 && (
+        <BlurFade inView delay={0.1} className="w-full">
         <StorefrontCategoriesStrip
           items={categoryStripItems}
           selectedLabel={categoryFilter}
-          onSelectCategory={setCategoryFilter}
+          onSelectCategory={(label) => {
+            setCategoryFilter(label);
+            setPromoOnly(false);
+          }}
         />
+        </BlurFade>
       )}
 
-      <main className="max-w-6xl mx-auto px-4">
+      <main className="max-w-[1260px] mx-auto px-4">
         {products.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-lg border border-stone-100 shadow-sm my-10">
             <span className="text-5xl opacity-40">📦</span>
@@ -2678,7 +2866,14 @@ export function LojaClient({
                     <span aria-hidden style={{ color: EC.accent }}>
                       ⚡
                     </span>{" "}
-                    Ofertas Relâmpago
+                    <AnimatedGradientText
+                      colorFrom={EC.accent}
+                      colorMid={EC.primary}
+                      colorTo={EC.accent}
+                      speed={5}
+                    >
+                      Ofertas Relâmpago
+                    </AnimatedGradientText>
                   </h3>
                   {storefront.flashSaleEndsAt && (
                     <FlashSaleCountdown endsAt={storefront.flashSaleEndsAt} />
@@ -2694,6 +2889,7 @@ export function LojaClient({
                       freeShippingLabel={storefront.cardFreeShipping}
                       showRatings={storefront.cardShowRatings}
                       revealDelayMs={Math.min(i, 8) * 50}
+                      featured={i === 0}
                       onOpen={setSelectedProduct}
                     />
                   ))}
@@ -2714,7 +2910,14 @@ export function LojaClient({
                     className="flex flex-1 items-center gap-3 text-xl font-bold tracking-tight after:h-px after:flex-1 after:bg-[#DCE3EC] after:content-['']"
                     style={{ color: EC.foreground }}
                   >
-                    Mais Produtos
+                    <AnimatedGradientText
+                      colorFrom={EC.foreground}
+                      colorMid={EC.primary}
+                      colorTo={EC.foreground}
+                      speed={6}
+                    >
+                      Mais Produtos
+                    </AnimatedGradientText>
                   </h3>
                   <label className="inline-flex items-center gap-2 text-sm text-stone-600">
                     <span className="text-base opacity-70" aria-hidden>
@@ -2763,13 +2966,16 @@ export function LojaClient({
         )}
       </main>
 
-      {/* Blocos de conteúdo do builder (Destaques etc.), abaixo do catálogo. */}
-      {storefront.contentBlocks.map((block) => (
-        <BlockRenderer key={block.id} block={block} products={blockProducts} />
+      {/* Blocos de conteúdo do builder (Destaques etc.), abaixo do catálogo.
+          Cada bloco revela com blur-fade ao rolar (padrão do projeto de referência). */}
+      {storefront.contentBlocks.map((block, i) => (
+        <BlurFade key={block.id} inView delay={i * 0.05}>
+          <BlockRenderer block={block} products={blockProducts} />
+        </BlurFade>
       ))}
 
       <footer className="bg-stone-100/90 border-t border-stone-200/80 mt-4">
-        <div className="max-w-6xl mx-auto px-4 py-10 md:py-12 grid grid-cols-1 sm:grid-cols-3 gap-8 text-sm">
+        <div className="max-w-[1260px] mx-auto px-4 py-10 md:py-12 grid grid-cols-1 sm:grid-cols-3 gap-8 text-sm">
           <div>
             <h4 className="font-semibold text-boutique-wine mb-3 font-serif">
               Institucional
@@ -2895,27 +3101,88 @@ export function LojaClient({
         </div>
       </footer>
 
-      {/* Carrinho flutuante (mobile) */}
-      {totalItems > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/98 backdrop-blur border-t border-boutique-muted z-30 md:hidden flex items-center justify-between gap-3 shadow-[0_-8px_30px_rgba(92,46,54,0.12)]">
-          <div>
-            <p className="text-[11px] text-stone-500 uppercase tracking-wide">
-              {totalItems} itens
-            </p>
-            <p className="font-semibold text-boutique-wine text-lg">
-              R$ {subtotal.toFixed(2).replace(".", ",")}
-            </p>
-          </div>
+      {/* Barra de navegação no rodapé (celular) — Início · Conta · Carrinho · Menu */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-4 border-t border-stone-200 bg-white/98 backdrop-blur shadow-[0_-6px_24px_rgba(0,0,0,0.08)] md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        aria-label="Navegação da loja"
+      >
+        <button
+          type="button"
+          onClick={goToStoreHome}
+          className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 active:bg-stone-100"
+        >
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M4 10.5 12 4l8 6.5" />
+            <path d="M6 9.5V20h4v-5h4v5h4V9.5" />
+          </svg>
+          <span className="text-[10px] font-medium">Início</span>
+        </button>
+
+        {contactHref ? (
+          <a
+            href={contactHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 active:bg-stone-100"
+          >
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="12" cy="8" r="3.4" />
+              <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+            </svg>
+            <span className="text-[10px] font-medium">Conta</span>
+          </a>
+        ) : (
           <button
             type="button"
-            onClick={() => setCartOpen(true)}
-            className="flex-1 max-w-[200px] py-3 rounded-full text-white text-sm font-semibold uppercase tracking-wider shadow-md"
-            style={{ backgroundColor: "var(--store-secondary)" }}
+            onClick={goToStoreHome}
+            className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 active:bg-stone-100"
           >
-            Carrinho
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="12" cy="8" r="3.4" />
+              <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+            </svg>
+            <span className="text-[10px] font-medium">Conta</span>
           </button>
-        </div>
-      )}
+        )}
+
+        <button
+          type="button"
+          onClick={() => setCartOpen(true)}
+          className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 active:bg-stone-100"
+        >
+          <span className="relative">
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M6.5 8h11l-1 11.5a1 1 0 0 1-1 .9h-7a1 1 0 0 1-1-.9L6.5 8Z" />
+              <path d="M9.2 8V7a2.8 2.8 0 0 1 5.6 0v1" />
+            </svg>
+            {totalItems > 0 && (
+              <span
+                className="absolute -top-1.5 -right-2 flex h-[1.05rem] min-w-[1.05rem] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                style={{ backgroundColor: "var(--store-primary)" }}
+              >
+                {totalItems}
+              </span>
+            )}
+          </span>
+          <span className="text-[10px] font-medium">Carrinho</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            document
+              .getElementById("catalogo")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+          className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 active:bg-stone-100"
+        >
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+          <span className="text-[10px] font-medium">Menu</span>
+        </button>
+      </nav>
 
       {/* Detalhe do produto */}
       {selectedProduct && (
@@ -3326,8 +3593,7 @@ export function LojaClient({
             </div>
             {items.length > 0 && orderWhatsAppReady && (
               <div className="p-4 border-t border-boutique-muted/50 bg-boutique-cream/60">
-                <button
-                  type="button"
+                <ShimmerButton
                   onClick={async () => {
                     const snap = await persistOrderSnapshot();
                     const href = whatsAppLink(
@@ -3354,13 +3620,17 @@ export function LojaClient({
                     }
                   }}
                   disabled={!checkoutReady}
-                  className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-whatsapp text-white font-semibold hover:bg-whatsapp-dark transition-colors disabled:opacity-45 disabled:pointer-events-none"
+                  background="radial-gradient(ellipse 80% 50% at 50% 120%, #25D366, #128C7E)"
+                  hoverBackground="radial-gradient(ellipse 80% 50% at 50% 120%, #2EE06F, #25D366)"
+                  shimmerColor="#ffffff"
+                  borderRadius="0.75rem"
+                  className="w-full py-3.5 text-base disabled:opacity-45 disabled:pointer-events-none"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                   </svg>
                   Enviar pedido no WhatsApp
-                </button>
+                </ShimmerButton>
                 {mpAvailable &&
                   (enabledPayMethods.length === 0 ||
                     paymentMethod === "mercadopago") && (

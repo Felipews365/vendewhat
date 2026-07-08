@@ -15,6 +15,7 @@
 
 import Image from "next/image";
 import type { HeroSlide, HeroTemplate } from "@/lib/storefront";
+import { ShimmerButton } from "@/components/magicui/shimmer-button";
 
 /** Conteúdo textual já resolvido (slide ou fallback geral). */
 export type HeroSlideContent = {
@@ -85,17 +86,20 @@ export function HeroTemplateSlide({
     </span>
   );
 
-  /** Botão CTA (com degradê da cor escolhida). */
+  /** Botão CTA — ShimmerButton (brilho deslizante), com o degradê da cor escolhida. */
+  const btnLight = adjustHex(btnBase, 0.28);
   const Cta = () =>
     content.ctaLabel ? (
-      <a
-        href={content.ctaHref}
-        onClick={(e) => onCta(e, content.ctaHref)}
-        className="inline-flex w-fit items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-white shadow-md transition-transform hover:-translate-y-0.5 sm:px-5 sm:py-2.5 sm:text-sm"
-        style={{ background: `linear-gradient(135deg, ${btnBase}, ${btnDark})` }}
-      >
-        {content.ctaLabel}
-        <span aria-hidden>→</span>
+      <a href={content.ctaHref} onClick={(e) => onCta(e, content.ctaHref)} className="w-fit">
+        <ShimmerButton
+          className="gap-1.5 px-5 py-2.5 text-xs font-bold sm:text-sm"
+          background={`radial-gradient(ellipse 80% 50% at 50% 120%, ${btnBase}, ${btnDark})`}
+          hoverBackground={`radial-gradient(ellipse 80% 50% at 50% 120%, ${btnLight}, ${btnBase})`}
+          shimmerColor="#ffffff"
+        >
+          {content.ctaLabel}
+          <span aria-hidden>→</span>
+        </ShimmerButton>
       </a>
     ) : null;
 
@@ -148,11 +152,11 @@ export function HeroTemplateSlide({
                 background: `linear-gradient(to ${photoLeft ? "right" : "left"}, ${photoLeft ? bgFrom : bgTo}, transparent)`,
               }}
             />
-            <Image src={img} alt={content.title} fill className="object-cover object-top" sizes="42vw" priority />
+            <Image src={img} alt={content.title} fill className="vw-photo-in object-cover object-top" sizes="42vw" priority />
           </div>
         )}
         <div
-          className={`relative z-10 flex h-full flex-col justify-center p-6 sm:p-10 ${
+          className={`vw-reveal-stagger relative z-10 flex h-full flex-col justify-center p-6 sm:p-10 ${
             img ? "w-[58%]" : "w-full max-w-2xl"
           } ${photoLeft && img ? "ml-auto" : ""}`}
         >
@@ -177,7 +181,7 @@ export function HeroTemplateSlide({
             className={`absolute inset-y-0 ${photoLeft ? "left-0" : "right-0"} w-[54%]`}
             style={{ clipPath: photoClip }}
           >
-            <Image src={img} alt={content.title} fill className="object-cover object-center" sizes="54vw" priority />
+            <Image src={img} alt={content.title} fill className="vw-photo-in object-cover object-center" sizes="54vw" priority />
           </div>
         )}
         <div
@@ -185,7 +189,7 @@ export function HeroTemplateSlide({
           style={{ background: gradient, clipPath: shapeClip }}
         />
         <div
-          className={`absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-20 flex w-[52%] flex-col justify-center px-5 sm:px-8 lg:px-12`}
+          className={`vw-reveal-stagger absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-20 flex w-[52%] flex-col justify-center px-5 sm:px-8 lg:px-12`}
         >
           <TextOnColor />
         </div>
@@ -206,7 +210,7 @@ export function HeroTemplateSlide({
         />
         {img && (
           <div className={`absolute inset-y-0 ${photoLeft ? "left-0" : "right-0"} w-[46%]`}>
-            <Image src={img} alt={content.title} fill className="object-cover object-center" sizes="46vw" priority />
+            <Image src={img} alt={content.title} fill className="vw-photo-in object-cover object-center" sizes="46vw" priority />
           </div>
         )}
         {content.badge && (
@@ -229,7 +233,7 @@ export function HeroTemplateSlide({
           </div>
         )}
         <div
-          className={`absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-10 flex w-[56%] flex-col justify-center px-5 sm:px-8 lg:px-14`}
+          className={`vw-reveal-stagger absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-10 flex w-[56%] flex-col justify-center px-5 sm:px-8 lg:px-14`}
         >
           {content.title && (
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/65 sm:text-sm">
@@ -267,11 +271,11 @@ export function HeroTemplateSlide({
             className={`absolute inset-y-0 ${photoLeft ? "left-0" : "right-0"} z-10 w-[57%]`}
             style={{ clipPath: photoClip }}
           >
-            <Image src={img} alt={content.title} fill className="object-cover object-center" sizes="57vw" priority />
+            <Image src={img} alt={content.title} fill className="vw-photo-in object-cover object-center" sizes="57vw" priority />
           </div>
         )}
         <div
-          className={`absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-20 flex w-[50%] flex-col justify-center px-5 sm:px-8 lg:px-14`}
+          className={`vw-reveal-stagger absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-20 flex w-[50%] flex-col justify-center px-5 sm:px-8 lg:px-14`}
         >
           {content.badge && (
             <p className="mb-1 text-xs font-bold uppercase tracking-widest sm:text-sm" style={{ color: bgFrom }}>
@@ -313,7 +317,7 @@ export function HeroTemplateSlide({
               clipPath: !photoLeft ? "polygon(0 0, 75% 0, 100% 100%, 0 100%)" : "polygon(25% 0, 100% 0, 100% 100%, 0 100%)",
             }}
           >
-            <Image src={img} alt={content.title} fill className="object-cover object-center" sizes="50vw" priority />
+            <Image src={img} alt={content.title} fill className="vw-photo-in object-cover object-center" sizes="50vw" priority />
           </div>
         )}
         {content.badge && (
@@ -332,7 +336,7 @@ export function HeroTemplateSlide({
           </div>
         )}
         <div
-          className={`absolute inset-y-0 ${!photoLeft ? "right-0" : "left-0"} z-10 flex w-[48%] flex-col justify-center px-5 sm:px-8 lg:px-14`}
+          className={`vw-reveal-stagger absolute inset-y-0 ${!photoLeft ? "right-0" : "left-0"} z-10 flex w-[48%] flex-col justify-center px-5 sm:px-8 lg:px-14`}
         >
           {content.title && (
             <p className="mb-1 text-xs font-bold uppercase tracking-[0.2em] sm:text-sm" style={{ color: bgFrom }}>
@@ -369,7 +373,7 @@ export function HeroTemplateSlide({
               clipPath: !photoLeft ? "polygon(0 0, 100% 0, 82% 100%, 0 100%)" : "polygon(18% 0, 100% 0, 100% 100%, 0 100%)",
             }}
           >
-            <Image src={img} alt={content.title} fill className="object-cover object-center" sizes="48vw" priority />
+            <Image src={img} alt={content.title} fill className="vw-photo-in object-cover object-center" sizes="48vw" priority />
           </div>
         )}
         {content.badge && (
@@ -391,7 +395,7 @@ export function HeroTemplateSlide({
           </div>
         )}
         <div
-          className={`absolute inset-y-0 ${!photoLeft ? "right-0" : "left-0"} z-10 flex w-[50%] flex-col justify-center px-5 sm:px-8 lg:px-14`}
+          className={`vw-reveal-stagger absolute inset-y-0 ${!photoLeft ? "right-0" : "left-0"} z-10 flex w-[50%] flex-col justify-center px-5 sm:px-8 lg:px-14`}
         >
           {content.title && (
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/70 sm:text-sm">{content.title}</p>
@@ -422,7 +426,7 @@ export function HeroTemplateSlide({
             diagonal — por isso o painel NÃO cobre as fotos (sem sobreposição). */}
         {strips.length > 0 && (
           <div
-            className="absolute inset-y-0 flex w-[60%] gap-[3px] overflow-hidden"
+            className="absolute inset-y-0 flex w-[62%] gap-[3px] overflow-hidden"
             style={{
               transform: "skewX(-9deg)",
               left: photoLeft ? "-6%" : undefined,
@@ -447,7 +451,7 @@ export function HeroTemplateSlide({
           </div>
         )}
         <div
-          className={`absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-10 flex w-[46%] flex-col justify-center px-3 sm:w-[44%] sm:px-8 lg:px-12`}
+          className={`vw-reveal-stagger absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-10 flex w-[40%] flex-col justify-center px-3 sm:w-[44%] sm:px-8 lg:px-12`}
         >
           {content.badge && (
             <p className="mb-1 text-[10px] font-bold uppercase tracking-widest sm:mb-2 sm:text-sm" style={{ color: accent }}>
@@ -499,13 +503,13 @@ export function HeroTemplateSlide({
           >
             {pair.map((src, k) => (
               <div key={k} className="relative flex-1 overflow-hidden">
-                <Image src={src} alt="" fill className="object-cover object-center" sizes="26vw" />
+                <Image src={src} alt="" fill className="vw-photo-in object-cover object-center" sizes="26vw" />
               </div>
             ))}
           </div>
         )}
         <div
-          className={`absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-10 flex w-[50%] flex-col justify-center px-3 sm:px-8 lg:px-14`}
+          className={`vw-reveal-stagger absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} z-10 flex w-[50%] flex-col justify-center px-3 sm:px-8 lg:px-14`}
         >
           {content.badge && (
             <p className="mb-1 text-[10px] font-bold uppercase tracking-widest sm:text-sm" style={{ color: accent }}>

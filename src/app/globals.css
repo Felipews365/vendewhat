@@ -176,6 +176,27 @@ html {
   }
 }
 
+/* Transição entre slides do banner (desliza + aparece), estilo do carrossel da
+   referência. Re-dispara a cada troca de slide via `key`. */
+@keyframes vw-banner-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px) scale(1.01);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+.vw-banner-in {
+  animation: vw-banner-in 0.5s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vw-banner-in {
+    animation: none;
+  }
+}
+
 /* Faixas diagonais animadas do estilo "Strips": um leve vai-e-vem vertical
    escalonado por faixa (o stagger vem do inline `animation-delay`). */
 @keyframes vw-strip-drift {
@@ -271,5 +292,90 @@ html {
   .vw-gradient-text,
   .vw-marquee-track {
     animation: none;
+  }
+}
+
+/* ---- Magic UI: BlurFade (entrada com desfoque) + fotos surgindo ---- */
+
+/* BlurFade: aparece subindo, saindo do desfoque (estilo Magic UI). As distâncias
+   e o blur são parametrizáveis por CSS var (o componente <BlurFade/> as define). */
+@keyframes vw-blur-fade {
+  from {
+    opacity: 0;
+    transform: translateY(var(--vw-bf-y, 8px));
+    filter: blur(var(--vw-bf-blur, 6px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+.vw-blur-fade {
+  animation: vw-blur-fade 0.4s ease-out both;
+}
+
+/* Revela os filhos em cascata (banner: selo → título → destaque → texto → botão).
+   Cada filho herda o mesmo blur-fade com um atraso crescente. Re-dispara junto do
+   slide porque o container do banner remonta por `key`. */
+.vw-reveal-stagger > * {
+  animation: vw-blur-fade 0.5s ease-out both;
+}
+.vw-reveal-stagger > *:nth-child(1) {
+  animation-delay: 0.08s;
+}
+.vw-reveal-stagger > *:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.vw-reveal-stagger > *:nth-child(3) {
+  animation-delay: 0.32s;
+}
+.vw-reveal-stagger > *:nth-child(4) {
+  animation-delay: 0.44s;
+}
+.vw-reveal-stagger > *:nth-child(5) {
+  animation-delay: 0.56s;
+}
+.vw-reveal-stagger > *:nth-child(6) {
+  animation-delay: 0.68s;
+}
+
+/* Foto surgindo: leve zoom-out + fade na entrada (a foto "chega" na tela). */
+@keyframes vw-photo-in {
+  from {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.vw-photo-in {
+  animation: vw-photo-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Ken Burns: zoom lento e contínuo — deixa a foto do banner "viva". */
+@keyframes vw-ken-burns {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.12);
+  }
+}
+.vw-ken-burns {
+  animation: vw-ken-burns 14s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vw-blur-fade,
+  .vw-reveal-stagger > *,
+  .vw-photo-in,
+  .vw-ken-burns {
+    animation: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+    transform: none !important;
   }
 }

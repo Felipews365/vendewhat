@@ -1668,11 +1668,11 @@ export function StoreVisualEditor({
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Fundo atrás do banner
+              Fundo da página
             </label>
             <p className="text-xs text-slate-500 mb-2">
-              Cor da faixa no topo, só atrás do banner. Um cinza claro faz o
-              banner “flutuar”. Os cards promocionais ficam fora dessa faixa.
+              Cor da página inteira. Um cinza claro separa os cards brancos
+              (banner, promoções e produtos), como nas grandes lojas.
             </p>
             <div className="flex gap-2 items-stretch">
               <input

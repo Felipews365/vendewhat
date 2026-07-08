@@ -141,6 +141,8 @@ export function ProductPhotosPicker({
 }) {
   // Classe de proporção das miniaturas conforme o formato escolhido no produto.
   const aspectClass = photoAspect === "3:4" ? "aspect-[3/4]" : "aspect-square";
+  // O RECORTE segue o mesmo formato (3:4 = 0,75; 1:1 = 1).
+  const cropAspect = photoAspect === "3:4" ? 3 / 4 : 1;
   const fileRef = useRef<HTMLInputElement>(null);
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -300,7 +302,7 @@ export function ProductPhotosPicker({
               return (
                 <div
                   key={item.id}
-                  className="relative aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200"
+                  className={`relative ${aspectClass} rounded-lg overflow-hidden bg-slate-100 border border-slate-200`}
                 >
                   <DraggablePhotoFraming
                     src={src}
@@ -338,7 +340,7 @@ export function ProductPhotosPicker({
                 key={`slot-${i}`}
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="relative aspect-square rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 hover:border-landing-primary/50 hover:bg-teal-50/30 transition-colors flex flex-col items-center justify-center text-slate-400"
+                className={`relative ${aspectClass} rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 hover:border-landing-primary/50 hover:bg-teal-50/30 transition-colors flex flex-col items-center justify-center text-slate-400`}
               >
                 <span className="text-2xl opacity-40 mb-0.5" aria-hidden>
                   🖼
@@ -479,6 +481,7 @@ export function ProductPhotosPicker({
           imageSrc={cropSession.src}
           sourceFileName={cropSession.file.name}
           originalFile={cropSession.file}
+          aspect={cropAspect}
           onCancel={handleCropCancel}
           onComplete={handleCropDone}
         />

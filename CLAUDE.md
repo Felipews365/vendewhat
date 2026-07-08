@@ -112,24 +112,34 @@ Orientações para o Claude Code trabalhar neste repositório.
     global `heroLayout`/`heroSplitPhotoSide`. Sem migration de banco: tudo no JSONB.
   - `heroLayout`/`heroSplitPhotoSide` em `StorefrontSettings` agora são só o **padrão para novas
     fotos** (não afetam o render, que é por slide).
-  - **Estilos/templates de banner (inspirados no projeto de referência `sitederoupa`):** além de
-    `overlay`/`split`, cada slide pode usar um **template** (`HeroSlide.template`): `gradient`,
-    `diagonal`, `fashion`, `magazine`, `spring`, `sale` (os 8 valores em `HERO_TEMPLATES` de
-    [storefront.ts](src/lib/storefront.ts); `strips`/`duo` da referência **ainda não** foram
-    portados). São painéis coloridos com **recortes diagonais** (clip-path), badge em círculo
-    (giratório no `spring`, pulsante no `sale`) e o **destaque cursivo em degradê animado**. Campos
-    extras por slide no JSONB (sem migration): `bgFrom`/`bgVia`/`bgTo` (gradiente), `ctaBgColor` (cor
-    do botão), `height` (altura px). Renderizados por
-    [HeroTemplateSlide.tsx](src/components/storefront/HeroTemplateSlide.tsx) — **componente único
-    compartilhado** pela loja (`HeroBannerBlock` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx),
-    quando `template` não é overlay/split, renderiza num container de altura fixa) **e** pela prévia
-    do editor (`SlidePreview` em [banner/page.tsx](src/app/dashboard/banner/page.tsx)). **Sem
-    framer-motion/magicui:** o destaque usa `.vw-anim-gradient`/`.font-script` e os badges usam
-    `.vw-spin-slow`/`.vw-pulse-soft` ([globals.css](src/app/globals.css), respeitam
-    `prefers-reduced-motion`). O editor [/dashboard/banner](src/app/dashboard/banner/page.tsx) ganhou
-    um **seletor de estilo por banner** + controles de gradiente (De/Via/Até), cor do botão, altura e
-    lado da foto (`applyTemplate` define os padrões ao trocar de estilo). Ao **adicionar**, a foto
-    entra como `overlay`; troca-se o estilo depois em cada banner.
+  - **Estilos/templates de banner (inspirados no `sitederoupa`):** além de `overlay`/`split`, cada
+    slide pode usar um **template** (`HeroSlide.template`): `gradient`, `diagonal`, `fashion`,
+    `magazine`, `spring`, `sale`, **`strips`** e **`duo`** (10 valores em `HERO_TEMPLATES`). Os
+    gráficos são painéis coloridos com recortes diagonais + badge em círculo; **Strips** = 3 faixas
+    de foto diagonais (skewX, `.vw-strip-drift`/`.vw-strip-shine`) + **painel de texto CLARO** com
+    destaque cursivo; **Duo** = 2 fotos + painel claro. Renderizados por
+    [HeroTemplateSlide.tsx](src/components/storefront/HeroTemplateSlide.tsx) (componente compartilhado
+    pela loja e pela prévia do editor). **Sem framer-motion/magicui nas animações internas** (só CSS
+    em [globals.css](src/app/globals.css): `.vw-anim-gradient`, `.vw-strip-drift/shine`,
+    `.vw-spin-slow/pulse-soft`, todas respeitam `prefers-reduced-motion`).
+    - **Fotos extras (`HeroSlide.images: string[]`, sem migration):** Strips usa 3 fotos (a `url` + 2),
+      Duo usa 2 (a `url` + 1); os slots "Foto 2/3" ficam no editor. `heroTemplatePhotoCount(tpl)` diz
+      quantas.
+    - **"Só a foto" (`HeroSlide.noText`, sem migration):** ignora estilo/texto/painel e mostra só a
+      imagem preenchendo o card — para fotos que já vêm com os dizeres embutidos. Checkbox no editor.
+    - **Container ÚNICO e contido:** `HeroBannerBlock` monta o slide ativo dentro de um card
+      **`max-w-[1260px]` arredondado com sombra**, **altura fluida** `clamp(240px, 55vw, 460px)` +
+      `min-h-[420px] sm:min-h-0` (cabe o layout no celular sem cortar). Bolinhas **por dentro** e uma
+      **transição** `.vw-banner-in` (desliza+fade) a cada troca de slide (via `key={idx}`). Strips/Duo
+      renderizam lado a lado (texto ~40% + fotos ~62%) também no celular, igual à referência.
+    - Campos de estilo por slide no JSONB: `bgFrom`/`bgVia`/`bgTo`, `ctaBgColor`, `height` (px; só os
+      templates gráficos usam — Strips/Duo/overlay/split usam a altura fluida do container).
+    - **CTA = `ShimmerButton`** (Magic UI) com o degradê da cor do botão da loja.
+    - **Editor** [/dashboard/banner](src/app/dashboard/banner/page.tsx): seletor de estilo por banner,
+      checkbox "Só a foto", **"Trocar foto"** (substitui a `url` principal recortando pelo formato do
+      banner — `replaceIndex` na sessão de recorte), Foto 2/3 (strips/duo), gradiente/cor do
+      botão/altura/lado, textos por banner. `applyTemplate` define os padrões ao trocar de estilo
+      (strips/duo/gradient/magazine nascem com foto à direita).
 - **Cards promocionais abaixo do banner (`storefront.promoCards: PromoCard[]`):** faixa de até
   `MAX_PROMO_CARDS` (6) cartões coloridos (gradiente `from`→`to`) com etiqueta/título/frase/link.
   Renderizados em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) logo **abaixo do banner**
@@ -139,8 +149,12 @@ Orientações para o Claude Code trabalhar neste repositório.
   seletor de cor (`PROMO_CARD_COLORS`), reordenar/remover. Sem migration (JSONB).
 - **Menu de categorias no topo (`storefront.showCategoryNav`, default `true`):** barra horizontal
   (`CategoryNavBar` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)) abaixo do cabeçalho,
-  reaproveita os `categoryStripItems` (mesma fonte do strip de bolinhas) e o `categoryFilter`; item
-  ativo usa `--store-primary`. Só aparece se houver categorias (logo, precisa de produtos). Toggle na
+  reaproveita os `categoryStripItems` e o `categoryFilter`. Estilo **igual ao `sitederoupa`**: fundo
+  = a cor do topo (`headerBackground`) porém **mais clara** (`lightenRgb`; texto claro/escuro conforme
+  `isDarkRgb`), item ativo em **dourado** (`#FFD600`) no fundo escuro (ou `--store-primary` no claro)
+  com sublinhado, **emoji por categoria** (`categoryEmoji()` — chute por palavra-chave), **"Ver todas
+  ▾"** (dropdown com todas) e **"🔥 Promoções"** no fim, que liga o filtro `promoOnly` (só produtos
+  `isPromotion`, mutuamente exclusivo com categoria). Só aparece se houver categorias. Toggle na
   página do banner. Sem migration (JSONB).
 - **Pixels e rastreamento (por loja):** cada lojista cola o **próprio** Pixel do Facebook/Meta
   (`storefront.facebookPixelId`, só dígitos) e a **tag do Google** (`storefront.googleAnalyticsId` —
@@ -260,15 +274,55 @@ Helpers e o catálogo `UNIT_TYPES` moram em [src/lib/productDetails.ts](src/lib/
 
 ### Formato da foto dos produtos (1:1 ou 3:4)
 
-Toggle `storefront.productCardRatio` (`"1:1"` quadrado — default — ou `"3:4"` retrato; JSONB, **sem
-migration**), editado no painel **"Rodapé da vitrine"** do
-[StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (seletor "Formato da foto dos
-produtos", **salva na hora** via `onAutoSaveStorefront`). Vale para **todos** os cards de produto da
-loja (promoções + catálogo). O `ProductCatalogCard` em
-[LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) recebe `imageRatio` e troca `aspect-square` ↔
-`aspect-[3/4]`; a foto é `object-cover` com ponto de foco, então **não distorce** em nenhum formato
-(nem exige re-recorte das capas já enviadas). Só afeta a grade — a foto grande no **detalhe** do
+**Padrão da loja:** `storefront.productCardRatio` (`"3:4"` retrato — **default agora** — ou `"1:1"`
+quadrado; JSONB, sem migration), no painel "Rodapé da vitrine" do
+[StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx).
+
+**Por produto (`products.card_ratio`, migration
+[supabase-migration-product-card-ratio.sql](supabase-migration-product-card-ratio.sql)):** cada
+produto pode ter seu formato (`"1:1"`/`"3:4"`) ou `null` = **usa o padrão da loja**. Seletor **"Formato
+da foto no card"** na aba Produto das duas telas ([novo](src/app/dashboard/produtos/novo/page.tsx) e
+[id](src/app/dashboard/produtos/[id]/page.tsx)), salvo com **fallback de coluna ausente**
+(`isMissingColumnError(..., "card_ratio")`). Ao abrir **"Novo produto"** um **modal** pergunta o
+formato (3:4 recomendado). O `ProductPhotosPicker` recebe `photoAspect` → as **miniaturas e o RECORTE**
+seguem o formato escolhido (3:4 recorta em retrato). Na loja, o card usa
+`product.cardRatio ?? storefront.productCardRatio`.
+
+O `ProductCatalogCard` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) recebe `imageRatio` e
+troca `aspect-square` ↔ `aspect-[3/4]`; a foto é `object-cover` com ponto de foco, então **não
+distorce** em nenhum formato. Só afeta a grade — a foto grande no **detalhe** do
 produto continua inteira (`object-contain`) de propósito.
+
+### Fundo da página + largura (loja pública)
+
+- **Fundo da página (`storefront.pageBackground`, default `#f7f8fa`, JSONB sem migration):** cor da
+  **página inteira** da loja, aplicada no wrapper de [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)
+  (`themeStyle`). Um cinza claro separa os cards brancos (banner, promoções, produtos) — como as
+  grandes lojas. Editado no painel **"Cores da loja"** ("Fundo da página") do
+  [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), ao lado do "Fundo do topo"
+  (`headerBackground`). É desse `headerBackground` que a `CategoryNavBar` deriva a cor (mais clara).
+- **Largura:** os contêineres da loja usam **`max-w-[1260px]`** (largura da referência), não mais
+  `max-w-6xl`.
+
+### Barra de navegação inferior no celular
+
+`<nav class="… md:hidden">` fixa no rodapé (só no celular) em
+[LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx), com 4 ícones em linha: **Início** (topo),
+**Conta** (abre o WhatsApp da loja se `contactHref`), **Carrinho** (abre o carrinho + selo de
+quantidade) e **Menu** (rola até `#catalogo`). Substituiu o antigo "carrinho flutuante"; o espaço já
+está reservado pelo `pb-28` do wrapper. SVGs inline (casa/pessoa/sacola/hambúrguer).
+
+### Componentes Magic UI (portados do `sitederoupa`)
+
+Deps `clsx` + `tailwind-merge`; helper **`cn`** em [src/lib/utils.ts](src/lib/utils.ts). Três
+componentes em [src/components/magicui/](src/components/magicui/): `border-beam.tsx`,
+`animated-gradient-text.tsx`, `shimmer-button.tsx`. As animações (`border-beam`, `gradient`,
+`shimmer-slide`, `spin-around`) estão em `theme.extend.keyframes`/`animation` do
+[tailwind.config.ts](tailwind.config.ts) (**Tailwind v3**). Obs.: o `shimmer-button` usa
+`animate-shimmer-slide` (corrigido do `animate-shimmer` do arquivo original, que não batia com a
+config). **Aplicados:** `ShimmerButton` no **CTA do banner** (`HeroTemplateSlide`), `BorderBeam` no
+**1º card** das "Ofertas Relâmpago" (`featured={i===0}`) e `AnimatedGradientText` no **título "Ofertas
+Relâmpago"**. Ainda não aplicados nos demais botões/títulos.
 
 ### Estilo "e-commerce" dos cards + Ofertas Relâmpago (referência `sitederoupa`)
 
