@@ -75,7 +75,20 @@ type Props = {
   description?: string;
   /** Rótulo do botão que confirma o recorte. */
   confirmLabel?: string;
+  /**
+   * Mostra um seletor de formato 1:1 / 3:4 DENTRO do modal (fotos de produto).
+   * Ao trocar, o quadro do recorte muda na hora e avisa o pai por `onRatioChange`.
+   */
+  showRatioToggle?: boolean;
+  /** Chamado quando o lojista escolhe 1:1 ou 3:4 no seletor (sincroniza o card). */
+  onRatioChange?: (ratio: "1:1" | "3:4") => void;
 };
+
+const RATIO_VALUE = { "1:1": 1, "3:4": 3 / 4 } as const;
+/** Deriva o rótulo do formato a partir da proporção numérica. */
+function ratioLabelFromAspect(a: number): "1:1" | "3:4" {
+  return a < 0.9 ? "3:4" : "1:1";
+}
 
 export function ProductImageCropModal({
   imageSrc,
@@ -87,11 +100,15 @@ export function ProductImageCropModal({
   title = "Ajustar foto (quadrado)",
   description = "Arraste e use o zoom para encaixar como na vitrine (cards 1:1).",
   confirmLabel = "Usar este enquadramento",
+  showRatioToggle = false,
+  onRatioChange,
 }: Props) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [busy, setBusy] = useState(false);
   const [cropReady, setCropReady] = useState(false);
+  // Proporção ativa: começa na `aspect` recebida e pode ser trocada pelo seletor.
+  const [activeAspect, setActiveAspect] = useState(aspect);
   const croppedAreaPixelsRef = useRef<Area | null>(null);
 
   const onCropComplete = useCallback((_area: Area, pixels: Area) => {
@@ -104,7 +121,24 @@ export function ProductImageCropModal({
     setCropReady(false);
     setCrop({ x: 0, y: 0 });
     setZoom(1);
-  }, [imageSrc]);
+    setActiveAspect(aspect);
+  }, [imageSrc, aspect]);
+
+  // Troca o formato no meio do recorte: recentraliza o quadro e avisa o pai.
+  function chooseRatio(r: "1:1" | "3:4") {
+    setActiveAspect(RATIO_VALUE[r]);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    onRatioChange?.(r);
+  }
+
+  const currentRatio = ratioLabelFromAspect(activeAspect);
+  const shownTitle = showRatioToggle
+    ? `Ajustar foto (${currentRatio === "3:4" ? "retrato 3:4" : "quadrado 1:1"})`
+    : title;
+  const shownDescription = showRatioToggle
+    ? "Escolha o formato do card e arraste/zoom para encaixar."
+    : description;
 
   async function applyCrop() {
     const pixels = croppedAreaPixelsRef.current;
@@ -124,7 +158,7 @@ export function ProductImageCropModal({
     }
   }
 
-  const wide = aspect > 1.6;
+  const wide = activeAspect > 1.6;
 
   return (
     <div
@@ -140,9 +174,32 @@ export function ProductImageCropModal({
       >
         <div className="px-4 py-3 border-b border-slate-100">
           <h2 id="crop-title" className="text-lg font-bold text-slate-800">
-            {title}
+            {shownTitle}
           </h2>
-          <p className="text-xs text-slate-500 mt-1">{description}</p>
+          <p className="text-xs text-slate-500 mt-1">{shownDescription}</p>
+
+          {showRatioToggle && (
+            <div className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+              {(["3:4", "1:1"] as const).map((r) => {
+                const active = currentRatio === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => chooseRatio(r)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                      active
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                    aria-pressed={active}
+                  >
+                    {r === "3:4" ? "Retrato 3:4" : "Quadrado 1:1"}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="relative w-full h-[38vh] min-h-[180px] sm:h-72 bg-slate-900">
@@ -150,7 +207,7 @@ export function ProductImageCropModal({
             image={imageSrc}
             crop={crop}
             zoom={zoom}
-            aspect={aspect}
+            aspect={activeAspect}
             onCropChange={setCrop}
             onZoomChange={setZoom}
             onCropComplete={onCropComplete}

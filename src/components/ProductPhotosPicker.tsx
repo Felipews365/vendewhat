@@ -130,6 +130,7 @@ export function ProductPhotosPicker({
   label = "Fotos do produto",
   variant = "default",
   photoAspect = "1:1",
+  onPhotoAspectChange,
 }: {
   items: PhotoItem[];
   onItemsChange: (next: PhotoItem[]) => void;
@@ -138,6 +139,11 @@ export function ProductPhotosPicker({
   variant?: "default" | "editor";
   /** Formato das miniaturas (prévia de como fica no card da loja). */
   photoAspect?: "1:1" | "3:4";
+  /**
+   * Chamado quando o lojista troca o formato (1:1/3:4) DENTRO do modal de
+   * recorte. O pai (página do produto) usa para atualizar o `card_ratio`.
+   */
+  onPhotoAspectChange?: (ratio: "1:1" | "3:4") => void;
 }) {
   // Classe de proporção das miniaturas conforme o formato escolhido no produto.
   const aspectClass = photoAspect === "3:4" ? "aspect-[3/4]" : "aspect-square";
@@ -373,6 +379,9 @@ export function ProductPhotosPicker({
             imageSrc={cropSession.src}
             sourceFileName={cropSession.file.name}
             originalFile={cropSession.file}
+            aspect={cropAspect}
+            showRatioToggle={!!onPhotoAspectChange}
+            onRatioChange={onPhotoAspectChange}
             onCancel={handleCropCancel}
             onComplete={handleCropDone}
           />
@@ -482,6 +491,8 @@ export function ProductPhotosPicker({
           sourceFileName={cropSession.file.name}
           originalFile={cropSession.file}
           aspect={cropAspect}
+          showRatioToggle={!!onPhotoAspectChange}
+          onRatioChange={onPhotoAspectChange}
           onCancel={handleCropCancel}
           onComplete={handleCropDone}
         />

@@ -953,6 +953,9 @@ export default function EditarProdutoPage() {
                   label="Fotos do produto"
                   variant="editor"
                   photoAspect={form.cardRatio === "1:1" ? "1:1" : "3:4"}
+                  onPhotoAspectChange={(r) =>
+                    setForm((f) => ({ ...f, cardRatio: r }))
+                  }
                 />
                 <div>
                   <label
