@@ -194,6 +194,133 @@ function InstagramIcon({ className }: { className?: string }) {
   );
 }
 
+/* ── Ícones de linha do cabeçalho (estilo e-commerce) ─────────────────── */
+const strokeProps = {
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.8,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+function IconUser({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-3.6 3.6-6 8-6s8 2.4 8 6" />
+    </svg>
+  );
+}
+function IconHeart({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+      <path d="M12 20.5S3.5 15.3 3.5 9.3A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 8.5 1.7c0 6-8.5 11.2-8.5 11.2z" />
+    </svg>
+  );
+}
+function IconBag({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+      <path d="M6 7h12l1 13H5L6 7z" />
+      <path d="M9 7V6a3 3 0 0 1 6 0v1" />
+    </svg>
+  );
+}
+function IconSearch({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+}
+function WhatsAppGlyph({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
+
+/** Renderiza um aviso com trechos entre **…** em dourado. */
+function AnnouncementText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.startsWith("**") && p.endsWith("**") ? (
+          <span key={i} className="font-bold" style={{ color: "#FFDA6C" }}>
+            {p.slice(2, -2)}
+          </span>
+        ) : (
+          <span key={i}>{p}</span>
+        )
+      )}
+    </>
+  );
+}
+
+/** Barra preta de avisos no topo (frete grátis, parcelamento, troca…). */
+function AnnouncementBar({ items, bg }: { items: string[]; bg: string }) {
+  if (items.length === 0) return null;
+  return (
+    <div
+      className="w-full text-white text-center text-[11px] sm:text-xs font-medium tracking-wide py-2 px-4"
+      style={{ backgroundColor: bg }}
+    >
+      <div className="hidden sm:block">
+        {items.map((it, i) => (
+          <span key={i} className="whitespace-nowrap">
+            {i > 0 && <span className="text-white/30 mx-2">|</span>}
+            <AnnouncementText text={it} />
+          </span>
+        ))}
+      </div>
+      <div className="sm:hidden">
+        <AnnouncementText text={items[0]} />
+      </div>
+    </div>
+  );
+}
+
+/** Ícone-ação do cabeçalho (ícone + rótulo em pilha, estilo e-commerce). */
+function HeaderAction({
+  icon,
+  label,
+  dark,
+  onClick,
+  badge,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  dark: boolean;
+  onClick?: () => void;
+  badge?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg min-w-[52px] transition-colors ${
+        dark ? "text-white/90 hover:bg-white/10" : "text-stone-700 hover:bg-stone-100"
+      }`}
+      aria-label={label}
+    >
+      <span className="relative">
+        {icon}
+        {badge != null && badge > 0 && (
+          <span
+            className="absolute -top-1.5 -right-2.5 text-white text-[10px] font-bold min-w-[1.05rem] h-4 px-1 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: EC.accent }}
+          >
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
+      </span>
+      <span className="text-[0.62rem] font-medium leading-none">{label}</span>
+    </button>
+  );
+}
+
 /** Slides do banner (sem indicadores — estes ficam abaixo do banner). */
 function HeroSlideshowLayer({
   images,
@@ -1804,30 +1931,26 @@ function StorefrontCategoriesStrip({
   selectedLabel: string | null;
   onSelectCategory: (label: string | null) => void;
 }) {
-  /** Bolinha circular; foto com object-cover para preencher sem faixas laterais. */
-  const ringActive =
-    "ring-2 ring-offset-2 ring-stone-600/90 ring-offset-white scale-[1.02] origin-top";
-  const thumbFrame =
-    "relative w-[4.25rem] h-[4.25rem] sm:w-[4.75rem] sm:h-[4.75rem] shrink-0 rounded-full overflow-hidden";
-  const stripBtnClass =
-    "flex flex-col items-center shrink-0 w-[4.75rem] sm:w-[5.25rem] snap-start group cursor-pointer border-0 bg-transparent p-0 shadow-none outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-300/80 focus-visible:rounded-2xl";
+  /** Tile de categoria (card branco com emoji/foto + rótulo), estilo e-commerce. */
+  const tileBase =
+    "group flex flex-col items-center justify-center gap-2 p-3 sm:p-4 rounded-xl border bg-white transition shrink-0 w-[5.5rem] sm:w-auto snap-start cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#0062B8]";
+  const tileActive = "border-[#0062B8] bg-[#F0F6FC] shadow-sm";
+  const tileIdle =
+    "border-[#DCE3EC] hover:border-[#0062B8] hover:shadow-md hover:bg-[#F0F6FC]/40";
 
   return (
     <section
       id="faixa-categorias"
-      className="w-full bg-white/90 border-b border-stone-200/70 pt-3 pb-2 sm:pt-4 sm:pb-2.5 scroll-mt-28"
+      className="w-full pt-5 pb-2 scroll-mt-28"
       aria-label="Categorias"
     >
       <div className="max-w-[1260px] mx-auto px-4">
-        <h2 className="text-base sm:text-lg font-semibold text-stone-800 tracking-tight mb-1">
-          Categorias
+        <h2 className="flex items-center gap-3 text-lg sm:text-xl font-bold text-stone-900 tracking-tight mb-4">
+          <span className="whitespace-nowrap">Categorias</span>
+          <span className="flex-1 h-px bg-[#DCE3EC]" aria-hidden />
         </h2>
-        <p className="text-[11px] sm:text-xs leading-snug text-stone-500 mb-1 max-w-md">
-          Toque para filtrar. <span className="whitespace-nowrap">«Todas»</span> mostra o
-          catálogo completo.
-        </p>
         <div
-          className="flex gap-5 sm:gap-7 overflow-x-auto pt-3 sm:pt-3.5 pb-1 -mx-1 px-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory"
+          className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden snap-x sm:grid sm:grid-cols-4 md:grid-cols-8 sm:overflow-visible sm:mx-0 sm:px-0"
           role="list"
         >
           <button
@@ -1837,27 +1960,13 @@ function StorefrontCategoriesStrip({
               onSelectCategory(null);
               scrollToCatalogo();
             }}
-            className={`${stripBtnClass} text-left`}
+            className={`${tileBase} ${selectedLabel == null ? tileActive : tileIdle}`}
           >
-            <div
-              className={`${thumbFrame} ${
-                selectedLabel == null ? ringActive : ""
-              }`}
-            >
-              <div
-                className="absolute inset-0 origin-top rounded-full bg-stone-100 border border-dashed border-stone-300/90 flex flex-col items-center justify-center gap-0.5 transition-transform group-hover:scale-[1.03]"
-                aria-hidden
-              >
-                <span className="text-[1.65rem] sm:text-[1.85rem] leading-none select-none">
-                  🛍️
-                </span>
-                <span className="text-[9px] font-semibold text-stone-500 uppercase tracking-wide">
-                  Todas
-                </span>
-              </div>
-            </div>
-            <span className="mt-1.5 text-center text-xs text-stone-500 font-normal leading-tight max-w-[5.5rem]">
-              Ver tudo
+            <span className="text-3xl leading-none select-none transition-transform group-hover:scale-110">
+              🛍️
+            </span>
+            <span className="text-xs font-medium text-stone-700 text-center leading-tight line-clamp-1">
+              Todos
             </span>
           </button>
           {items.map((cat, i) => {
@@ -1875,28 +1984,23 @@ function StorefrontCategoriesStrip({
                   onSelectCategory(cat.label);
                   scrollToCatalogo();
                 }}
-                className={`${stripBtnClass} text-left`}
+                className={`${tileBase} ${active ? tileActive : tileIdle}`}
               >
-                <div className={`${thumbFrame} ${active ? ringActive : ""}`}>
-                  <div className="absolute inset-0 origin-top rounded-full bg-stone-100 overflow-hidden ring-1 ring-stone-200/80 shadow-sm transition-transform group-hover:scale-[1.03] flex items-center justify-center">
-                    {cat.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={cat.imageUrl}
-                        alt=""
-                        className="absolute inset-0 h-full w-full object-cover object-center"
-                      />
-                    ) : (
-                      <span
-                        className="text-[1.5rem] sm:text-[1.65rem] leading-none select-none opacity-90"
-                        aria-hidden
-                      >
-                        🏷️
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <span className="mt-1.5 text-center text-xs text-stone-500 font-normal leading-tight max-w-[5.5rem] line-clamp-2">
+                {cat.imageUrl ? (
+                  <span className="w-12 h-12 rounded-full overflow-hidden ring-1 ring-[#DCE3EC] flex items-center justify-center bg-stone-100">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={cat.imageUrl}
+                      alt=""
+                      className="h-full w-full object-cover object-center transition-transform group-hover:scale-110"
+                    />
+                  </span>
+                ) : (
+                  <span className="text-3xl leading-none select-none transition-transform group-hover:scale-110">
+                    {categoryEmoji(cat.label)}
+                  </span>
+                )}
+                <span className="text-xs font-medium text-stone-700 text-center leading-tight line-clamp-1">
                   {cat.label}
                 </span>
               </button>
@@ -2492,217 +2596,228 @@ export function LojaClient({
   const headerRgb = parseHexRgb(storefront.headerBackground);
   const categoryBarBg = headerRgb ? lightenRgb(headerRgb, 0.12) : undefined;
   const categoryBarDark = headerRgb ? isDarkRgb(headerRgb) : true;
+  const headerDark = headerRgb ? isDarkRgb(headerRgb) : true;
 
   return (
     <div
       className="min-h-screen pb-28 md:pb-8 text-stone-800"
       style={themeStyle}
     >
-      {/* Topo — logo, bullets, busca (estilo vitrine) */}
+      {/* Barra de avisos preta no topo (frete grátis, parcelamento, troca…) */}
+      {storefront.announcementBarEnabled && storefront.announcements.length > 0 && (
+        <AnnouncementBar
+          items={storefront.announcements}
+          bg={storefront.announcementBarBg}
+        />
+      )}
+
+      {/* Topo — cabeçalho estilo e-commerce (logo, busca, ações) */}
       <header
-        className="z-40 border-b border-stone-200/80 shadow-[0_1px_0_rgba(92,46,54,0.04)] backdrop-blur-md md:sticky md:top-0"
+        className="z-40 shadow-lg md:sticky md:top-0"
         style={{ backgroundColor: storefront.headerBackground }}
       >
         <div className="max-w-[1260px] mx-auto px-4 py-3 md:py-4">
-          <div className="flex flex-col gap-3 lg:gap-4">
-            {/* Linha superior: logo | atalhos (mobile) — no desktop: logo | busca + atalhos na mesma linha */}
-            <div className="flex flex-col gap-3 min-w-0 lg:flex-row lg:items-center lg:gap-6">
-              <div className="flex min-w-0 flex-1 flex-col gap-2 lg:max-w-sm xl:max-w-xs shrink-0">
-                <div className="flex items-center justify-between gap-2 min-w-0">
-                  <button
-                    type="button"
-                    onClick={goToStoreHome}
-                    className="flex items-center gap-3 min-w-0 text-left rounded-lg -m-1 p-1 hover:bg-stone-500/5 transition-colors"
-                    aria-label="Ir para a página inicial da loja"
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
+            {/* Logo + ações compactas (mobile) */}
+            <div className="flex items-center justify-between gap-2 lg:justify-start lg:shrink-0">
+              <button
+                type="button"
+                onClick={goToStoreHome}
+                className={`flex items-center gap-3 min-w-0 text-left rounded-lg -m-1 p-1 transition-colors ${
+                  headerDark ? "hover:bg-white/5" : "hover:bg-stone-500/5"
+                }`}
+                aria-label="Ir para a página inicial da loja"
+              >
+                {store.logo ? (
+                  <div className="relative w-10 h-10 md:w-11 md:h-11 rounded-xl overflow-hidden flex-shrink-0 ring-1 ring-white/10">
+                    <Image
+                      src={store.logo}
+                      alt=""
+                      fill
+                      className="object-cover"
+                      sizes="44px"
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className="w-10 h-10 md:w-11 md:h-11 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+                    style={{
+                      backgroundColor: headerDark
+                        ? "#253745"
+                        : "var(--store-secondary)",
+                      color: "#FFDA6C",
+                    }}
                   >
-                    {store.logo ? (
-                      <div className="relative w-11 h-11 md:w-12 md:h-12 rounded-lg overflow-hidden bg-stone-100 flex-shrink-0 ring-1 ring-stone-200/80">
-                        <Image
-                          src={store.logo}
-                          alt=""
-                          fill
-                          className="object-cover"
-                          sizes="48px"
-                        />
-                      </div>
-                    ) : (
-                      <div
-                        className="w-11 h-11 md:w-12 md:h-12 rounded-lg flex items-center justify-center text-lg flex-shrink-0 text-white"
-                        style={{ backgroundColor: "var(--store-secondary)" }}
-                      >
-                        🛍
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <p
-                        className="font-serif text-lg md:text-xl font-semibold tracking-tight truncate"
-                        style={{ color: "var(--store-secondary)" }}
-                      >
-                        {store.name}
-                      </p>
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-stone-500">
-                        Loja online
-                      </p>
-                    </div>
-                  </button>
-                  {/* Mobile/tablet: ♡ · carrinho · Instagram · WhatsApp — uma linha, sem quebra */}
-                  <nav
-                    className="flex lg:hidden items-center justify-end gap-0 flex-nowrap shrink-0"
-                    style={{ color: "var(--store-primary)" }}
-                    aria-label="Atalhos da loja"
-                  >
-                    <button
-                      type="button"
-                      className="p-2 rounded-full text-stone-400 hover:bg-stone-100 transition-colors shrink-0"
-                      aria-label="Favoritos"
-                    >
-                      ♡
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCartOpen(true)}
-                      className="relative p-2 rounded-full hover:bg-stone-100 transition-colors shrink-0"
-                      aria-label="Carrinho"
-                    >
-                      <span className="text-xl leading-none">🛒</span>
-                      {totalItems > 0 && (
-                        <span
-                          className="absolute top-0 right-0 text-white text-[10px] font-bold min-w-[1.1rem] h-4 px-1 rounded-full flex items-center justify-center"
-                          style={{ backgroundColor: "var(--store-secondary)" }}
-                        >
-                          {totalItems}
-                        </span>
-                      )}
-                    </button>
-                    {storefront.instagramUrl && (
-                      <a
-                        href={storefront.instagramUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 rounded-full hover:bg-stone-100 transition-colors shrink-0 flex items-center justify-center"
-                        style={{ color: "var(--store-primary)" }}
-                        aria-label="Instagram da loja"
-                        title="Instagram"
-                      >
-                        <InstagramIcon className="w-[22px] h-[22px]" />
-                      </a>
-                    )}
-                    {contactHref && (
-                      <a
-                        href={contactHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ml-0.5 inline-flex items-center gap-1 bg-whatsapp text-white text-xs font-semibold px-2.5 py-2 rounded-full hover:bg-whatsapp-dark transition-colors shadow-sm shrink-0 whitespace-nowrap"
-                      >
-                        <svg
-                          className="w-3.5 h-3.5 shrink-0"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden
-                        >
-                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                        </svg>
-                        <span className="hidden min-[380px]:inline">WhatsApp</span>
-                      </a>
-                    )}
-                  </nav>
-                </div>
-                {storefront.infoBullets.length > 0 && (
-                  <ul className="space-y-1 text-xs text-stone-600 max-w-md">
-                    {storefront.infoBullets.map((line, i) => (
-                      <li key={i} className="flex gap-2 items-start">
-                        <span
-                          className="font-bold leading-snug shrink-0"
-                          style={{ color: "var(--store-primary)" }}
-                        >
-                          •
-                        </span>
-                        <span className="leading-snug">{line}</span>
-                      </li>
-                    ))}
-                  </ul>
+                    ✦
+                  </div>
                 )}
-              </div>
-
-              {/* Busca + atalhos desktop na mesma linha */}
-              <div className="flex w-full flex-1 min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
-                <div className="relative w-full flex-1 min-w-0 lg:max-w-2xl">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm pointer-events-none">
-                    ⌕
-                  </span>
-                  <input
-                    id="loja-busca"
-                    type="search"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={storefront.searchPlaceholder}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-full border-2 border-stone-300 bg-white text-sm text-stone-800 placeholder:text-stone-400 shadow-sm focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none transition-shadow scroll-mt-32"
-                    aria-label="Buscar produtos"
-                  />
+                <div className="min-w-0">
+                  <p
+                    className={`text-lg md:text-xl font-bold tracking-tight truncate ${
+                      headerDark ? "text-white" : "text-stone-900"
+                    }`}
+                  >
+                    {store.name}
+                  </p>
+                  {storefront.headerTagline && (
+                    <p
+                      className={`text-[10px] font-medium uppercase tracking-[0.22em] ${
+                        headerDark ? "text-white/55" : "text-stone-500"
+                      }`}
+                    >
+                      {storefront.headerTagline}
+                    </p>
+                  )}
                 </div>
-                <nav
-                  className="hidden lg:flex items-center justify-end gap-1 flex-nowrap shrink-0"
-                  style={{ color: "var(--store-primary)" }}
-                  aria-label="Atalhos da loja"
+              </button>
+              {/* Ações compactas (mobile/tablet) */}
+              <nav
+                className="flex lg:hidden items-center gap-1 shrink-0"
+                aria-label="Atalhos da loja"
+              >
+                <button
+                  type="button"
+                  className={`p-2 rounded-lg transition-colors shrink-0 ${
+                    headerDark
+                      ? "text-white/90 hover:bg-white/10"
+                      : "text-stone-700 hover:bg-stone-100"
+                  }`}
+                  aria-label="Favoritos"
                 >
-                  <button
-                    type="button"
-                    className="p-2.5 rounded-full text-stone-400 hover:bg-stone-100 transition-colors shrink-0"
-                    aria-label="Favoritos"
-                  >
-                    ♡
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCartOpen(true)}
-                    className="relative p-2.5 rounded-full hover:bg-stone-100 transition-colors shrink-0"
-                    aria-label="Carrinho"
-                  >
-                    <span className="text-xl leading-none">🛒</span>
-                    {totalItems > 0 && (
-                      <span
-                        className="absolute top-0.5 right-0.5 text-white text-[10px] font-bold min-w-[1.15rem] h-4 px-1 rounded-full flex items-center justify-center"
-                        style={{ backgroundColor: "var(--store-secondary)" }}
-                      >
-                        {totalItems}
-                      </span>
-                    )}
-                  </button>
-                  {storefront.instagramUrl && (
-                    <a
-                      href={storefront.instagramUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2.5 rounded-full hover:bg-stone-100 transition-colors shrink-0 flex items-center justify-center"
-                      style={{ color: "var(--store-primary)" }}
-                      aria-label="Instagram da loja"
-                      title="Instagram"
+                  <IconHeart className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCartOpen(true)}
+                  className={`relative p-2 rounded-lg transition-colors shrink-0 ${
+                    headerDark
+                      ? "text-white/90 hover:bg-white/10"
+                      : "text-stone-700 hover:bg-stone-100"
+                  }`}
+                  aria-label="Sacola"
+                >
+                  <IconBag className="w-5 h-5" />
+                  {totalItems > 0 && (
+                    <span
+                      className="absolute -top-0.5 -right-0.5 text-white text-[10px] font-bold min-w-[1.05rem] h-4 px-1 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: EC.accent }}
                     >
-                      <InstagramIcon className="w-6 h-6" />
-                    </a>
+                      {totalItems > 99 ? "99+" : totalItems}
+                    </span>
                   )}
-                  {contactHref && (
-                    <a
-                      href={contactHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-1 inline-flex items-center gap-1.5 bg-whatsapp text-white text-sm font-semibold px-4 py-2.5 rounded-full hover:bg-whatsapp-dark transition-colors shadow-sm whitespace-nowrap shrink-0"
-                    >
-                      <svg
-                        className="w-4 h-4 shrink-0"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden
-                      >
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                      </svg>
-                      WhatsApp
-                    </a>
-                  )}
-                </nav>
-              </div>
+                </button>
+                {contactHref && (
+                  <a
+                    href={contactHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-0.5 inline-flex items-center gap-1 bg-whatsapp text-white text-xs font-semibold px-2.5 py-2 rounded-full hover:bg-whatsapp-dark transition-colors shadow-sm shrink-0 whitespace-nowrap"
+                  >
+                    <WhatsAppGlyph className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden min-[380px]:inline">WhatsApp</span>
+                  </a>
+                )}
+              </nav>
             </div>
+
+            {/* Busca (pílula branca + botão laranja "Buscar") */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                scrollToCatalogo();
+              }}
+              className="w-full flex-1 min-w-0 lg:max-w-2xl lg:mx-auto"
+            >
+              <div className="flex items-stretch rounded-full overflow-hidden bg-white border-2 border-transparent focus-within:border-[#FFDA6C] shadow-sm">
+                <input
+                  id="loja-busca"
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={storefront.searchPlaceholder}
+                  className="flex-1 min-w-0 pl-4 pr-2 py-2.5 text-sm text-stone-800 placeholder:text-stone-400 bg-transparent outline-none scroll-mt-32"
+                  aria-label="Buscar produtos"
+                />
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 px-4 sm:px-5 text-white text-sm font-semibold hover:brightness-95 transition"
+                  style={{ backgroundColor: EC.accent }}
+                >
+                  <IconSearch className="w-4 h-4" />
+                  <span className="hidden sm:inline">Buscar</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Ações (desktop): Entrar · Favoritos · Sacola · WhatsApp */}
+            <nav
+              className="hidden lg:flex items-center gap-1 shrink-0"
+              aria-label="Atalhos da loja"
+            >
+              <HeaderAction
+                icon={<IconUser className="w-5 h-5" />}
+                label="Entrar"
+                dark={headerDark}
+              />
+              <HeaderAction
+                icon={<IconHeart className="w-5 h-5" />}
+                label="Favoritos"
+                dark={headerDark}
+              />
+              <HeaderAction
+                icon={<IconBag className="w-5 h-5" />}
+                label="Sacola"
+                dark={headerDark}
+                onClick={() => setCartOpen(true)}
+                badge={totalItems}
+              />
+              {storefront.instagramUrl && (
+                <a
+                  href={storefront.instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`p-2.5 rounded-lg transition-colors shrink-0 flex items-center justify-center ${
+                    headerDark
+                      ? "text-white/90 hover:bg-white/10"
+                      : "text-stone-700 hover:bg-stone-100"
+                  }`}
+                  aria-label="Instagram da loja"
+                  title="Instagram"
+                >
+                  <InstagramIcon className="w-5 h-5" />
+                </a>
+              )}
+              {contactHref && (
+                <a
+                  href={contactHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-1 inline-flex items-center gap-1.5 bg-whatsapp text-white text-sm font-semibold px-4 py-2.5 rounded-full hover:bg-whatsapp-dark transition-colors shadow-sm whitespace-nowrap shrink-0"
+                >
+                  <WhatsAppGlyph className="w-4 h-4 shrink-0" />
+                  WhatsApp
+                </a>
+              )}
+            </nav>
           </div>
+
+          {/* Frases abaixo do logo (opcional, se o lojista configurar) */}
+          {storefront.infoBullets.length > 0 && (
+            <ul
+              className={`mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs ${
+                headerDark ? "text-white/70" : "text-stone-600"
+              }`}
+            >
+              {storefront.infoBullets.map((line, i) => (
+                <li key={i} className="flex gap-1.5 items-center">
+                  <span className="font-bold" style={{ color: "#FFDA6C" }}>
+                    •
+                  </span>
+                  <span className="leading-snug">{line}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </header>
 

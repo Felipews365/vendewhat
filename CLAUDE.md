@@ -176,6 +176,29 @@ Orientações para o Claude Code trabalhar neste repositório.
   ▾"** (dropdown com todas) e **"🔥 Promoções"** no fim, que liga o filtro `promoOnly` (só produtos
   `isPromotion`, mutuamente exclusivo com categoria). Só aparece se houver categorias. Toggle na
   página do banner. Sem migration (JSONB).
+- **Barra de avisos preta no topo (`storefront.announcements` + `announcementBarEnabled`/`announcementBarBg`):**
+  faixa full-width **acima do cabeçalho** (`AnnouncementBar` em
+  [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)) no estilo `sitederoupa` — fundo escuro
+  (`announcementBarBg`, default `#06141B`), frases separadas por `|` no desktop e só a 1ª no celular.
+  Cada frase é texto livre; um trecho entre `**asteriscos**` vira **destaque dourado** (`#FFDA6C`) via
+  `AnnouncementText` (split por regex). Defaults = as 4 frases do print (nova coleção / frete grátis /
+  10x / troca). Editada no painel **"Barra de avisos"** do
+  [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (toggle + cor + lista de
+  avisos + `headerTagline`). Sem migration (JSONB).
+- **Cabeçalho escuro estilo e-commerce (redesenho do `<header>` em LojaClient):** fundo
+  `headerBackground` (default agora `#11212D`), **dark-aware** (`headerDark = isDarkRgb`). Logo/nome da
+  loja em branco + **subtítulo** `storefront.headerTagline` (default `"MODA & ESTILO"`) em
+  dourado-uppercase. Busca vira **pílula branca com botão laranja "Buscar"** (`EC.accent`, `IconSearch`;
+  submit rola até o catálogo). Ícones de linha SVG em pilha (`HeaderAction`): **Entrar** (`IconUser`,
+  decorativo — loja é por WhatsApp, sem login), **Favoritos** (`IconHeart`, decorativo), **Sacola**
+  (`IconBag`, abre o carrinho, selo laranja com o total). Mantém Instagram + botão **WhatsApp**. No
+  claro (headerBackground claro) o texto/ícones ficam escuros. Os `infoBullets` continuam opcionais
+  (linha discreta abaixo do logo). Sem migration.
+- **Grade "Categorias" em tiles (redesenho de `StorefrontCategoriesStrip`):** trocou a faixa circular
+  (stories) por **cards brancos retangulares** iguais ao print — grid `sm:grid-cols-4 md:grid-cols-8`
+  (scroll horizontal no celular), cada tile com **emoji** (`categoryEmoji`) ou a `imageUrl` da
+  categoria + rótulo; 1º tile "🛍️ Todos" limpa o filtro. Paleta fixa da referência (borda `#DCE3EC`,
+  ativo azul `#0062B8`/`#F0F6FC`). Mesma prop/comportamento de filtro de antes.
 - **Pixels e rastreamento (por loja):** cada lojista cola o **próprio** Pixel do Facebook/Meta
   (`storefront.facebookPixelId`, só dígitos) e a **tag do Google** (`storefront.googleAnalyticsId` —
   GA4 `G-…`, Google Ads `AW-…` ou Tag Manager `GTM-…`) na página dedicada

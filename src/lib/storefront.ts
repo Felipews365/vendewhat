@@ -464,6 +464,16 @@ export type StorefrontSettings = {
   /** Fundo da página inteira (atrás do banner e dos cards) — hex ou rgba */
   pageBackground: string;
   searchPlaceholder: string;
+  /**
+   * Barra de avisos preta no topo (frete grátis, parcelamento, troca…).
+   * `announcementBarEnabled` liga/desliga; `announcementBarBg` é a cor de fundo;
+   * `announcements` são as frases (trecho entre `**...**` vira destaque dourado).
+   */
+  announcementBarEnabled: boolean;
+  announcementBarBg: string;
+  announcements: string[];
+  /** Subtítulo do logo no cabeçalho (ex.: "MODA & ESTILO"). Vazio = não mostra. */
+  headerTagline: string;
   /** URL completa do perfil (ex. https://instagram.com/sualoja) */
   instagramUrl: string;
   facebookUrl: string;
@@ -518,7 +528,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroLayout: "overlay",
   heroSplitPhotoSide: "right",
   heroCouponCode: "",
-  promoCards: [],
+  promoCards: PROMO_CARD_PRESETS.slice(0, 3).map((p) => ({ ...p.card })),
   showCategoryNav: true,
   productCardRatio: "3:4",
   flashSaleEndsAt: "",
@@ -529,9 +539,18 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   infoBullets: [],
   themePrimary: "#c9a8ac",
   themeSecondary: "#5c2e36",
-  headerBackground: "#ffffff",
+  headerBackground: "#11212D",
   pageBackground: "#f7f8fa",
-  searchPlaceholder: "Faça sua busca",
+  searchPlaceholder: "Buscar roupas, modelos, tamanhos...",
+  announcementBarEnabled: true,
+  announcementBarBg: "#06141B",
+  announcements: [
+    "🚀 Nova coleção chegou!",
+    "🚚 Frete grátis acima de **R$ 79**",
+    "💳 Até **10x** sem juros",
+    "🔄 Troca grátis em **7 dias**",
+  ],
+  headerTagline: "MODA & ESTILO",
   instagramUrl: "",
   facebookUrl: "",
   tiktokUrl: "",
@@ -665,6 +684,16 @@ function bulletsFromDb(v: unknown): string[] {
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 8);
+}
+
+/** Frases da barra de avisos do topo (até 6, cada uma com no máx. 80 caracteres). */
+function announcementsFromDb(v: unknown): string[] {
+  if (!Array.isArray(v)) return DEFAULT_STOREFRONT.announcements;
+  return v
+    .filter((x): x is string => typeof x === "string")
+    .map((s) => s.trim().slice(0, 80))
+    .filter(Boolean)
+    .slice(0, 6);
 }
 
 function categoriesFromDb(v: unknown): StorefrontCategoryItem[] {
@@ -829,6 +858,16 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       o.searchPlaceholder,
       DEFAULT_STOREFRONT.searchPlaceholder
     ),
+    announcementBarEnabled: boolFromDb(
+      o.announcementBarEnabled,
+      DEFAULT_STOREFRONT.announcementBarEnabled
+    ),
+    announcementBarBg: str(
+      o.announcementBarBg,
+      DEFAULT_STOREFRONT.announcementBarBg
+    ),
+    announcements: announcementsFromDb(o.announcements),
+    headerTagline: str(o.headerTagline, DEFAULT_STOREFRONT.headerTagline),
     instagramUrl: strOrEmpty(o.instagramUrl),
     facebookUrl: strOrEmpty(o.facebookUrl),
     tiktokUrl: strOrEmpty(o.tiktokUrl),
@@ -896,6 +935,13 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     headerBackground: s.headerBackground.trim(),
     pageBackground: s.pageBackground.trim(),
     searchPlaceholder: s.searchPlaceholder.trim(),
+    announcementBarEnabled: s.announcementBarEnabled,
+    announcementBarBg: s.announcementBarBg.trim() || "#06141B",
+    announcements: s.announcements
+      .map((a) => a.trim().slice(0, 80))
+      .filter(Boolean)
+      .slice(0, 6),
+    headerTagline: s.headerTagline.trim(),
     instagramUrl: s.instagramUrl.trim(),
     facebookUrl: s.facebookUrl.trim(),
     tiktokUrl: s.tiktokUrl.trim(),
