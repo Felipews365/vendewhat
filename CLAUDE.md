@@ -117,16 +117,24 @@ Orientações para o Claude Code trabalhar neste repositório.
     escolhido — `HERO_TARGET_RATIO` (largo) para "de fundo", `HERO_SPLIT_RATIO` (1:1) para "ao lado"
     (`heroCropRatioForLayout`). `heroImageProportionWarning(w,h,layout)` avisa por foto conforme o
     formato. Upload imediato (bucket `product-images`).
-  - **Editor = página dedicada** [/dashboard/banner](src/app/dashboard/banner/page.tsx) (não é mais
-    modal): lista de banners com prévia fiel (`SlidePreview`), formato por banner (Fundo/Ao lado +
-    lado), textos por banner, reordenar (▲▼), remover, adicionar (com formato padrão p/ a próxima
-    foto), + a seção "Texto geral". Carrega/salva o próprio `storefront` (botão **Salvar**). O clique
-    no banner dentro do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
-    (canvas + FAB) navega para essa página (`openBannerEditor`); o antigo painel `banner` do modal
-    ficou **legado/inacessível** (marcado no código, a remover depois). Ao **adicionar** uma foto, a
-    página **rola até o card recém-criado e o destaca** (anel + etiqueta "Ajuste texto e formato
-    aqui", some após 3s) — via `highlightUrl`/`highlightRef` — para o lojista não perder o card lá no
-    fim da lista e configurar texto/formato na hora.
+  - **Editor = página dedicada "estúdio"** [/dashboard/banner](src/app/dashboard/banner/page.tsx)
+    (não é modal). Redesenhado para lojistas leigos: edita **UM banner por vez** num formulário
+    guiado com **PRÉVIA EM TEMPO REAL** (desktop + mockup de celular) e uma **TABELA** com todos os
+    banners (colunas Prévia/Título/Link/Ordem/Status/Ações). Fluxo: **"+ Novo banner"** (topo, à
+    direita) ou o lápis ✏️ da tabela abrem o formulário (estado `draft: HeroSlide | null` +
+    `draftIndex` — `null` = novo); "Criar banner"/"Salvar alterações" comita o `draft` na lista **e
+    persiste na hora** (`persist(next)` grava o `storefront` no banco → a coluna "Status: ● Ativo" é
+    real); a lixeira 🗑️ e os ▲▼ da tabela também **salvam na hora**. Seletor de **estilo com
+    miniaturas visuais** (`StyleThumb`, mock CSS de cada um dos 10 estilos), upload/URL da foto (com
+    recorte pela proporção do estilo — overlay largo, split 1:1, gráficos 3/4), textos, gradiente
+    (De/Via/Até + barra), altura (slider + pills Compacto/Médio/Alto/Extra), cor do botão (+
+    "Resetar"), posição da foto, fotos extras (strips/duo) e "só a foto". A prévia usa o **mesmo
+    `HeroTemplateSlide`** da loja (`SlideInner`/`BannerPreview`), então mostra as animações reais
+    (foto surgindo, texto em cascata, gradiente/brilho do botão). Abaixo ficam as seções "Cards
+    abaixo do banner", "Menu de categorias" e "Texto geral", com um **"Salvar alterações"** no rodapé
+    (`saveRest`) que persiste o resto. O clique no banner dentro do
+    [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (canvas + FAB) navega para
+    essa página (`openBannerEditor`); o antigo painel `banner` do modal ficou **legado/inacessível**.
   - **Migração:** `storefrontFromDb` (`heroSlidesFromDb`) migra formatos antigos — `heroImages:
     string[]`, `heroCarousels` (faixas), `heroImage` (única) → viram slides herdando o antigo formato
     global `heroLayout`/`heroSplitPhotoSide`. Sem migration de banco: tudo no JSONB.
