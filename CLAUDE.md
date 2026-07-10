@@ -488,6 +488,13 @@ logo abaixo da chave Pix.
 > A chave `EditorPanel` continua `"footer"`; só mudaram rótulos/estilo. Os inputs desse editor (que é
 > propositalmente claro) agora fixam `bg-white text-slate-900 placeholder:text-slate-400` para o texto
 > digitado não sumir no tema escuro do painel.
+>
+> **Menu único "⚙️ Configurações da loja":** logo acima do canvas há um botão destacado (cor
+> `landing-primary`) que abre um **dropdown listando todas as seções** do editor (Pix/pagamentos,
+> logo, banner, textos, cores, avisos, busca, infos, redes, categorias, blocos) — cada item chama
+> `openSection(panel)` (= `setPanel`) ou navega para o banner. Ponto de entrada único para o lojista
+> não precisar caçar os atalhos. Estado `settingsMenuOpen`; fecha ao clicar fora (backdrop
+> `fixed inset-0`). A fila de chips abaixo do canvas continua como acesso rápido secundário.
 
 O endereço, o nome da excursão/transportadora e a forma de pagamento aparecem no painel em
 [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (tela e comprovante impresso, via

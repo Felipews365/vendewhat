@@ -377,8 +377,15 @@ export function StoreVisualEditor({
 }) {
   const router = useRouter();
   const [panel, setPanel] = useState<EditorPanel>(null);
+  /** Menu único "Configurações da loja" (lista todas as seções num lugar só). */
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   /** Abre a página dedicada de edição do banner (em vez de um modal). */
   const openBannerEditor = () => router.push("/dashboard/banner");
+  /** Abre uma seção do editor pelo menu de configurações (fecha o menu antes). */
+  const openSection = (p: EditorPanel) => {
+    setSettingsMenuOpen(false);
+    setPanel(p);
+  };
   const [storeCategoryModal, setStoreCategoryModal] = useState<{
     open: boolean;
     editIndex: number | null;
@@ -558,6 +565,65 @@ export function StoreVisualEditor({
         editar cada parte. A área abaixo é como a loja pública — o que mudar aqui
         precisa de <strong>Salvar</strong> no final da página.
       </p>
+
+      {/* Botão único que reúne todas as configurações da loja num menu só. */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setSettingsMenuOpen((v) => !v)}
+          aria-expanded={settingsMenuOpen}
+          className="flex w-full items-center justify-between gap-2 rounded-xl border border-landing-primary/30 bg-landing-primary px-4 py-3 text-sm font-bold text-white shadow-sm hover:opacity-95 sm:w-auto"
+        >
+          <span className="flex items-center gap-2">
+            <span aria-hidden>⚙️</span> Configurações da loja
+          </span>
+          <span aria-hidden className={settingsMenuOpen ? "rotate-180 transition-transform" : "transition-transform"}>▾</span>
+        </button>
+        <p className="mt-1 text-[11px] text-slate-500">
+          Tudo num lugar só: Pix e pagamentos, banner, cores, categorias, rodapé…
+        </p>
+
+        {settingsMenuOpen && (
+          <>
+            {/* Fundo para fechar ao clicar fora. */}
+            <button
+              type="button"
+              aria-label="Fechar menu"
+              onClick={() => setSettingsMenuOpen(false)}
+              className="fixed inset-0 z-30 cursor-default"
+            />
+            <div className="absolute left-0 top-full z-40 mt-2 w-full max-w-sm overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+              <div className="max-h-[70vh] overflow-y-auto py-1">
+                {(
+                  [
+                    { emoji: "💳", label: "Pix, pagamentos e rodapé", onClick: () => openSection("footer") },
+                    { emoji: "🖼️", label: "Logo da loja", onClick: () => openSection("logo") },
+                    { emoji: "🎞️", label: "Banner da loja", onClick: () => { setSettingsMenuOpen(false); openBannerEditor(); } },
+                    { emoji: "✍️", label: "Textos do banner", onClick: () => openSection("texts") },
+                    { emoji: "🎨", label: "Cores da loja", onClick: () => openSection("colors") },
+                    { emoji: "📢", label: "Barra de avisos do topo", onClick: () => openSection("avisos") },
+                    { emoji: "🔎", label: "Barra de busca", onClick: () => openSection("search") },
+                    { emoji: "ℹ️", label: "Informações abaixo do logo", onClick: () => openSection("info") },
+                    { emoji: "🔗", label: "Redes sociais", onClick: () => openSection("socials") },
+                    { emoji: "🏷️", label: "Categorias na loja", onClick: () => openSection("categories") },
+                    { emoji: "✨", label: "Blocos de destaque", onClick: () => openSection("blocks") },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={item.onClick}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <span aria-hidden className="text-base">{item.emoji}</span>
+                    <span className="font-medium">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Canvas da vitrine — sem overflow-hidden no pai para não recortar os botões + */}
       <div className="rounded-2xl border-2 border-slate-200 bg-[#f5f5f5] shadow-inner">
