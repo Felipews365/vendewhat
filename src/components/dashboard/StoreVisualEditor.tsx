@@ -567,7 +567,7 @@ export function StoreVisualEditor({
       </p>
 
       {/* Botão único que reúne todas as configurações da loja num menu só. */}
-      <div className="relative">
+      <div className="relative scroll-mt-28" id="passo-configuracoes">
         <button
           type="button"
           onClick={() => setSettingsMenuOpen((v) => !v)}
@@ -1160,81 +1160,6 @@ export function StoreVisualEditor({
         </div>
       </div>
 
-      {/* Atalhos rápidos abaixo do canvas */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          id="passo-pagamentos"
-          onClick={() => setPanel("footer")}
-          className="text-xs font-bold px-3 py-2 rounded-lg border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm scroll-mt-28"
-        >
-          💳 Pix e pagamentos
-        </button>
-        <button
-          type="button"
-          id="passo-avisos"
-          onClick={() => setPanel("avisos")}
-          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
-        >
-          Barra de avisos
-        </button>
-        <button
-          type="button"
-          id="passo-textos-banner"
-          onClick={() => setPanel("texts")}
-          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
-        >
-          Textos do banner
-        </button>
-        <button
-          type="button"
-          id="passo-cores"
-          onClick={() => setPanel("colors")}
-          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
-        >
-          Cores
-        </button>
-        <button
-          type="button"
-          id="passo-info"
-          onClick={() => setPanel("info")}
-          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
-        >
-          Infos abaixo do logo
-        </button>
-        <button
-          type="button"
-          id="passo-redes"
-          onClick={() => setPanel("socials")}
-          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
-        >
-          Redes sociais
-        </button>
-        <button
-          type="button"
-          id="passo-categorias"
-          onClick={() => setPanel("categories")}
-          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
-        >
-          Categorias
-        </button>
-        <button
-          type="button"
-          id="passo-blocos"
-          onClick={() => setPanel("blocks")}
-          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
-        >
-          Blocos de destaque
-        </button>
-        <button
-          type="button"
-          id="passo-rodape"
-          onClick={() => setPanel("footer")}
-          className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
-        >
-          Rodapé, contato e retirada
-        </button>
-      </div>
 
       {/* Painéis */}
       <EditorSheet

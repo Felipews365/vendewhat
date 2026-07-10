@@ -479,8 +479,12 @@ prova de invenção**: o `buildSystemPrompt` ([attendant.ts](src/lib/ai/attendan
 ([whatsappRespond.ts](src/lib/whatsappRespond.ts)) lê o marcador via `parseReplyDirectives` e envia a
 chave num balão próprio (linha isolada p/ copiar fácil) montado a partir do `storefront`. Sem chave
 preenchida ou com o toggle desligado, `hasPix` é `false` → a IA nunca oferece nem envia Pix. O toggle
-fica no painel de pagamentos do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx),
-logo abaixo da chave Pix.
+aparece em **dois lugares** (mesmo campo `storefront.aiSendPixOnCheckout`): no painel de pagamentos do
+[StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (abaixo da chave Pix) **e** na
+aba **Atendente de IA** ([whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx), estado
+`sendPixOnCheckout`, com aviso quando não há chave Pix). Como a aba de IA salva `store_whatsapp`, a
+rota [/api/whatsapp/config](src/app/api/whatsapp/config/route.ts) recebe `aiSendPixOnCheckout` e faz um
+**patch preservando o resto do JSONB** `stores.storefront` (só grava quando o campo vem no corpo).
 
 > **Nota de UI:** o painel `footer` do editor (antigo "Rodapé da vitrine") foi retitulado para
 > **"Pix, pagamentos e rodapé"** e ganhou um atalho **destacado (verde) "💳 Pix e pagamentos"** no
@@ -490,11 +494,14 @@ logo abaixo da chave Pix.
 > digitado não sumir no tema escuro do painel.
 >
 > **Menu único "⚙️ Configurações da loja":** logo acima do canvas há um botão destacado (cor
-> `landing-primary`) que abre um **dropdown listando todas as seções** do editor (Pix/pagamentos,
-> logo, banner, textos, cores, avisos, busca, infos, redes, categorias, blocos) — cada item chama
-> `openSection(panel)` (= `setPanel`) ou navega para o banner. Ponto de entrada único para o lojista
-> não precisar caçar os atalhos. Estado `settingsMenuOpen`; fecha ao clicar fora (backdrop
-> `fixed inset-0`). A fila de chips abaixo do canvas continua como acesso rápido secundário.
+> `landing-primary`, âncora `id="passo-configuracoes"`) que abre um **dropdown listando todas as
+> seções** do editor (Pix/pagamentos, logo, banner, textos, cores, avisos, busca, infos, redes,
+> categorias, blocos) — cada item chama `openSection(panel)` (= `setPanel`) ou navega para o banner.
+> Ponto de entrada **único** para o lojista não precisar caçar os atalhos. Estado `settingsMenuOpen`;
+> fecha ao clicar fora (backdrop `fixed inset-0`). A **antiga fila de chips abaixo do canvas foi
+> removida** (o menu cobre tudo); o [StoreSetupGuideModal.tsx](src/components/dashboard/StoreSetupGuideModal.tsx)
+> teve os passos que apontavam para os chips (`#passo-textos-banner/cores/redes/info`) repontados para
+> `#passo-configuracoes`. As âncoras `#passo-banner` e `#passo-busca` seguem no canvas.
 
 O endereço, o nome da excursão/transportadora e a forma de pagamento aparecem no painel em
 [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (tela e comprovante impresso, via

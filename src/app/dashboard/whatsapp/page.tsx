@@ -133,6 +133,10 @@ export default function WhatsAppIaPage() {
   const [storeVideoUrl, setStoreVideoUrl] = useState("");
   const [videoUploading, setVideoUploading] = useState(false);
   const [pickupAddress, setPickupAddress] = useState("");
+  // Toggle "A IA envia a chave Pix ao fechar o pedido" (mora no storefront, editado
+  // aqui e no painel de pagamentos da vitrine). hasPixKey = a loja tem chave Pix.
+  const [sendPixOnCheckout, setSendPixOnCheckout] = useState(false);
+  const [hasPixKey, setHasPixKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
 
@@ -224,7 +228,12 @@ export default function WhatsAppIaPage() {
         return;
       }
       setStoreId(store.id);
-      setPickupAddress(storefrontFromDb(store.storefront).pickupAddress);
+      {
+        const sf0 = storefrontFromDb(store.storefront);
+        setPickupAddress(sf0.pickupAddress);
+        setSendPixOnCheckout(sf0.aiSendPixOnCheckout);
+        setHasPixKey(Boolean(sf0.pixKey.trim()));
+      }
 
       const { data: cfg } = await supabase
         .from("store_whatsapp")
@@ -357,6 +366,7 @@ export default function WhatsAppIaPage() {
           aiLocationUrl: locationUrl,
           aiStorePhotoUrl: storePhotoUrl,
           aiStoreVideoUrl: storeVideoUrl,
+          aiSendPixOnCheckout: sendPixOnCheckout,
         }),
       });
       const data = await res.json();
@@ -779,6 +789,32 @@ export default function WhatsAppIaPage() {
             }
           />
         </div>
+
+        {/* A IA envia a chave Pix ao fechar o pedido (mesmo toggle do painel de pagamentos) */}
+        <label className="flex items-start gap-3 rounded-xl border border-stone-200 dark:border-slate-700 p-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={sendPixOnCheckout}
+            onChange={(e) => setSendPixOnCheckout(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-stone-300 text-violet-700 focus:ring-violet-600 dark:border-slate-600 dark:bg-slate-800"
+          />
+          <span>
+            <span className="block text-sm font-medium text-stone-800 dark:text-slate-100">
+              A IA envia a chave Pix ao fechar o pedido
+            </span>
+            <span className="mt-0.5 block text-xs text-stone-500 dark:text-slate-400">
+              Quando o cliente for finalizar a compra pela conversa, a IA manda a
+              chave Pix da loja para ele pagar. Sem chave Pix cadastrada, ela nunca
+              envia nem inventa uma.
+            </span>
+            {!hasPixKey && (
+              <span className="mt-1 block text-xs font-medium text-amber-600 dark:text-amber-400">
+                Você ainda não cadastrou uma chave Pix — cadastre em Loja →
+                Configurações → Pix e pagamentos para a IA poder enviar.
+              </span>
+            )}
+          </span>
+        </label>
 
         {/* Loja só online (sem ponto físico) */}
         <label className="flex items-start gap-3 rounded-xl border border-stone-200 dark:border-slate-700 p-4 cursor-pointer">

@@ -24,6 +24,8 @@ type Body = {
   aiLocationUrl?: string;
   aiStorePhotoUrl?: string;
   aiStoreVideoUrl?: string;
+  /** Toggle "A IA envia a chave Pix ao fechar o pedido" — mora no storefront. */
+  aiSendPixOnCheckout?: boolean;
 };
 
 export async function POST(req: Request) {
@@ -37,7 +39,7 @@ export async function POST(req: Request) {
 
   const { data: store } = await supabase
     .from("stores")
-    .select("id")
+    .select("id, storefront")
     .eq("user_id", user.id)
     .maybeSingle();
   if (!store?.id) {
@@ -102,6 +104,22 @@ export async function POST(req: Request) {
     aiStoreVideoUrl:
       typeof body.aiStoreVideoUrl === "string" ? body.aiStoreVideoUrl : "",
   });
+
+  // O toggle "A IA envia a chave Pix ao fechar o pedido" mora no JSONB storefront
+  // (mesmo campo do painel de pagamentos da vitrine). Faz um patch preservando o
+  // resto do storefront; só grava quando o campo veio no corpo.
+  if (typeof body.aiSendPixOnCheckout === "boolean") {
+    const current =
+      store.storefront && typeof store.storefront === "object"
+        ? (store.storefront as Record<string, unknown>)
+        : {};
+    await admin
+      .from("stores")
+      .update({
+        storefront: { ...current, aiSendPixOnCheckout: body.aiSendPixOnCheckout },
+      })
+      .eq("id", store.id as string);
+  }
 
   return NextResponse.json({
     ok: true,
