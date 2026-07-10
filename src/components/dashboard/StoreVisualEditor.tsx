@@ -1050,7 +1050,7 @@ export function StoreVisualEditor({
         <div className="relative bg-stone-50/95 border-t border-slate-200 px-3 py-3 sm:px-4">
           <div className="absolute top-2 right-2 z-20">
             <PlusFab
-              label="Editar rodapé da vitrine"
+              label="Editar Pix, pagamentos e rodapé"
               onClick={() => setPanel("footer")}
             />
           </div>
@@ -1096,6 +1096,14 @@ export function StoreVisualEditor({
 
       {/* Atalhos rápidos abaixo do canvas */}
       <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          id="passo-pagamentos"
+          onClick={() => setPanel("footer")}
+          className="text-xs font-bold px-3 py-2 rounded-lg border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm scroll-mt-28"
+        >
+          💳 Pix e pagamentos
+        </button>
         <button
           type="button"
           id="passo-avisos"
@@ -1158,7 +1166,7 @@ export function StoreVisualEditor({
           onClick={() => setPanel("footer")}
           className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 scroll-mt-28"
         >
-          Rodapé da vitrine
+          Rodapé, contato e retirada
         </button>
       </div>
 
@@ -1204,7 +1212,7 @@ export function StoreVisualEditor({
           onChange={(e) =>
             setSf((s) => ({ ...s, heroSubtitle: e.target.value }))
           }
-          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm"
+          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
           placeholder="Frete grátis acima de R$…"
         />
       </EditorSheet>
@@ -1375,7 +1383,7 @@ export function StoreVisualEditor({
               onChange={(e) =>
                 setSf((s) => ({ ...s, heroSubtitle: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
             />
           </div>
           <div>
@@ -1388,7 +1396,7 @@ export function StoreVisualEditor({
               onChange={(e) =>
                 setSf((s) => ({ ...s, heroTitle: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
             />
           </div>
           <div>
@@ -1419,7 +1427,7 @@ export function StoreVisualEditor({
                 onChange={(e) =>
                   setSf((s) => ({ ...s, heroCtaLabel: e.target.value }))
                 }
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
               />
             </div>
             <div>
@@ -1512,7 +1520,7 @@ export function StoreVisualEditor({
                     onChange={(e) =>
                       patchBlockConfig(block.id, { eyebrow: e.target.value })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
                     placeholder="Ex.: NOVIDADE"
                   />
                 </div>
@@ -1528,7 +1536,7 @@ export function StoreVisualEditor({
                     onChange={(e) =>
                       patchBlockConfig(block.id, { title: e.target.value })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
                     placeholder="Conheça a nova coleção"
                   />
                 </div>
@@ -1544,7 +1552,7 @@ export function StoreVisualEditor({
                     onChange={(e) =>
                       patchBlockConfig(block.id, { body: e.target.value })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm resize-none"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 resize-none"
                     placeholder="Peças selecionadas com carinho para você."
                   />
                   <span className="text-[10px] text-slate-400">
@@ -1605,7 +1613,7 @@ export function StoreVisualEditor({
                       onChange={(e) =>
                         patchBlockConfig(block.id, { ctaLabel: e.target.value })
                       }
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
                       placeholder="Ver coleção"
                     />
                   </div>
@@ -1773,7 +1781,7 @@ export function StoreVisualEditor({
               onChange={(e) =>
                 setSf((s) => ({ ...s, instagramUrl: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
               placeholder="@loja"
             />
           </div>
@@ -1787,7 +1795,7 @@ export function StoreVisualEditor({
               onChange={(e) =>
                 setSf((s) => ({ ...s, facebookUrl: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
             />
           </div>
           <div>
@@ -1800,7 +1808,7 @@ export function StoreVisualEditor({
               onChange={(e) =>
                 setSf((s) => ({ ...s, tiktokUrl: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
             />
           </div>
           <div>
@@ -1813,7 +1821,7 @@ export function StoreVisualEditor({
               onChange={(e) =>
                 setSf((s) => ({ ...s, youtubeUrl: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
               placeholder="https://youtube.com/@…"
             />
           </div>
@@ -1892,7 +1900,7 @@ export function StoreVisualEditor({
                     return { ...s, categories: next };
                   });
                 }}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
                 placeholder="Ex.: Vestidos"
               />
               {cat.parentLabel?.trim() ? (
@@ -1951,7 +1959,7 @@ export function StoreVisualEditor({
                 type="text"
                 value={line}
                 onChange={(e) => setBullet(i, e.target.value)}
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
               />
               <button
                 type="button"
@@ -1986,7 +1994,7 @@ export function StoreVisualEditor({
           onChange={(e) =>
             setSf((s) => ({ ...s, searchPlaceholder: e.target.value }))
           }
-          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm"
+          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
         />
       </EditorSheet>
 
@@ -2030,7 +2038,7 @@ export function StoreVisualEditor({
                 onChange={(e) =>
                   setSf((s) => ({ ...s, announcementBarBg: e.target.value }))
                 }
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
               />
             </div>
           </div>
@@ -2062,7 +2070,7 @@ export function StoreVisualEditor({
                         ),
                       }))
                     }
-                    className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                    className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
                   />
                   <button
                     type="button"
@@ -2109,7 +2117,7 @@ export function StoreVisualEditor({
               onChange={(e) =>
                 setSf((s) => ({ ...s, headerTagline: e.target.value }))
               }
-              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm"
+              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
             />
           </div>
         </div>
@@ -2117,7 +2125,7 @@ export function StoreVisualEditor({
 
       <EditorSheet
         open={panel === "footer"}
-        title="Rodapé da vitrine"
+        title="Pix, pagamentos e rodapé"
         onClose={() => setPanel(null)}
       >
         <p className="text-xs text-slate-500">
@@ -2139,7 +2147,7 @@ export function StoreVisualEditor({
               setSf((s) => ({ ...s, pickupAddress: e.target.value }))
             }
             rows={3}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm resize-none"
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 resize-none"
             placeholder="Ex.: Rua das Flores, 123 — Centro, São Paulo/SP. Seg–Sex 9h–18h."
           />
           <label className="block text-sm font-medium text-slate-700 pt-1">
@@ -2156,7 +2164,7 @@ export function StoreVisualEditor({
               setSf((s) => ({ ...s, pickupInstructions: e.target.value }))
             }
             rows={2}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm resize-none"
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 resize-none"
             placeholder="Ex.: Retire de Seg–Sex, 9h–18h. Apresente o código do pedido no balcão."
           />
         </div>
@@ -2169,7 +2177,7 @@ export function StoreVisualEditor({
           onChange={(e) =>
             setSf((s) => ({ ...s, footerShippingLine: e.target.value }))
           }
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
           placeholder="Ex.: Frete grátis em pedidos a partir de R$ 199"
         />
         <label className="block text-sm font-medium text-slate-700">
@@ -2181,7 +2189,7 @@ export function StoreVisualEditor({
           onChange={(e) =>
             setSf((s) => ({ ...s, footerReturnsLine: e.target.value }))
           }
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
           placeholder="Ex.: Conheça nossa política de trocas e devoluções"
         />
         <label className="block text-sm font-medium text-slate-700">
@@ -2205,7 +2213,7 @@ export function StoreVisualEditor({
           onChange={(e) =>
             setSf((s) => ({ ...s, footerPhone: e.target.value }))
           }
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
           placeholder="(00) 00000-0000"
         />
         <label className="block text-sm font-medium text-slate-700">E-mail</label>
@@ -2215,7 +2223,7 @@ export function StoreVisualEditor({
           onChange={(e) =>
             setSf((s) => ({ ...s, footerEmail: e.target.value }))
           }
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
           placeholder="contato@sualoja.com"
         />
         <label className="block text-sm font-medium text-slate-700">Site</label>
@@ -2225,7 +2233,7 @@ export function StoreVisualEditor({
           onChange={(e) =>
             setSf((s) => ({ ...s, footerWebsite: e.target.value }))
           }
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
           placeholder="www.sualoja.com.br"
         />
         <label className="block text-sm font-medium text-slate-700">
@@ -2237,7 +2245,7 @@ export function StoreVisualEditor({
           onChange={(e) =>
             setSf((s) => ({ ...s, footerHours: e.target.value }))
           }
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
           placeholder="Seg–Sex 9h–18h"
         />
         <div className="flex flex-wrap gap-4 pt-1">
@@ -2271,7 +2279,7 @@ export function StoreVisualEditor({
           type="text"
           value={sf.pixKey}
           onChange={(e) => setSf((s) => ({ ...s, pixKey: e.target.value }))}
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
           placeholder="CPF, telefone, e-mail ou chave aleatória"
         />
         <label className="block text-sm font-medium text-slate-700">
@@ -2281,7 +2289,7 @@ export function StoreVisualEditor({
           type="text"
           value={sf.pixName}
           onChange={(e) => setSf((s) => ({ ...s, pixName: e.target.value }))}
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
           placeholder="Ex.: Maria da Silva"
         />
         <p className="text-[11px] text-slate-500">

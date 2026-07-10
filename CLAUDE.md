@@ -479,8 +479,15 @@ prova de invenção**: o `buildSystemPrompt` ([attendant.ts](src/lib/ai/attendan
 ([whatsappRespond.ts](src/lib/whatsappRespond.ts)) lê o marcador via `parseReplyDirectives` e envia a
 chave num balão próprio (linha isolada p/ copiar fácil) montado a partir do `storefront`. Sem chave
 preenchida ou com o toggle desligado, `hasPix` é `false` → a IA nunca oferece nem envia Pix. O toggle
-fica no painel "Rodapé da vitrine" do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx),
+fica no painel de pagamentos do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx),
 logo abaixo da chave Pix.
+
+> **Nota de UI:** o painel `footer` do editor (antigo "Rodapé da vitrine") foi retitulado para
+> **"Pix, pagamentos e rodapé"** e ganhou um atalho **destacado (verde) "💳 Pix e pagamentos"** no
+> **início** da fila de atalhos abaixo do canvas (antes era o último botão neutro, difícil de achar).
+> A chave `EditorPanel` continua `"footer"`; só mudaram rótulos/estilo. Os inputs desse editor (que é
+> propositalmente claro) agora fixam `bg-white text-slate-900 placeholder:text-slate-400` para o texto
+> digitado não sumir no tema escuro do painel.
 
 O endereço, o nome da excursão/transportadora e a forma de pagamento aparecem no painel em
 [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (tela e comprovante impresso, via
