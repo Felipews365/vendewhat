@@ -122,6 +122,11 @@ export async function respondToCustomer(
   // Tem produto = a IA pode anexar o catálogo em PDF.
   const hasCatalogPdf = (productRows?.length ?? 0) > 0;
 
+  // Pix: a IA só oferece/envia a chave se a loja preencheu a chave E ativou o
+  // envio pela IA no painel. Sem chave, nunca envia (e o prompt proíbe inventar).
+  const pixKey = sf.pixKey.trim();
+  const pixEnabled = sf.aiSendPixOnCheckout && Boolean(pixKey);
+
   // Loja sem controle de estoque: a IA não deve dizer "sem estoque" (trata tudo
   // como disponível, igual à loja pública). Só afeta o texto do catálogo no prompt.
   let products = mapProducts((productRows ?? []) as AnyObj[]);
@@ -172,6 +177,7 @@ export async function respondToCustomer(
     pickupAddress,
     pickupInstructions,
     hasCatalogPdf,
+    hasPix: pixEnabled,
   });
 
   const reply = await generateReply(systemPrompt, contextHistory, combinedUserText);
@@ -183,6 +189,7 @@ export async function respondToCustomer(
     sendPhoto,
     sendVideo,
     sendCatalog,
+    sendPix,
   } = parseReplyDirectives(reply);
   // Rede de segurança do link: o gpt-4o-mini às vezes ANUNCIA o link ("segue o
   // link", "confira o catálogo") mas esquece de colar a URL (o cliente recebe só a
@@ -272,6 +279,31 @@ export async function respondToCustomer(
       }
     } catch (e) {
       console.error("[whatsappRespond] sendCatalog", e);
+    }
+  }
+  // Chave Pix (fechamento do pedido): enviada de forma DETERMINÍSTICA a partir da
+  // chave cadastrada — a IA nunca escreve a chave (só emite o marcador), então não
+  // há como inventar. A chave vai numa linha própria para o cliente copiar fácil.
+  if (sendPix && pixEnabled) {
+    try {
+      const pixName = sf.pixName.trim();
+      const pixMsg = [
+        "Pode pagar via Pix com esta chave 🔑",
+        "",
+        pixKey,
+        pixName ? `Titular: ${pixName}` : "",
+        "",
+        "Assim que fizer o Pix, é só me enviar o comprovante 😊",
+      ]
+        .filter((l) => l !== null && l !== undefined)
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      await sendText(cfg.evolutionInstance, customerPhone, pixMsg, 1200);
+      await appendMessage(admin, cfg.storeId, customerPhone, "assistant", pixMsg);
+      sent = true;
+    } catch (e) {
+      console.error("[whatsappRespond] sendPix", e);
     }
   }
   return sent;

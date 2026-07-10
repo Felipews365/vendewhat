@@ -508,6 +508,8 @@ export type StorefrontSettings = {
   pixKey: string;
   /** Nome do titular da conta Pix (mostrado junto da chave). */
   pixName: string;
+  /** A IA do WhatsApp envia a chave Pix quando o cliente for fechar o pedido (exige `pixKey`). */
+  aiSendPixOnCheckout: boolean;
   /** ID do Pixel do Facebook/Meta (só números) — carrega o rastreamento na loja pública. */
   facebookPixelId: string;
   /** ID da tag do Google: GA4 "G-…", Google Ads "AW-…" ou Tag Manager "GTM-…". */
@@ -573,6 +575,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   footerShowCash: false,
   pixKey: "",
   pixName: "",
+  aiSendPixOnCheckout: false,
   facebookPixelId: "",
   googleAnalyticsId: "",
   contentBlocks: [],
@@ -905,6 +908,10 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     ),
     pixKey: strOrEmpty(o.pixKey),
     pixName: strOrEmpty(o.pixName),
+    aiSendPixOnCheckout: boolFromDb(
+      o.aiSendPixOnCheckout,
+      DEFAULT_STOREFRONT.aiSendPixOnCheckout
+    ),
     facebookPixelId: sanitizeFacebookPixelId(o.facebookPixelId),
     googleAnalyticsId: sanitizeGoogleTagId(o.googleAnalyticsId),
     contentBlocks: contentBlocksFromDb(o.contentBlocks),
@@ -963,6 +970,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     footerShowCash: s.footerShowCash,
     pixKey: s.pixKey.trim(),
     pixName: s.pixName.trim(),
+    aiSendPixOnCheckout: s.aiSendPixOnCheckout,
     facebookPixelId: sanitizeFacebookPixelId(s.facebookPixelId),
     googleAnalyticsId: sanitizeGoogleTagId(s.googleAnalyticsId),
     contentBlocks: contentBlocksFromDb(s.contentBlocks).slice(

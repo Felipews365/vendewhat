@@ -469,6 +469,19 @@ com a chave para o cliente pagar e enviar o comprovante — mas **só quando o m
 Sem migration: mora no JSONB `stores.storefront`. É o fluxo de pagamento dos pedidos que **não**
 passam pelo Mercado Pago.
 
+**A IA do WhatsApp envia a chave Pix ao fechar o pedido** (toggle `storefront.aiSendPixOnCheckout`,
+default `false` — **opt-in**, só envia se o lojista marcar no painel; JSONB — **sem migration**):
+quando o cliente vai finalizar/pagar pela conversa, a IA
+oferece o Pix e o sistema manda a **chave Pix real** (`pixKey` + `pixName`). É **determinístico e à
+prova de invenção**: o `buildSystemPrompt` ([attendant.ts](src/lib/ai/attendant.ts)) recebe `hasPix`
+(= `aiSendPixOnCheckout && pixKey` preenchida) e instrui a IA a **só emitir o marcador
+`[[ENVIAR_PIX]]`** (proibido escrever/chutar a chave); `respondToCustomer`
+([whatsappRespond.ts](src/lib/whatsappRespond.ts)) lê o marcador via `parseReplyDirectives` e envia a
+chave num balão próprio (linha isolada p/ copiar fácil) montado a partir do `storefront`. Sem chave
+preenchida ou com o toggle desligado, `hasPix` é `false` → a IA nunca oferece nem envia Pix. O toggle
+fica no painel "Rodapé da vitrine" do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx),
+logo abaixo da chave Pix.
+
 O endereço, o nome da excursão/transportadora e a forma de pagamento aparecem no painel em
 [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (tela e comprovante impresso, via
 `paymentMethodLabel`). Não há migration: `pickupAddress`/`pickupInstructions` e os toggles de

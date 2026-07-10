@@ -2288,6 +2288,24 @@ export function StoreVisualEditor({
           Quando o cliente finalizar por <strong>Enviar pedido no WhatsApp</strong>,
           a chave Pix entra na mensagem para ele pagar e enviar o comprovante.
         </p>
+        <label className="mt-1 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3 text-sm text-slate-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={sf.aiSendPixOnCheckout}
+            onChange={(e) =>
+              setSf((s) => ({ ...s, aiSendPixOnCheckout: e.target.checked }))
+            }
+            className="mt-0.5 rounded border-slate-300"
+          />
+          <span>
+            A IA do WhatsApp envia a chave Pix ao fechar o pedido
+            <span className="block text-[11px] text-slate-500">
+              Quando o cliente for finalizar a compra pela conversa, a IA manda a
+              chave Pix acima para ele pagar. Sem chave preenchida, ela nunca
+              envia nem inventa uma.
+            </span>
+          </span>
+        </label>
         <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
           <p className="text-sm font-medium text-slate-700">
             Formas de pagamento no checkout

@@ -99,6 +99,8 @@ export function buildSystemPrompt(args: {
   pickupInstructions?: string;
   /** A loja tem produtos: a IA pode anexar o catálogo em PDF. */
   hasCatalogPdf?: boolean;
+  /** A loja recebe por Pix e ativou o envio pela IA: manda a chave ao fechar o pedido. */
+  hasPix?: boolean;
 }): string {
   const {
     storeName,
@@ -117,6 +119,7 @@ export function buildSystemPrompt(args: {
     pickupAddress,
     pickupInstructions,
     hasCatalogPdf,
+    hasPix,
   } = args;
   const storeUrl = `${baseUrl.replace(/\/+$/, "")}/loja/${slug}`;
   const address = (storeAddress ?? "").trim();
@@ -173,7 +176,10 @@ export function buildSystemPrompt(args: {
     hasCatalogPdf
       ? `- Você PODE anexar um CATÁLOGO EM PDF com todos os produtos (fotos, preços, cores e tamanhos) para o cliente folhear e escolher com calma. Quando o cliente pedir o catálogo, a lista de produtos, um PDF, quiser ver tudo o que a loja vende, ou você mandar o link da loja para ele conferir os produtos, ENVIE o link do site (como já explicado) E inclua, no final da mensagem, o marcador [[ENVIAR_CATALOGO]] — o sistema anexa o PDF automaticamente. Assim o cliente escolhe: ver pelo site (link) ou pelo PDF. Mencione de forma leve que está mandando o catálogo em PDF também. Envie o PDF no máximo uma vez por conversa, a não ser que o cliente peça de novo.`
       : "",
-    hasLocationPin || hasStorePhoto || hasStoreVideo || hasCatalogPdf
+    hasPix
+      ? "- PAGAMENTO POR PIX: esta loja recebe pagamento via Pix. Quando o cliente for FECHAR/FINALIZAR o pedido, confirmar a compra ou perguntar como pagar (ex.: 'vou querer', 'pode fechar', 'como pago?', 'aceita pix?', 'me manda a chave pix'), ofereça o pagamento por Pix e inclua, no final da mensagem, o marcador [[ENVIAR_PIX]] — o sistema envia a CHAVE PIX real automaticamente logo em seguida. NUNCA escreva, chute ou invente uma chave Pix você mesmo; deixe SEMPRE o sistema enviar pelo marcador. Peça, com gentileza, que o cliente envie o comprovante depois de pagar. Envie o Pix quando o cliente estiver de fato fechando/pagando, não a cada mensagem."
+      : "",
+    hasLocationPin || hasStorePhoto || hasStoreVideo || hasCatalogPdf || hasPix
       ? "- Os marcadores [[...]] são comandos internos: use-os só quando fizer sentido, nunca os explique ao cliente e nunca os escreva em outro contexto."
       : "",
     hasPickup
@@ -213,27 +219,32 @@ export type ReplyDirectives = {
   sendVideo: boolean;
   /** A IA pediu para anexar o catálogo em PDF. */
   sendCatalog: boolean;
+  /** A IA pediu para enviar a chave Pix (fechamento do pedido). */
+  sendPix: boolean;
 };
 
 /**
  * Separa a resposta da IA dos marcadores internos ([[ENVIAR_LOCALIZACAO]],
- * [[ENVIAR_FOTO]], [[ENVIAR_VIDEO]], [[ENVIAR_CATALOGO]]) que pedem o envio do
- * pino do mapa / da foto / do vídeo da loja / do catálogo em PDF.
+ * [[ENVIAR_FOTO]], [[ENVIAR_VIDEO]], [[ENVIAR_CATALOGO]], [[ENVIAR_PIX]]) que
+ * pedem o envio do pino do mapa / da foto / do vídeo da loja / do catálogo em
+ * PDF / da chave Pix.
  */
 export function parseReplyDirectives(reply: string): ReplyDirectives {
   const sendLocation = /\[\[\s*ENVIAR_LOCALIZACAO\s*\]\]/i.test(reply);
   const sendPhoto = /\[\[\s*ENVIAR_FOTO\s*\]\]/i.test(reply);
   const sendVideo = /\[\[\s*ENVIAR_VIDEO\s*\]\]/i.test(reply);
   const sendCatalog = /\[\[\s*ENVIAR_CATALOGO\s*\]\]/i.test(reply);
+  const sendPix = /\[\[\s*ENVIAR_PIX\s*\]\]/i.test(reply);
   const text = reply
     .replace(/\[\[\s*ENVIAR_LOCALIZACAO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_FOTO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_VIDEO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_CATALOGO\s*\]\]/gi, "")
+    .replace(/\[\[\s*ENVIAR_PIX\s*\]\]/gi, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { text, sendLocation, sendPhoto, sendVideo, sendCatalog };
+  return { text, sendLocation, sendPhoto, sendVideo, sendCatalog, sendPix };
 }
 
 /** Gera a resposta do atendente. Retorna o texto, ou null se não houver conteúdo. */
