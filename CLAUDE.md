@@ -1032,6 +1032,59 @@ Duas integrações distintas, ambas via wrapper REST [src/lib/mercadopago.ts](sr
 - **Modo teste:** comece com credenciais `TEST-...` (tanto a sua quanto a do lojista). A UI mostra um
   selo "Modo teste" quando o token do lojista começa com `TEST-`.
 
+## Créditos da IA (cobrança por uso)
+
+A IA é **paga por uso**: cada loja tem um **saldo de tokens** e, a cada resposta da IA, o sistema
+desconta os tokens reais gastos na OpenAI. Sem saldo, a IA **para de atender** e o dono é avisado no
+WhatsApp. O saldo é mostrado ao lojista em **"conversas"** (1 conversa ≈ **80.000 tokens** —
+`TOKENS_PER_CONVERSATION`), nunca em tokens. **Planos:** Sem IA (R$ 89,90) / IA Completo (R$ 500 —
+franquia de 80 mi tokens/mês ≈ 1.000 conversas) / IA Sob Medida (R$ 350 + créditos). Ids legados
+mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.ts) + seed do admin.
+
+- **Motor:** [src/lib/aiCredits.ts](src/lib/aiCredits.ts) + tabela `store_ai_credits` (**migration:**
+  [supabase-migration-ai-credits.sql](supabase-migration-ai-credits.sql), sem policies — só service
+  role). Colunas: `included_tokens` (franquia mensal do plano — `PLAN_MONTHLY_TOKENS`, renova por
+  mês-calendário), `used_tokens` (consumo do ciclo, zera na renovação), `credit_tokens` (créditos
+  comprados/creditados — **acumulam, não expiram**), `low_warned_at`/`empty_warned_at` (avisos). Saldo
+  disponível = `max(0, included − used) + credit`; **desconta primeiro da franquia, depois dos
+  créditos**. `loadCredits` cria a linha (com **bônus de boas-vindas** `WELCOME_BONUS_TOKENS` = 30
+  conversas), renova o ciclo e sincroniza a franquia com o plano atual. `consumeTokens` desconta e
+  sinaliza `justLow`/`justEmptied`; `addCredits` credita e limpa os avisos.
+- **Medição (tokens reais):** `generateReply` e as 3 funções dos crons
+  (`generateFollowupReply`/`generatePostsaleReply`/`generateAbandonedCartReply`) em
+  [attendant.ts](src/lib/ai/attendant.ts) devolvem `ReplyResult` (`{ text, tokens }`, de
+  `completion.usage.total_tokens`).
+- **Trava + avisos (Opção A):** [whatsappRespond.ts](src/lib/whatsappRespond.ts) checa `hasAiBalance`
+  **antes** de gerar (nunca corta no meio) — sem saldo, **não responde** o cliente e avisa o dono uma
+  vez (`notifyOwnerCredits`, ao `cfg.connectedNumber`); depois de responder, `consumeTokens` e avisa se
+  cruzou "acabando" (~20 conversas) / "esgotado". Os 3 crons em
+  [followups/route.ts](src/app/api/whatsapp/followups/route.ts) também gateiam+medem (o pós-venda cai na
+  mensagem padrão grátis se não houver saldo; follow-up/carrinho por IA só rodam com saldo — mensagem
+  fixa da loja sempre roda, pois não custa IA).
+- **Página do lojista:** [/dashboard/creditos](src/app/dashboard/creditos/page.tsx) mostra o saldo em
+  conversas + os pacotes de recarga (com preço por conversa); dados de
+  [/api/whatsapp/credits](src/app/api/whatsapp/credits/route.ts) (GET). Link em **Conta → Créditos da
+  IA**.
+- **Recarga automática (Mercado Pago, na SUA conta):** pacotes em `CREDIT_PACKAGES` (R$30/100 ·
+  R$50/200 · R$100/450 · R$250/1.200 conversas; markup 2–3x, margem 53–65% já com imposto). O botão
+  chama [/api/credits/checkout](src/app/api/credits/checkout/route.ts) (`requireAuth` do dono da loja →
+  registra a compra em `ai_credit_purchases` → `createPreference` na sua conta `MP_ACCESS_TOKEN` →
+  devolve o `init_point`). O [/api/credits/webhook](src/app/api/credits/webhook/route.ts) reconsulta o
+  pagamento e **credita uma única vez** (claim atômico `.neq("status","approved")`) + avisa a loja no
+  WhatsApp. **Migration:** [supabase-migration-ai-credit-purchases.sql](supabase-migration-ai-credit-purchases.sql).
+  - **⚠️ App do MP:** a aplicação do MP precisa ser do produto **Checkout Pro** (não "Assinaturas"),
+    senão `createPreference` retorna `At least one policy returned UNAUTHORIZED`. Como o produto é
+    escolha única por aplicação, o mesmo `MP_ACCESS_TOKEN` **não** serve para a assinatura automática da
+    mensalidade (preapproval) enquanto estiver em Checkout Pro — hoje a mensalidade é controlada
+    manualmente no admin, então não afeta. Para usar os dois, criar uma 2ª aplicação MP e um token
+    dedicado.
+- **Crédito manual (só admin do SaaS):** card **"Créditos da IA"**
+  ([AiCreditsCard.tsx](src/app/admin/(panel)/clientes/[storeId]/AiCreditsCard.tsx)) na página do cliente
+  [/admin/clientes/[storeId]](src/app/admin/(panel)/clientes/[storeId]/page.tsx) — vê o saldo e credita
+  conversas de cortesia/suporte via [/api/admin/credits](src/app/api/admin/credits/route.ts) (`GET`
+  saldo / `POST` credita, protegido por `requireAdmin`). O lojista **não** tem como se auto-creditar
+  (recarga dele é só pagando pelo MP). Para reduzir/zerar um saldo, use SQL no Supabase.
+
 ## Notas do ambiente (Windows / OneDrive)
 
 O repositório fica dentro do **OneDrive**, o que pode quebrar symlinks da pasta `.next` e causar
