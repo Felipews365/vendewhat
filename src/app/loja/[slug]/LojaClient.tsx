@@ -953,6 +953,19 @@ function ProductCatalogCard({
             </div>
           )}
 
+          {/* Selo de vídeo: indica que o produto tem vídeo (canto inferior direito) */}
+          {product.videoUrl && !soldOut && (
+            <span
+              className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[0.6rem] font-semibold text-white backdrop-blur-sm"
+              aria-hidden
+            >
+              <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white/90 text-[0.5rem] text-black">
+                ▶
+              </span>
+              Vídeo
+            </span>
+          )}
+
           {/* Selo desconto (vermelho) OU "Novo" (azul), canto superior esquerdo */}
           {discount != null ? (
             <span
@@ -1098,7 +1111,20 @@ function ProductDetailModal({
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const imgs = product.images.length > 0 ? product.images : product.image ? [product.image] : [];
-  const safeImgIdx = imgs.length > 0 ? Math.min(imgIdx, imgs.length - 1) : 0;
+  /**
+   * Mídias da galeria: o vídeo (se houver) entra como PRIMEIRO item, seguido das
+   * fotos — tudo no mesmo carrossel/miniaturas, então clicar nas miniaturas alterna
+   * entre o vídeo e as fotos. `imgIndex` guarda a posição original da foto (para o
+   * ponto de foco e o zoom, que continuam por foto).
+   */
+  const media: Array<
+    | { type: "video"; url: string }
+    | { type: "image"; url: string; imgIndex: number }
+  > = [
+    ...(product.videoUrl ? [{ type: "video" as const, url: product.videoUrl }] : []),
+    ...imgs.map((url, imgIndex) => ({ type: "image" as const, url, imgIndex })),
+  ];
+  const safeImgIdx = media.length > 0 ? Math.min(imgIdx, media.length - 1) : 0;
 
   const imgFocusStyle = (i: number) =>
     coverImageStyleAt(i, product.imageObjectPositions, product.imageObjectPosition);
@@ -1106,12 +1132,12 @@ function ProductDetailModal({
   const scrollCarouselToIndex = useCallback(
     (i: number, behavior: "smooth" | "auto" = "smooth") => {
       const el = carouselRef.current;
-      if (!el || imgs.length <= 1) return;
+      if (!el || media.length <= 1) return;
       const w = el.clientWidth;
       if (w <= 0) return;
       skipCarouselScrollRef.current = true;
       el.scrollTo({
-        left: Math.min(i, imgs.length - 1) * w,
+        left: Math.min(i, media.length - 1) * w,
         behavior,
       });
       window.setTimeout(
@@ -1121,19 +1147,19 @@ function ProductDetailModal({
         behavior === "auto" ? 50 : 450
       );
     },
-    [imgs.length]
+    [media.length]
   );
 
   const onCarouselScroll = useCallback(() => {
-    if (skipCarouselScrollRef.current || imgs.length <= 1) return;
+    if (skipCarouselScrollRef.current || media.length <= 1) return;
     const el = carouselRef.current;
     if (!el) return;
     const w = el.clientWidth;
     if (w <= 0) return;
     const i = Math.round(el.scrollLeft / w);
-    const clamped = Math.max(0, Math.min(i, imgs.length - 1));
+    const clamped = Math.max(0, Math.min(i, media.length - 1));
     setImgIdx((prev) => (clamped !== prev ? clamped : prev));
-  }, [imgs.length]);
+  }, [media.length]);
 
   useEffect(() => {
     setImgIdx(0);
@@ -1244,26 +1270,14 @@ function ProductDetailModal({
         </button>
 
         <div className="flex flex-col md:flex-row max-md:pt-0 max-md:pb-3 md:py-5">
-          {/* Galeria: vídeo (se houver) em destaque, miniaturas à esquerda + foto grande */}
+          {/* Galeria: vídeo (se houver) entra como 1.ª mídia do carrossel; miniaturas à esquerda */}
           <div className="w-full md:w-[55%] flex flex-col bg-stone-50 md:pl-2 md:pr-1 max-md:pt-0">
-            {product.videoUrl && (
-              <video
-                src={product.videoUrl}
-                controls
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                className="w-full aspect-video max-h-72 object-contain bg-black max-sm:rounded-t-2xl sm:rounded-2xl sm:m-2 sm:mb-0"
-              />
-            )}
             <div className="flex flex-col-reverse sm:flex-row min-w-0">
-            {imgs.length > 1 && (
+            {media.length > 1 && (
               <div className="flex sm:flex-col gap-2 p-3 sm:w-[80px] sm:min-w-[80px] overflow-x-auto sm:overflow-y-auto sm:overflow-x-hidden sm:max-h-[min(28rem,70vh)] [scrollbar-width:thin] snap-x snap-mandatory sm:snap-none max-sm:pb-1">
-                {imgs.map((url, i) => (
+                {media.map((item, i) => (
                   <button
-                    key={`${url}-${i}`}
+                    key={`${item.url}-${i}`}
                     type="button"
                     onClick={() => {
                       setImgIdx(i);
@@ -1275,14 +1289,31 @@ function ProductDetailModal({
                         : "ring-transparent opacity-60 hover:opacity-100 hover:ring-stone-300"
                     }`}
                   >
-                    <Image
-                      src={url}
-                      alt=""
-                      fill
-                      className="object-contain bg-stone-200"
-                      style={imgFocusStyle(i)}
-                      sizes="80px"
-                    />
+                    {item.type === "video" ? (
+                      <>
+                        <video
+                          src={item.url}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="absolute inset-0 h-full w-full object-cover bg-stone-900"
+                        />
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-[0.55rem] text-stone-900">
+                            ▶
+                          </span>
+                        </span>
+                      </>
+                    ) : (
+                      <Image
+                        src={item.url}
+                        alt=""
+                        fill
+                        className="object-contain bg-stone-200"
+                        style={imgFocusStyle(item.imgIndex)}
+                        sizes="80px"
+                      />
+                    )}
                   </button>
                 ))}
               </div>
@@ -1290,53 +1321,71 @@ function ProductDetailModal({
             {/* Galeria principal: deslize horizontal (snap) no mobile; toque sem arrastar abre zoom */}
             <div
               className={`relative w-full min-w-0 mx-0 shrink-0 max-sm:flex-none sm:flex-1 sm:min-h-0 aspect-auto min-h-[min(52vw,220px)] h-[min(88vh,36rem)] md:h-[min(72vh,34rem)] bg-stone-200 shadow-sm touch-pan-x max-sm:rounded-t-2xl sm:rounded-2xl ${
-                imgs.length > 1 ? "max-sm:rounded-b-none" : "max-sm:rounded-b-2xl"
+                media.length > 1 ? "max-sm:rounded-b-none" : "max-sm:rounded-b-2xl"
               }`}
             >
-              {imgs.length > 1 ? (
+              {media.length > 1 ? (
                 <div
                   ref={carouselRef}
                   onScroll={onCarouselScroll}
                   className="flex h-full w-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory overscroll-x-contain rounded-[inherit] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
-                  {imgs.map((url, i) => (
+                  {media.map((item, i) => (
                     <div
-                      key={`${url}-${i}`}
+                      key={`${item.url}-${i}`}
                       className="relative h-full min-w-full w-full shrink-0 snap-center snap-always bg-stone-200"
                     >
-                      <Image
-                        src={url}
-                        alt={i === 0 ? product.name : `${product.name} — foto ${i + 1}`}
-                        fill
-                        className="object-contain object-center select-none pointer-events-none bg-stone-200"
-                        style={imgFocusStyle(i)}
-                        draggable={false}
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 55vw, 480px"
-                        priority={i === 0}
-                      />
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        aria-label="Ampliar foto"
-                        className="absolute inset-0 z-[1] cursor-zoom-in touch-pan-x"
-                        onPointerDown={(e) => {
-                          pointerStartRef.current = { x: e.clientX, y: e.clientY };
-                        }}
-                        onPointerUp={(e) => {
-                          const start = pointerStartRef.current;
-                          pointerStartRef.current = null;
-                          if (!start) return;
-                          const dx = Math.abs(e.clientX - start.x);
-                          const dy = Math.abs(e.clientY - start.y);
-                          if (dx < 12 && dy < 12) openLightboxAt(i);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            openLightboxAt(i);
-                          }
-                        }}
-                      />
+                      {item.type === "video" ? (
+                        <video
+                          src={item.url}
+                          controls
+                          muted
+                          loop
+                          playsInline
+                          preload="metadata"
+                          className="absolute inset-0 h-full w-full object-contain bg-black"
+                        />
+                      ) : (
+                        <>
+                          <Image
+                            src={item.url}
+                            alt={
+                              item.imgIndex === 0
+                                ? product.name
+                                : `${product.name} — foto ${item.imgIndex + 1}`
+                            }
+                            fill
+                            className="object-contain object-center select-none pointer-events-none bg-stone-200"
+                            style={imgFocusStyle(item.imgIndex)}
+                            draggable={false}
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 55vw, 480px"
+                            priority={i === 0}
+                          />
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Ampliar foto"
+                            className="absolute inset-0 z-[1] cursor-zoom-in touch-pan-x"
+                            onPointerDown={(e) => {
+                              pointerStartRef.current = { x: e.clientX, y: e.clientY };
+                            }}
+                            onPointerUp={(e) => {
+                              const start = pointerStartRef.current;
+                              pointerStartRef.current = null;
+                              if (!start) return;
+                              const dx = Math.abs(e.clientX - start.x);
+                              const dy = Math.abs(e.clientY - start.y);
+                              if (dx < 12 && dy < 12) openLightboxAt(item.imgIndex);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                openLightboxAt(item.imgIndex);
+                              }
+                            }}
+                          />
+                        </>
+                      )}
                       {soldOut && (
                         <span className="absolute top-4 right-4 z-10 bg-boutique-wine/95 text-white text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-sm pointer-events-none">
                           Esgotado
@@ -1345,47 +1394,60 @@ function ProductDetailModal({
                     </div>
                   ))}
                 </div>
-              ) : imgs.length === 1 ? (
-                <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
-                  <Image
-                    src={imgs[0]}
-                    alt={product.name}
-                    fill
-                    className="object-contain object-center select-none pointer-events-none bg-stone-200"
-                    style={imgFocusStyle(0)}
-                    draggable={false}
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 55vw, 480px"
-                    priority
+              ) : media.length === 1 ? (
+                media[0].type === "video" ? (
+                  <video
+                    src={media[0].url}
+                    controls
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    className="absolute inset-0 h-full w-full object-contain bg-black rounded-[inherit]"
                   />
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Ampliar foto"
-                    className="absolute inset-0 z-[1] cursor-zoom-in touch-pan-x"
-                    onPointerDown={(e) => {
-                      pointerStartRef.current = { x: e.clientX, y: e.clientY };
-                    }}
-                    onPointerUp={(e) => {
-                      const start = pointerStartRef.current;
-                      pointerStartRef.current = null;
-                      if (!start) return;
-                      const dx = Math.abs(e.clientX - start.x);
-                      const dy = Math.abs(e.clientY - start.y);
-                      if (dx < 12 && dy < 12) openLightboxAt(0);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openLightboxAt(0);
-                      }
-                    }}
-                  />
-                  {soldOut && (
-                    <span className="absolute top-4 right-4 z-10 bg-boutique-wine/95 text-white text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-sm pointer-events-none">
-                      Esgotado
-                    </span>
-                  )}
-                </div>
+                ) : (
+                  <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
+                    <Image
+                      src={imgs[0]}
+                      alt={product.name}
+                      fill
+                      className="object-contain object-center select-none pointer-events-none bg-stone-200"
+                      style={imgFocusStyle(0)}
+                      draggable={false}
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 55vw, 480px"
+                      priority
+                    />
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Ampliar foto"
+                      className="absolute inset-0 z-[1] cursor-zoom-in touch-pan-x"
+                      onPointerDown={(e) => {
+                        pointerStartRef.current = { x: e.clientX, y: e.clientY };
+                      }}
+                      onPointerUp={(e) => {
+                        const start = pointerStartRef.current;
+                        pointerStartRef.current = null;
+                        if (!start) return;
+                        const dx = Math.abs(e.clientX - start.x);
+                        const dy = Math.abs(e.clientY - start.y);
+                        if (dx < 12 && dy < 12) openLightboxAt(0);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openLightboxAt(0);
+                        }
+                      }}
+                    />
+                    {soldOut && (
+                      <span className="absolute top-4 right-4 z-10 bg-boutique-wine/95 text-white text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-sm pointer-events-none">
+                        Esgotado
+                      </span>
+                    )}
+                  </div>
+                )
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-6xl text-stone-300">
                   📷
