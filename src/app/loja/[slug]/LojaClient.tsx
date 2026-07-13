@@ -22,6 +22,7 @@ import {
   type HeroSlideContent,
 } from "@/components/storefront/HeroTemplateSlide";
 import { StorefrontRichFooter } from "@/components/storefront/StorefrontRichFooter";
+import CookieConsent from "@/components/storefront/CookieConsent";
 import { BorderBeam } from "@/components/magicui/border-beam";
 import { AnimatedGradientText } from "@/components/magicui/animated-gradient-text";
 import { ShimmerButton } from "@/components/magicui/shimmer-button";
@@ -1303,13 +1304,13 @@ function ProductDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-10 sm:px-6 sm:py-14 md:px-10 md:py-20"
+      className="fixed inset-0 z-50 flex items-stretch justify-center overflow-y-auto bg-black/40 md:items-start md:px-10 md:py-20"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-auto overflow-hidden ring-1 ring-stone-200/60"
+        className="relative bg-white shadow-2xl w-full min-h-full overflow-hidden md:min-h-0 md:my-auto md:max-w-4xl md:rounded-2xl md:ring-1 md:ring-stone-200/60"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -1391,6 +1392,7 @@ function ProductDetailModal({
                         <video
                           src={item.url}
                           controls
+                          autoPlay
                           muted
                           loop
                           playsInline
@@ -3940,6 +3942,8 @@ export function LojaClient({
           </div>
         </div>
       )}
+
+      <CookieConsent />
     </div>
   );
 }
