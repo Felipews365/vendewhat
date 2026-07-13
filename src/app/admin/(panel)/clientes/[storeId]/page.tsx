@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAllPlans, getClient } from "@/lib/adminData";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import { loadCredits, TOKENS_PER_CONVERSATION } from "@/lib/aiCredits";
 import ClientForm from "./ClientForm";
+import AiCreditsCard from "./AiCreditsCard";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +31,10 @@ export default async function AdminClientePage({
   const [client, plans] = await Promise.all([getClient(storeId), getAllPlans()]);
 
   if (!client) notFound();
+
+  // Saldo de créditos da IA da loja (para o card de crédito manual).
+  const db = createAdminSupabase();
+  const credits = db ? await loadCredits(db, storeId) : null;
 
   const { store, ownerEmail, subscription, payments } = client;
   const planTitle = subscription?.plan_id
@@ -93,6 +100,16 @@ export default async function AdminClientePage({
           </p>
         </div>
       </div>
+
+      {credits && (
+        <AiCreditsCard
+          storeId={store.id}
+          conversationsLeft={credits.conversationsLeft}
+          creditConversations={Math.floor(credits.creditTokens / TOKENS_PER_CONVERSATION)}
+          includedConversations={Math.floor(credits.includedTokens / TOKENS_PER_CONVERSATION)}
+          usedConversations={Math.floor(credits.usedTokens / TOKENS_PER_CONVERSATION)}
+        />
+      )}
 
       <ClientForm
         storeId={store.id}

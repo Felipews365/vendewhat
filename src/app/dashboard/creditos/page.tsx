@@ -14,7 +14,6 @@ type CreditState = {
   includedConversations: number;
   creditConversations: number;
   packages: CreditPackage[];
-  canTopUp: boolean;
   mpConfigured: boolean;
 };
 
@@ -28,8 +27,6 @@ export default function CreditosPage() {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<CreditState | null>(null);
-  const [topUpQty, setTopUpQty] = useState(30);
-  const [busy, setBusy] = useState(false);
   const [checkoutBrl, setCheckoutBrl] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -77,28 +74,6 @@ export default function CreditosPage() {
     } catch {
       showToast("Falha ao abrir o pagamento.", "error");
       setCheckoutBrl(null);
-    }
-  }
-
-  async function handleTopUp() {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/whatsapp/credits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversations: topUpQty }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setState(data as CreditState);
-        showToast(`+${topUpQty} conversas creditadas!`, "success");
-      } else {
-        showToast(data.error || "Não foi possível creditar.", "error");
-      }
-    } catch {
-      showToast("Falha ao creditar.", "error");
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -254,31 +229,6 @@ export default function CreditosPage() {
         </div>
       </div>
 
-      {/* Crédito de teste (só admin do SaaS) */}
-      {state?.canTopUp && (
-        <div className="mt-6 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-4">
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-            Admin — crédito de teste
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <input
-              type="number"
-              min={1}
-              value={topUpQty}
-              onChange={(e) => setTopUpQty(Math.max(1, Number(e.target.value) || 0))}
-              className="w-28 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 text-sm"
-            />
-            <span className="text-sm text-slate-500 dark:text-slate-400">conversas</span>
-            <button
-              onClick={handleTopUp}
-              disabled={busy}
-              className="ml-auto px-4 py-2 rounded-lg bg-landing-primary text-white text-sm font-semibold disabled:opacity-50"
-            >
-              {busy ? "Creditando…" : "Adicionar"}
-            </button>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
