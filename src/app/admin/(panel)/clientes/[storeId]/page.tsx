@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAllPlans, getClient } from "@/lib/adminData";
+import { getAllPlans, getAiUsageSummary, getClient, type AiUsageSummary } from "@/lib/adminData";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { loadCredits, TOKENS_PER_CONVERSATION } from "@/lib/aiCredits";
 import ClientForm from "./ClientForm";
@@ -22,13 +22,84 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("pt-BR");
 }
 
+function fmtInt(n: number): string {
+  return n.toLocaleString("pt-BR");
+}
+
+/** Medição real do consumo da IA desta loja (últimos 30 dias). */
+function StoreAiUsage({ usage }: { usage: AiUsageSummary }) {
+  return (
+    <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-bold text-slate-900">
+          Consumo real da IA (últimos {usage.days} dias)
+        </h2>
+        {usage.measured && (
+          <span className="text-xs text-slate-400">
+            {fmtInt(usage.responses)} respostas · {fmtInt(usage.conversations)} conversas
+          </span>
+        )}
+      </div>
+      {usage.measured ? (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-medium text-slate-500">Tokens por conversa (média)</p>
+              <p className="mt-1 text-xl font-extrabold text-slate-900">
+                {fmtInt(usage.avgTokensPerConversation)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                {usage.usageVsBudgetPct}% dos 80 mil reservados
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-medium text-slate-500">Tokens por resposta (média)</p>
+              <p className="mt-1 text-xl font-extrabold text-slate-900">
+                {fmtInt(usage.avgTokensPerResponse)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-medium text-slate-500">Tokens no período</p>
+              <p className="mt-1 text-xl font-extrabold text-slate-900">
+                {fmtInt(usage.totalTokens)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-medium text-slate-500">
+                Conversas por 80 mi (nesta média)
+              </p>
+              <p className="mt-1 text-xl font-extrabold text-emerald-600">
+                {fmtInt(usage.conversationsPer80M)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">no ritmo desta loja</p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            {usage.usageVsBudgetPct <= 100
+              ? `Esta loja usa em média ${usage.usageVsBudgetPct}% da franquia de 80 mil tokens por conversa — dentro do previsto.`
+              : `Atenção: esta loja gasta em média ${fmtInt(usage.avgTokensPerConversation)} tokens/conversa, acima dos 80 mil reservados. Conversas mais longas/pesadas que a média.`}
+          </p>
+        </>
+      ) : (
+        <p className="mt-2 text-sm text-slate-500">
+          Ainda sem dados medidos para esta loja nos últimos {usage.days} dias.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default async function AdminClientePage({
   params,
 }: {
   params: Promise<{ storeId: string }>;
 }) {
   const { storeId } = await params;
-  const [client, plans] = await Promise.all([getClient(storeId), getAllPlans()]);
+  const [client, plans, aiUsage] = await Promise.all([
+    getClient(storeId),
+    getAllPlans(),
+    getAiUsageSummary({ days: 30, storeId }),
+  ]);
 
   if (!client) notFound();
 
@@ -110,6 +181,8 @@ export default async function AdminClientePage({
           usedConversations={Math.floor(credits.usedTokens / TOKENS_PER_CONVERSATION)}
         />
       )}
+
+      <StoreAiUsage usage={aiUsage} />
 
       <ClientForm
         storeId={store.id}

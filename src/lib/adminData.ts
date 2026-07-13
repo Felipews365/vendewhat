@@ -267,7 +267,10 @@ const AI_COMPLETO_MONTHLY_TOKENS = 80_000_000;
  * Agrega em JS (o cliente supabase-js não faz GROUP BY direto); o volume no início
  * é pequeno, com teto de segurança na leitura.
  */
-export async function getAiUsageSummary(days = 30): Promise<AiUsageSummary> {
+export async function getAiUsageSummary(
+  opts: { days?: number; storeId?: string } = {}
+): Promise<AiUsageSummary> {
+  const days = opts.days ?? 30;
   const empty: AiUsageSummary = {
     measured: false,
     days,
@@ -283,11 +286,13 @@ export async function getAiUsageSummary(days = 30): Promise<AiUsageSummary> {
   if (!db) return empty;
 
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await db
+  let query = db
     .from("ai_usage_events")
     .select("store_id, customer_phone, tokens")
     .gte("created_at", since)
     .limit(100000);
+  if (opts.storeId) query = query.eq("store_id", opts.storeId);
+  const { data, error } = await query;
   if (error) return empty; // tabela ausente / erro → sem medição
 
   const rows =

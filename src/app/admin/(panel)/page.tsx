@@ -146,7 +146,7 @@ function AiUsageMeasurement({ usage }: { usage: AiUsageSummary }) {
 }
 
 export default async function AdminClientesPage() {
-  const [clients, aiUsage] = await Promise.all([getClients(), getAiUsageSummary(30)]);
+  const [clients, aiUsage] = await Promise.all([getClients(), getAiUsageSummary({ days: 30 })]);
   const { total, active, expired, mrr, aiUsed, aiLeft } = summarize(clients);
 
   return (
