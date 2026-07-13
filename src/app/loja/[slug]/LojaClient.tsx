@@ -881,6 +881,40 @@ function ProductCatalogCard({
     return () => io.disconnect();
   }, []);
 
+  // Prévia do vídeo no card: toca ao passar o mouse (desktop) ou o dedo (celular).
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const playPreview = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    setVideoPlaying(true);
+    v.play().catch(() => {});
+  }, []);
+  const stopPreview = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.pause();
+    try {
+      v.currentTime = 0;
+    } catch {}
+    setVideoPlaying(false);
+  }, []);
+
+  // Pausa a prévia quando o card sai da tela (evita vários vídeos tocando ao rolar).
+  useEffect(() => {
+    if (!product.videoUrl) return;
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (!e.isIntersecting) stopPreview();
+      },
+      { threshold: 0 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [product.videoUrl, stopPreview]);
+
   // Preço exibido (fardo mostra o preço do fardo quando configurado).
   const shownPrice =
     product.sale.saleMode === "pack" && product.sale.priceDisplay === "pack"
@@ -914,6 +948,9 @@ function ProductCatalogCard({
       }`}
       style={{ animationDelay: `${revealDelayMs}ms` }}
       onClick={() => onOpen(product)}
+      onMouseEnter={product.videoUrl ? playPreview : undefined}
+      onMouseLeave={product.videoUrl ? stopPreview : undefined}
+      onTouchStart={product.videoUrl ? playPreview : undefined}
     >
       <div
         className="relative flex h-full flex-col overflow-hidden rounded-xl border bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#A1CCF7] hover:shadow-[0_4px_12px_rgba(0,40,100,0.14)]"
@@ -953,8 +990,23 @@ function ProductCatalogCard({
             </div>
           )}
 
+          {/* Prévia do vídeo: aparece por cima da foto ao passar o mouse/dedo */}
+          {product.videoUrl && (
+            <video
+              ref={videoRef}
+              src={product.videoUrl}
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              className={`absolute inset-0 z-[5] h-full w-full object-cover transition-opacity duration-300 ${
+                videoPlaying ? "opacity-100" : "opacity-0"
+              }`}
+            />
+          )}
+
           {/* Selo de vídeo: indica que o produto tem vídeo (canto inferior direito) */}
-          {product.videoUrl && !soldOut && (
+          {product.videoUrl && !soldOut && !videoPlaying && (
             <span
               className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[0.6rem] font-semibold text-white backdrop-blur-sm"
               aria-hidden
