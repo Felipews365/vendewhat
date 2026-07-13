@@ -163,7 +163,10 @@ async function runSilenceFollowups(
           const reply = await generateFollowupReply(prompt.systemPrompt, history);
           if (reply) {
             message = reply.text;
-            await consumeTokens(admin, cfg.storeId, reply.tokens);
+            await consumeTokens(admin, cfg.storeId, reply.tokens, {
+              customerPhone: phone,
+              kind: "followup",
+            });
           }
         }
         if (!message) continue;
@@ -234,7 +237,10 @@ async function runPostsale(
               );
               if (reply) {
                 message = reply.text;
-                await consumeTokens(admin, cfg.storeId, reply.tokens);
+                await consumeTokens(admin, cfg.storeId, reply.tokens, {
+                  customerPhone: phone,
+                  kind: "postsale",
+                });
               }
             }
           }
@@ -308,7 +314,10 @@ async function runAbandonedCarts(
           );
           if (reply) {
             message = reply.text;
-            await consumeTokens(admin, cfg.storeId, reply.tokens);
+            await consumeTokens(admin, cfg.storeId, reply.tokens, {
+              customerPhone: phone,
+              kind: "cart",
+            });
           }
         }
         if (!message) continue;

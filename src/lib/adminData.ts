@@ -236,6 +236,97 @@ export async function getAllPlans(): Promise<PlanRow[]> {
   return (data as PlanRow[] | null) ?? [];
 }
 
+/** Medição REAL do consumo da IA (da tabela de telemetria `ai_usage_events`). */
+export type AiUsageSummary = {
+  /** Houve dados no período (tabela existe e teve respostas). */
+  measured: boolean;
+  /** Janela em dias. */
+  days: number;
+  /** Respostas da IA que gastaram tokens. */
+  responses: number;
+  /** Conversas distintas (loja + telefone do cliente). */
+  conversations: number;
+  /** Tokens reais somados no período. */
+  totalTokens: number;
+  /** Média de tokens por resposta da IA. */
+  avgTokensPerResponse: number;
+  /** Média de tokens por conversa (cliente atendido). */
+  avgTokensPerConversation: number;
+  /** Pela média real, quantas conversas os 80 mi de tokens (IA Completo) rendem. */
+  conversationsPer80M: number;
+  /** Qual fração dos 80 mil tokens "reservados" por conversa é usada de fato (%). */
+  usageVsBudgetPct: number;
+};
+
+const AI_BUDGET_PER_CONVERSATION = 80_000;
+const AI_COMPLETO_MONTHLY_TOKENS = 80_000_000;
+
+/**
+ * Lê a telemetria real de consumo da IA e calcula as médias (por resposta e por
+ * conversa). Tolera a tabela ausente (migration não aplicada) → `measured:false`.
+ * Agrega em JS (o cliente supabase-js não faz GROUP BY direto); o volume no início
+ * é pequeno, com teto de segurança na leitura.
+ */
+export async function getAiUsageSummary(days = 30): Promise<AiUsageSummary> {
+  const empty: AiUsageSummary = {
+    measured: false,
+    days,
+    responses: 0,
+    conversations: 0,
+    totalTokens: 0,
+    avgTokensPerResponse: 0,
+    avgTokensPerConversation: 0,
+    conversationsPer80M: 0,
+    usageVsBudgetPct: 0,
+  };
+  const db = createAdminSupabase();
+  if (!db) return empty;
+
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await db
+    .from("ai_usage_events")
+    .select("store_id, customer_phone, tokens")
+    .gte("created_at", since)
+    .limit(100000);
+  if (error) return empty; // tabela ausente / erro → sem medição
+
+  const rows =
+    (data as { store_id: string; customer_phone: string | null; tokens: number }[] | null) ??
+    [];
+  if (rows.length === 0) return empty;
+
+  let totalTokens = 0;
+  const conversationSet = new Set<string>();
+  for (const r of rows) {
+    totalTokens += Math.max(0, r.tokens || 0);
+    const phone = (r.customer_phone ?? "").trim();
+    conversationSet.add(`${r.store_id}:${phone || "sem-telefone"}`);
+  }
+  const responses = rows.length;
+  const conversations = conversationSet.size;
+  const avgTokensPerResponse = responses > 0 ? Math.round(totalTokens / responses) : 0;
+  const avgTokensPerConversation =
+    conversations > 0 ? Math.round(totalTokens / conversations) : 0;
+
+  return {
+    measured: true,
+    days,
+    responses,
+    conversations,
+    totalTokens,
+    avgTokensPerResponse,
+    avgTokensPerConversation,
+    conversationsPer80M:
+      avgTokensPerConversation > 0
+        ? Math.floor(AI_COMPLETO_MONTHLY_TOKENS / avgTokensPerConversation)
+        : 0,
+    usageVsBudgetPct:
+      avgTokensPerConversation > 0
+        ? Math.round((avgTokensPerConversation / AI_BUDGET_PER_CONVERSATION) * 100)
+        : 0,
+  };
+}
+
 /** Métricas de resumo para os cards do topo. */
 export function summarize(clients: AdminClient[]) {
   const now = Date.now();

@@ -362,7 +362,10 @@ export async function respondToCustomer(
   // limites de "acabando" ou "esgotado".
   if (reply.tokens > 0) {
     try {
-      const consumed = await consumeTokens(admin, cfg.storeId, reply.tokens);
+      const consumed = await consumeTokens(admin, cfg.storeId, reply.tokens, {
+        customerPhone,
+        kind: "reply",
+      });
       if (consumed.justEmptied) {
         await notifyOwnerCredits(cfg, "empty", 0);
       } else if (consumed.justLow) {

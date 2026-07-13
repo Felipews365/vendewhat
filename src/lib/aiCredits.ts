@@ -198,6 +198,33 @@ export type ConsumeResult = {
   justLow: boolean;
 };
 
+/** Origem do gasto de tokens (para a telemetria do painel admin). */
+export type AiUsageKind = "reply" | "followup" | "postsale" | "cart";
+
+/**
+ * Grava uma linha de telemetria por resposta da IA (tokens reais gastos), para o
+ * painel admin medir o consumo real por resposta/conversa. É só histórico — não
+ * afeta o saldo. Tolera a tabela ausente (migration não aplicada): ignora o erro.
+ */
+async function logAiUsage(
+  admin: SupabaseClient,
+  storeId: string,
+  tokens: number,
+  meta?: { customerPhone?: string | null; kind?: AiUsageKind }
+): Promise<void> {
+  if (tokens <= 0) return;
+  try {
+    await admin.from("ai_usage_events").insert({
+      store_id: storeId,
+      customer_phone: meta?.customerPhone ?? null,
+      kind: meta?.kind ?? "reply",
+      tokens,
+    });
+  } catch {
+    // Tabela pode não existir ainda — telemetria é opcional, nunca quebra o fluxo.
+  }
+}
+
 /**
  * Desconta os tokens gastos (franquia primeiro, depois créditos) e sinaliza se é
  * hora de avisar o dono (saldo baixo / esgotado). Marca os avisos para não repetir.
@@ -205,7 +232,8 @@ export type ConsumeResult = {
 export async function consumeTokens(
   admin: SupabaseClient,
   storeId: string,
-  tokens: number
+  tokens: number,
+  meta?: { customerPhone?: string | null; kind?: AiUsageKind }
 ): Promise<ConsumeResult> {
   const before = await loadCredits(admin, storeId);
   const spend = Math.max(0, Math.round(tokens));
@@ -237,6 +265,7 @@ export async function consumeTokens(
   if (justLow) patch.low_warned_at = nowIso;
 
   await admin.from(TABLE).update(patch).eq("store_id", storeId);
+  await logAiUsage(admin, storeId, spend, meta);
 
   const state: CreditState = {
     ...before,

@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { getClients, summarize, type AdminClient } from "@/lib/adminData";
+import {
+  getClients,
+  getAiUsageSummary,
+  summarize,
+  type AdminClient,
+  type AiUsageSummary,
+} from "@/lib/adminData";
 import { formatBRL } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
@@ -67,8 +73,80 @@ function fmtInt(n: number): string {
   return n.toLocaleString("pt-BR");
 }
 
+/** Bloco de MEDIÇÃO REAL do consumo da IA (valida "1 conversa ≈ 80 mil tokens"). */
+function AiUsageMeasurement({ usage }: { usage: AiUsageSummary }) {
+  if (!usage.measured) {
+    return (
+      <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-bold text-slate-900">
+          Consumo real da IA (últimos {usage.days} dias)
+        </h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Ainda sem dados medidos. A medição começa automaticamente assim que a IA
+          responder clientes. Se acabou de ativar, aplique a migration{" "}
+          <code className="rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-700">
+            supabase-migration-ai-usage-events.sql
+          </code>{" "}
+          no Supabase para registrar o consumo.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-bold text-slate-900">
+          Consumo real da IA (últimos {usage.days} dias)
+        </h2>
+        <span className="text-xs text-slate-400">
+          {fmtInt(usage.responses)} respostas · {fmtInt(usage.conversations)} conversas medidas
+        </span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="rounded-xl bg-slate-50 p-4">
+          <p className="text-xs font-medium text-slate-500">Tokens por conversa (média)</p>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900">
+            {fmtInt(usage.avgTokensPerConversation)}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            {usage.usageVsBudgetPct}% dos 80 mil reservados
+          </p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-4">
+          <p className="text-xs font-medium text-slate-500">Tokens por resposta (média)</p>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900">
+            {fmtInt(usage.avgTokensPerResponse)}
+          </p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-4">
+          <p className="text-xs font-medium text-slate-500">
+            Conversas por 80 mi (IA Completo)
+          </p>
+          <p className="mt-1 text-2xl font-extrabold text-emerald-600">
+            {fmtInt(usage.conversationsPer80M)}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            pela média real (promessa: ~1.000)
+          </p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-4">
+          <p className="text-xs font-medium text-slate-500">Tokens no período</p>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900">
+            {fmtInt(usage.totalTokens)}
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-slate-500">
+        {usage.usageVsBudgetPct <= 100
+          ? `Cada conversa real usa em média ${usage.usageVsBudgetPct}% da franquia de 80 mil tokens — a margem está segura e a promessa de ~1.000 conversas se sustenta (dá para ${fmtInt(usage.conversationsPer80M)}).`
+          : `Atenção: a média real (${fmtInt(usage.avgTokensPerConversation)} tokens/conversa) está acima dos 80 mil reservados — reveja a franquia ou o número prometido de conversas.`}
+      </p>
+    </div>
+  );
+}
+
 export default async function AdminClientesPage() {
-  const clients = await getClients();
+  const [clients, aiUsage] = await Promise.all([getClients(), getAiUsageSummary(30)]);
   const { total, active, expired, mrr, aiUsed, aiLeft } = summarize(clients);
 
   return (
@@ -86,6 +164,8 @@ export default async function AdminClientesPage() {
         <SummaryCard label="Conversas IA (mês)" value={fmtInt(aiUsed)} accent="text-slate-900" />
         <SummaryCard label="Saldo IA (total)" value={fmtInt(aiLeft)} accent="text-emerald-600" />
       </div>
+
+      <AiUsageMeasurement usage={aiUsage} />
 
       <div className="mt-8 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
         <div className="overflow-x-auto">
