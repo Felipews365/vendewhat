@@ -1244,8 +1244,21 @@ function ProductDetailModal({
         </button>
 
         <div className="flex flex-col md:flex-row max-md:pt-0 max-md:pb-3 md:py-5">
-          {/* Galeria: miniaturas à esquerda + foto grande */}
-          <div className="w-full md:w-[55%] flex flex-col-reverse sm:flex-row bg-stone-50 md:pl-2 md:pr-1 max-md:pt-0">
+          {/* Galeria: vídeo (se houver) em destaque, miniaturas à esquerda + foto grande */}
+          <div className="w-full md:w-[55%] flex flex-col bg-stone-50 md:pl-2 md:pr-1 max-md:pt-0">
+            {product.videoUrl && (
+              <video
+                src={product.videoUrl}
+                controls
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                className="w-full aspect-video max-h-72 object-contain bg-black max-sm:rounded-t-2xl sm:rounded-2xl sm:m-2 sm:mb-0"
+              />
+            )}
+            <div className="flex flex-col-reverse sm:flex-row min-w-0">
             {imgs.length > 1 && (
               <div className="flex sm:flex-col gap-2 p-3 sm:w-[80px] sm:min-w-[80px] overflow-x-auto sm:overflow-y-auto sm:overflow-x-hidden sm:max-h-[min(28rem,70vh)] [scrollbar-width:thin] snap-x snap-mandatory sm:snap-none max-sm:pb-1">
                 {imgs.map((url, i) => (
@@ -1379,6 +1392,7 @@ function ProductDetailModal({
                 </div>
               )}
             </div>
+            </div>
           </div>
 
           {/* Info do produto */}
@@ -1448,16 +1462,6 @@ function ProductDetailModal({
               <p className="mt-4 text-sm text-stone-600 leading-relaxed whitespace-pre-line">
                 {product.description}
               </p>
-            )}
-
-            {product.videoUrl && (
-              <video
-                src={product.videoUrl}
-                controls
-                playsInline
-                preload="metadata"
-                className="mt-4 w-full max-h-72 rounded-xl bg-black"
-              />
             )}
 
             {/* Cores */}
