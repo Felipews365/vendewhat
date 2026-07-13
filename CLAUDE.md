@@ -270,13 +270,24 @@ imagens ao bucket `product-images` e guarda a ordem em `products.images` + o foc
   item para o índice 0). Não há coluna de "capa" — é só a ordem do array.
 - **Vídeo do produto (`products.video_url`):** upload no formulário (MP4/MOV, teto `MAX_VIDEO_BYTES`
   = 50MB) para o mesmo bucket `product-images` (pasta `videos/`), guarda a URL pública. O save inclui
-  `video_url` com **fallback de coluna ausente** (`isMissingColumnError`, igual a `images`). Exibido
-  no detalhe do produto na loja pública (`ProductDetailModal` em
-  [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx), abaixo da descrição), via
+  `video_url` com **fallback de coluna ausente** (`isMissingColumnError`, igual a `images`), via
   `CatalogProduct.videoUrl` (mapeado em [loja/[slug]/page.tsx](src/app/loja/[slug]/page.tsx) a partir
   do `select("*")`). **Migration:** [supabase-migration-product-video.sql](supabase-migration-product-video.sql)
   (só a coluna). O limite real de tamanho do arquivo depende do bucket no Supabase (Storage →
   `product-images` → File size limit).
+  - **Na galeria do detalhe (integrado, não separado):** o `ProductDetailModal` em
+    [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) monta um array único `media` onde o **vídeo
+    entra como 1.ª mídia**, seguido das fotos — o carrossel principal e a coluna de **miniaturas**
+    percorrem esse `media`, então **clicar nas miniaturas alterna entre o vídeo e as fotos** (o vídeo
+    não fica mais num bloco solto acima da galeria). A miniatura do vídeo mostra um ▶; o slide grande
+    reproduz o vídeo (controles/mudo/loop). Cada item de imagem carrega o `imgIndex` original (o ponto
+    de foco e o **zoom/lightbox** continuam por foto — vídeo não abre lightbox). `scrollCarouselToIndex`
+    /`onCarouselScroll` passaram a usar `media.length`.
+  - **Prévia no card da loja (hover/toque):** o `ProductCatalogCard` toca o vídeo **por cima da foto de
+    capa** ao passar o **mouse** (`onMouseEnter`/`onMouseLeave`, desktop) ou o **dedo**
+    (`onTouchStart`, celular — sem precisar clicar para abrir). Um `IntersectionObserver` **pausa** a
+    prévia quando o card sai da tela (evita vários vídeos tocando ao rolar). Cards com vídeo mostram um
+    selo **▶ Vídeo** (canto inferior direito), escondido enquanto a prévia toca.
 
 ### Variações (cores, tamanhos e estoque por combinação)
 
@@ -1091,6 +1102,24 @@ mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.
   lote e converte tokens→conversas com `conversationsFromTokens`/`includedTokensForPlan` (**sem
   escrever** no banco — `aiFromRow` zera o consumo do ciclo se `cycle_start` não é do mês atual, como
   faz o `loadCredits`). Tolera a tabela ausente (migration de créditos não aplicada → coluna "—").
+- **Medição REAL de consumo (tokens por resposta/conversa, só admin):** além do saldo, o admin vê o
+  **consumo real medido** — para validar a conversão "1 conversa ≈ 80 mil tokens" e ver quem gasta
+  mais. **Migration:** [supabase-migration-ai-usage-events.sql](supabase-migration-ai-usage-events.sql)
+  (tabela `ai_usage_events`, sem policies — só service role; **opcional**: o código tolera a tabela
+  ausente). Cada resposta da IA que gasta tokens grava **uma linha** (`store_id`, `customer_phone`,
+  `kind` = reply/followup/postsale/cart, `tokens` reais, `created_at`) — a escrita é centralizada em
+  `consumeTokens` ([aiCredits.ts](src/lib/aiCredits.ts), helper `logAiUsage`, ignora erro de tabela
+  ausente), então **todo** gasto de IA é capturado (atendimento em [whatsappRespond.ts](src/lib/whatsappRespond.ts)
+  + os 3 crons em [followups/route.ts](src/app/api/whatsapp/followups/route.ts)). É **só telemetria**:
+  não afeta o saldo/desconto (`store_ai_credits` continua a fonte do saldo). `getAiUsageSummary({ days,
+  storeId? })` ([adminData.ts](src/lib/adminData.ts)) lê os eventos do período e agrega em JS (média por
+  resposta, média por conversa = distintos `store_id:customer_phone`, tokens totais, "conversas por 80
+  mi" no ritmo real, % dos 80 mil reservados) — tolera tabela ausente (`measured:false`). Exibido em
+  **dois lugares**: bloco "Consumo real da IA" no topo do [/admin](src/app/admin/(panel)/page.tsx)
+  (geral) e por loja na página do cliente
+  [/admin/clientes/[storeId]](src/app/admin/(panel)/clientes/[storeId]/page.tsx). **O lojista NÃO vê
+  isso** (é área admin, `requireAdmin`); ele só vê o saldo em **conversas** em `/dashboard/creditos`.
+  A medição só conta a partir de quando a migration é aplicada (conversas antigas não têm log).
 
 ## Notas do ambiente (Windows / OneDrive)
 
