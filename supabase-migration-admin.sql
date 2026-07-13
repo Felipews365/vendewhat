@@ -44,7 +44,7 @@ values
     'profissional',
     'IA Completo',
     'Atendimento inteligente com IA para responder rápido e vender melhor.',
-    500.00,
+    499.90,
     array[
       'Tudo do plano Sem IA',
       'IA para tirar dúvidas dos clientes',
@@ -61,7 +61,7 @@ values
     'empresarial',
     'IA Sob Medida',
     'IA personalizada para o seu negócio, com pagamento por uso.',
-    350.00,
+    349.90,
     array[
       'Ajustes personalizados nas respostas',
       'Treinamento com dados da sua loja',

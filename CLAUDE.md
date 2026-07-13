@@ -1037,8 +1037,8 @@ Duas integrações distintas, ambas via wrapper REST [src/lib/mercadopago.ts](sr
 A IA é **paga por uso**: cada loja tem um **saldo de tokens** e, a cada resposta da IA, o sistema
 desconta os tokens reais gastos na OpenAI. Sem saldo, a IA **para de atender** e o dono é avisado no
 WhatsApp. O saldo é mostrado ao lojista em **"conversas"** (1 conversa ≈ **80.000 tokens** —
-`TOKENS_PER_CONVERSATION`), nunca em tokens. **Planos:** Sem IA (R$ 89,90) / IA Completo (R$ 500 —
-franquia de 80 mi tokens/mês ≈ 1.000 conversas) / IA Sob Medida (R$ 350 + créditos). Ids legados
+`TOKENS_PER_CONVERSATION`), nunca em tokens. **Planos:** Sem IA (R$ 89,90) / IA Completo (R$ 499,90 —
+franquia de 80 mi tokens/mês ≈ 1.000 conversas) / IA Sob Medida (R$ 349,90 + créditos). Ids legados
 mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.ts) + seed do admin.
 
 - **Motor:** [src/lib/aiCredits.ts](src/lib/aiCredits.ts) + tabela `store_ai_credits` (**migration:**
@@ -1084,6 +1084,13 @@ mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.
   conversas de cortesia/suporte via [/api/admin/credits](src/app/api/admin/credits/route.ts) (`GET`
   saldo / `POST` credita, protegido por `requireAdmin`). O lojista **não** tem como se auto-creditar
   (recarga dele é só pagando pelo MP). Para reduzir/zerar um saldo, use SQL no Supabase.
+- **Consumo da IA na lista de clientes:** a lista [/admin](src/app/admin/(panel)/page.tsx) mostra, por
+  loja, o **saldo** (conversas restantes, verde/âmbar/vermelho) e o **gasto no mês** numa coluna "IA
+  (saldo · gasto mês)", além de dois cards de resumo ("Conversas IA (mês)" e "Saldo IA (total)"). Os
+  números vêm do `getClients()` ([adminData.ts](src/lib/adminData.ts)), que lê `store_ai_credits` em
+  lote e converte tokens→conversas com `conversationsFromTokens`/`includedTokensForPlan` (**sem
+  escrever** no banco — `aiFromRow` zera o consumo do ciclo se `cycle_start` não é do mês atual, como
+  faz o `loadCredits`). Tolera a tabela ausente (migration de créditos não aplicada → coluna "—").
 
 ## Notas do ambiente (Windows / OneDrive)
 

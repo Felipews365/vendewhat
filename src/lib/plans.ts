@@ -35,7 +35,7 @@ export const PLAN_CATALOG: PlanDefinition[] = [
   {
     id: "profissional",
     title: "IA Completo",
-    monthly: 500,
+    monthly: 499.9,
     description:
       "Atendimento inteligente com IA para responder rápido e vender melhor.",
     features: [
@@ -55,7 +55,7 @@ export const PLAN_CATALOG: PlanDefinition[] = [
   {
     id: "empresarial",
     title: "IA Sob Medida",
-    monthly: 350,
+    monthly: 349.9,
     description:
       "IA personalizada para o seu negócio, com pagamento por uso.",
     features: [

@@ -63,27 +63,33 @@ function SummaryCard({ label, value, accent }: { label: string; value: string; a
   );
 }
 
+function fmtInt(n: number): string {
+  return n.toLocaleString("pt-BR");
+}
+
 export default async function AdminClientesPage() {
   const clients = await getClients();
-  const { total, active, expired, mrr } = summarize(clients);
+  const { total, active, expired, mrr, aiUsed, aiLeft } = summarize(clients);
 
   return (
     <div>
       <h1 className="text-2xl font-bold tracking-tight text-slate-900">Clientes</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Todas as lojas da plataforma, com plano, status e vencimento.
+        Todas as lojas da plataforma, com plano, status, vencimento e consumo da IA.
       </p>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard label="Clientes" value={String(total)} accent="text-slate-900" />
         <SummaryCard label="Ativos" value={String(active)} accent="text-emerald-600" />
         <SummaryCard label="Vencidos / atrasados" value={String(expired)} accent="text-red-600" />
         <SummaryCard label="Receita mensal (ativos)" value={`R$ ${formatBRL(mrr)}`} accent="text-landing-primary" />
+        <SummaryCard label="Conversas IA (mês)" value={fmtInt(aiUsed)} accent="text-slate-900" />
+        <SummaryCard label="Saldo IA (total)" value={fmtInt(aiLeft)} accent="text-emerald-600" />
       </div>
 
       <div className="mt-8 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
         <div className="overflow-x-auto">
-        <table className="w-full min-w-[680px] text-left text-sm">
+        <table className="w-full min-w-[820px] text-left text-sm">
           <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3 font-semibold">Loja</th>
@@ -91,13 +97,14 @@ export default async function AdminClientesPage() {
               <th className="px-4 py-3 font-semibold">Plano</th>
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold">Vencimento</th>
+              <th className="px-4 py-3 font-semibold">IA (saldo · gasto mês)</th>
               <th className="px-4 py-3 text-right font-semibold">Valor</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {clients.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
                   Nenhuma loja encontrada.
                 </td>
               </tr>
@@ -133,6 +140,28 @@ export default async function AdminClientesPage() {
                       </span>
                     ) : (
                       <VencimentoBadge expiresAt={sub?.expires_at ?? null} />
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.ai ? (
+                      <div className="flex flex-col leading-tight">
+                        <span
+                          className={`font-semibold ${
+                            c.ai.conversationsLeft <= 0
+                              ? "text-red-600"
+                              : c.ai.conversationsLeft <= 20
+                                ? "text-amber-600"
+                                : "text-emerald-600"
+                          }`}
+                        >
+                          {fmtInt(c.ai.conversationsLeft)} conv.
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {fmtInt(c.ai.usedConversations)} gastas no mês
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-slate-700">
