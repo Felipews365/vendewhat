@@ -809,17 +809,55 @@ Quando o cliente pede o catálogo/lista de produtos, a IA manda **o link do site
 cliente escolher pelo site OU folheando o PDF. **Sem migration** (o PDF mora no bucket
 `product-images` que já existe; nada novo em tabela).
 
-- **Geração:** [src/lib/catalogPdf.tsx](src/lib/catalogPdf.tsx) monta o PDF com
-  **`@react-pdf/renderer`** (JS puro, roda no serverless da Vercel — sem Chrome/puppeteer).
-  Cada produto vira um card: **foto de capa + nome + preço** (com risco no preço antigo em
-  promoção) **+ cores + tamanhos + descrição**. O cabeçalho tem **logo + nome da loja** e um
-  **QR code** (lib `qrcode`) que abre a loja; o rodapé traz a URL e a paginação. O
-  `@react-pdf` só lê **JPG/PNG** — as fotos são baixadas e **recomprimidas com `sharp`**
-  (`compressForPdf`: redimensiona p/ máx. 640px + JPEG q70) antes de embutir, o que derruba o
-  tamanho do PDF (era ~7MB; as fotos full-res pesavam demais). O `sharp` também **converte WebP→JPEG**,
-  então logos/fotos WebP agora entram (antes eram ignoradas). Se o `sharp` falhar, cai no buffer
-  original. As imagens são baixadas com concorrência limitada. Como `@react-pdf` e `sharp` trazem
-  deps/binários que quebram no bundler, ambos estão em
+- **Geração (catálogo mobile-first, 1 produto por página):** [src/lib/catalogPdf.tsx](src/lib/catalogPdf.tsx)
+  monta o PDF com **`@react-pdf/renderer`** (JS puro, roda no serverless da Vercel — sem
+  Chrome/puppeteer). O layout é **formato de celular** para ler no WhatsApp **sem zoom**:
+  - **Página no formato retrato de celular:** **largura fixa `PAGE_W = 400pt`** (é a largura que
+    define o tamanho do texto: a página escala para a largura da tela, então texto grande = leitura
+    sem zoom) e **altura calculada por produto** (`productPageHeight`) = molduras + foto + miniaturas
+    + `DATA_RESERVE`. **Cada produto ocupa a sua própria página** (`ProductPage`, `size={[400, h]}`) —
+    sem blocos `wrap={false}` (o que evita o **loop infinito** do @react-pdf quando um card indivisível
+    passa da altura da página). A capa (`CoverPage`, `400×720`) traz logo + nome, frase de impacto,
+    foto de destaque, CTA e QR code.
+  - **Separação por categoria (página divisória + "pastas" no índice):** `groupByCategory` agrupa
+    **por categoria** (case-insensitive, sem duplicar; rótulo em Title Case ptBR por
+    `titleCaseCategory`; sem categoria vai para "Mais produtos" no fim). `buildEntries` monta a
+    sequência de páginas: antes dos produtos de cada categoria entra uma **página divisória**
+    (`CategoryDivider`, capa colorida com o nome da categoria + contagem, visível ao rolar — funciona
+    em qualquer leitor/WhatsApp). Além disso, cada página recebe um **marcador (outline) do PDF**
+    aninhado: a divisória é uma **pasta** (bookmark de 1º nível) e cada produto pendura nela
+    (`bookmark.parent`). Como o @react-pdf atribui o `ref` de cada bookmark na **ordem das páginas**
+    (BFS de `Document.children`; a capa não tem bookmark → 1ª divisória = ref 0), o `buildEntries`
+    reproduz essa contagem para saber o ref da divisória e passá-lo como `parent` dos produtos — o
+    resolvedor da lib respeita o `parent` do objeto (`{ ref, parent, ...bookmark }`, spread por
+    último). A categoria também aparece como **eyebrow** no topo dos dados de cada card.
+  - **Card por produto** (vertical, minimalista): **foto principal grande** no topo → **até 2
+    miniaturas** (só se existirem — `p.images.slice(1,3)`, senão nada, sem espaço vazio) → dados na
+    ordem **categoria › nome › preço › cores › tamanhos › descrição › Ref./Cód.** Nome (19pt) e
+    **preço** (25pt, cor da loja, com riscado + selo `-X%` em promoção) em destaque. As miniaturas
+    ficam em **meia largura** (`THUMB_COL_W`, a única também — não vira um "segundo banner") com
+    **altura pela proporção real** (`thumbLayout`/`fittedBox`, mesma lógica da principal), então
+    **não cortam** o produto; a altura da faixa (`thumbsBlockHeight`) entra no cálculo da página.
+  - **Foto sem cortar o produto/rosto:** `mainImageLayout` mede a **proporção real** de cada foto
+    (dimensões vindas do `sharp`, ver `CatImg`) e dá a altura da caixa: se a foto inteira cabe no
+    teto (`MAIN_IMG_MAX_H = 460`), a caixa acompanha a proporção (`cover`, sem corte); retrato muito
+    alto usa `contain` (foto inteira). Como a **altura da página cresce** para acomodar a foto, o
+    retrato comum aparece inteiro em `cover` (sem faixas nem corte).
+  - **Copy comercial determinística** (não chama IA, não inventa preço/cor/tamanho): `commercialCopy`
+    usa a descrição real **polida** (`polishDescription`: limpa espaços, corrige CAIXA ALTA,
+    capitaliza, fecha com ponto, corta ~170 chars — "descrição curta"); sem descrição, usa uma frase
+    de benefício por tipo de produto (`persuasiveFallback` via `BENEFIT_LINES`).
+  - **Cor da loja:** usa `storefront.themePrimary` (lido por `loadStoreAccent`) como **acento**
+    (capa/CTA/preço/eyebrow); `buildPalette` calcula o contraste e um tom escurecido (`ink`) legível
+    sobre branco (fallback `#c9a8ac`).
+
+  O `@react-pdf` só lê **JPG/PNG** — as fotos são baixadas e **recomprimidas com `sharp`**
+  (`compressForPdf(maxPx, quality)` devolve o buffer **+ dimensões**: capa 640px q70, secundárias
+  220px; logo 240px) antes de embutir, o que mantém o arquivo **leve (bem abaixo dos 10 MB)**. O
+  `sharp` também **converte WebP→JPEG**, então logos/fotos WebP entram. Se o `sharp` falhar, cai no
+  buffer original (sem dimensões → usa proporção padrão). As imagens (máx. 3 por produto, teto de 80
+  produtos) são baixadas com **concorrência limitada** (`mapWithConcurrency`). Como `@react-pdf` e
+  `sharp` trazem deps/binários que quebram no bundler, ambos estão em
   `experimental.serverComponentsExternalPackages` no [next.config.mjs](next.config.mjs).
 - **Cache no bucket:** `ensureCatalogPdfUrl` (em [catalogPdf.tsx](src/lib/catalogPdf.tsx))
   gera e guarda o PDF em `product-images/catalogos/{slug}.pdf` e devolve a **URL pública**

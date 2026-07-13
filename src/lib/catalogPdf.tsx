@@ -4,10 +4,17 @@
  *  - o atendente de IA no WhatsApp, que anexa o PDF quando o cliente pede o
  *    catálogo (marcador [[ENVIAR_CATALOGO]] em [whatsappRespond.ts]).
  *
+ * É um **catálogo comercial de alta conversão**: capa com marca + chamada, seções
+ * por categoria (cada categoria começa em página nova), e um bloco por produto
+ * (foto de destaque + até 2 fotos menores, preço, cores, tamanhos, descrição
+ * reescrita em tom comercial, referência e código). Layout vertical, pensado para
+ * ler no celular e compartilhar no WhatsApp. Usa a cor da loja (`themePrimary`)
+ * como acento.
+ *
  * Gera com @react-pdf/renderer (JS puro, roda no serverless da Vercel — sem
- * Chrome/puppeteer). O @react-pdf só entende JPG/PNG; como as fotos de produto
- * passam pelo crop que exporta JPEG, dá para embutir direto. Fotos em formato
- * não suportado (ex.: WebP no logo) são simplesmente ignoradas.
+ * Chrome/puppeteer). O @react-pdf só entende JPG/PNG; as fotos são recomprimidas
+ * com `sharp` (que também converte WebP→JPEG) antes de embutir — isso mantém o
+ * arquivo leve (< 10 MB) sem perder qualidade visual.
  *
  * O resultado é cacheado no bucket `product-images` (pasta `catalogos/`) por um
  * tempo curto para não regerar a cada pedido no WhatsApp.
@@ -19,7 +26,6 @@ import {
   Text,
   View,
   Image,
-  StyleSheet,
   renderToBuffer,
 } from "@react-pdf/renderer";
 import QRCode from "qrcode";
@@ -29,11 +35,15 @@ import { optionArrayFromDb } from "@/lib/productOptions";
 
 export type CatalogPdfProduct = {
   name: string;
+  category: string | null;
+  reference: string | null;
+  barcode: string | null;
   price: number;
   description: string | null;
   colors: string[];
   sizes: string[];
-  imageDataUri: string | null;
+  /** Foto de capa (índice 0) + até 2 fotos secundárias, com dimensões. */
+  images: CatImg[];
   isPromotion: boolean;
   compareAtPrice: number | null;
 };
@@ -42,38 +52,164 @@ function brl(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-/**
- * Recomprime uma imagem para o PDF: redimensiona para no máx. `IMG_MAX_PX` de
- * largura e reencoda como JPEG (~`IMG_QUALITY`%). Isso derruba o tamanho do PDF
- * (fotos de produto full-res deixavam o catálogo com vários MB). Como o
- * @react-pdf embute os bytes crus da imagem, encolher os bytes = PDF leve.
- * Se o sharp falhar (formato exótico etc.), devolve o buffer original.
- */
-const IMG_MAX_PX = 640;
-const IMG_QUALITY = 70;
-async function compressForPdf(buf: Buffer): Promise<{ buf: Buffer; mime: string }> {
-  try {
-    const sharp = (await import("sharp")).default;
-    const out = await sharp(buf)
-      .rotate() // respeita orientação EXIF
-      .resize({ width: IMG_MAX_PX, height: IMG_MAX_PX, fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: IMG_QUALITY, mozjpeg: true })
-      .toBuffer();
-    // Só usa se realmente ficou menor (imagens já pequenas podem crescer).
-    if (out.length > 0 && out.length < buf.length) {
-      return { buf: out, mime: "image/jpeg" };
-    }
-  } catch {
-    /* segue com o original */
-  }
-  return { buf, mime: buf[0] === 0x89 && buf[1] === 0x50 ? "image/png" : "image/jpeg" };
+/* ------------------------------------------------------------------ *
+ * Cor da loja: acento, contraste e tons derivados
+ * ------------------------------------------------------------------ */
+
+const DEFAULT_ACCENT = "#c9a8ac";
+
+function clampByte(n: number): number {
+  return Math.max(0, Math.min(255, Math.round(n)));
+}
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const int = parseInt(m[1], 16);
+  return { r: (int >> 16) & 255, g: (int >> 8) & 255, b: int & 255 };
+}
+function rgbToHex(c: { r: number; g: number; b: number }): string {
+  return (
+    "#" +
+    [c.r, c.g, c.b].map((v) => clampByte(v).toString(16).padStart(2, "0")).join("")
+  );
+}
+/** Mistura `hex` com `target` (0 = só hex, 1 = só target). */
+function mix(hex: string, target: string, amount: number): string {
+  const a = hexToRgb(hex) ?? { r: 0, g: 0, b: 0 };
+  const b = hexToRgb(target) ?? { r: 0, g: 0, b: 0 };
+  return rgbToHex({
+    r: a.r + (b.r - a.r) * amount,
+    g: a.g + (b.g - a.g) * amount,
+    b: a.b + (b.b - a.b) * amount,
+  });
+}
+/** Luminância relativa (0 escuro → 1 claro) para decidir contraste. */
+function luminance(hex: string): number {
+  const c = hexToRgb(hex) ?? { r: 0, g: 0, b: 0 };
+  const f = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
 }
 
-/** Baixa uma imagem e devolve como data URI leve (JPG/PNG; null caso contrário). */
+type Palette = {
+  primary: string; // acento da loja (faixas/CTA)
+  onPrimary: string; // texto sobre o acento
+  ink: string; // acento legível sobre branco (preço, links, eyebrow)
+};
+function buildPalette(accent: string | null): Palette {
+  const primary = accent && hexToRgb(accent) ? accent : DEFAULT_ACCENT;
+  const light = luminance(primary);
+  return {
+    primary,
+    onPrimary: light > 0.55 ? "#0f172a" : "#ffffff",
+    // Se o acento é claro demais, escurece para garantir leitura sobre branco.
+    ink: light > 0.5 ? mix(primary, "#000000", 0.5) : primary,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Copy comercial (determinística — não inventa preço/cor/tamanho)
+ * ------------------------------------------------------------------ */
+
+/** Deixa a descrição real com cara comercial: limpa espaços, corrige CAIXA ALTA,
+ * capitaliza e fecha com ponto. Não acrescenta fatos que não estejam no texto. */
+function polishDescription(raw: string): string {
+  let s = raw.replace(/\s+/g, " ").trim();
+  if (!s) return "";
+  const letters = (s.match(/[a-zA-ZÀ-ÿ]/g) ?? []).length;
+  const uppers = (s.match(/[A-ZÀ-Þ]/g) ?? []).length;
+  if (letters > 0 && uppers / letters > 0.6) s = s.toLowerCase(); // texto gritado → normaliza
+  s = s.charAt(0).toUpperCase() + s.slice(1);
+  if (s.length > 170) {
+    s = s.slice(0, 165).replace(/[\s,;.]+\S*$/, "") + "…";
+  } else if (!/[.!?…]$/.test(s)) {
+    s += ".";
+  }
+  return s;
+}
+
+/** Frase de benefício por tipo de produto quando não há descrição cadastrada.
+ * São elogios genéricos e honestos (não afirmam tecido/medida específicos). */
+const BENEFIT_LINES: { kw: RegExp; line: string }[] = [
+  { kw: /camis|polo|blus|regat|top|cropped|body/i, line: "Peça versátil e confortável, com ótimo caimento para compor um visual moderno no dia a dia." },
+  { kw: /bermud|short/i, line: "Leve, confortável e cheia de estilo — perfeita para o dia a dia com liberdade de movimento." },
+  { kw: /cal(ç|c)a|jeans|legg|pantalon/i, line: "Caimento impecável e muito conforto: combina com diferentes looks e ocasiões." },
+  { kw: /conjunt/i, line: "Conjunto prático e cheio de estilo: peças que combinam entre si para montar o look completo sem esforço." },
+  { kw: /vestid|saia|macac|macaquinho/i, line: "Elegante e confortável, do casual ao arrumadinho, para você se sentir bem em qualquer ocasião." },
+  { kw: /jaquet|casac|moletom|blaz|cardig|sueter|su(é|e)ter/i, line: "Sofisticação e conforto para se aquecer com muito estilo em qualquer look." },
+  { kw: /t(ê|e)nis|sapat|sand(á|a)li|chinel|calçad|bota|sap|slide/i, line: "Modelo confortável e estiloso para acompanhar você o dia inteiro com muito conforto." },
+  { kw: /bols|mochil|carteir|acess(ó|o)ri|bon(é|e)|cinto|(ó|o)culos|rel(ó|o)gio|colar|brinc|anel|pulseir|len(ç|c)o/i, line: "O detalhe que eleva qualquer produção e combina com diferentes estilos." },
+  { kw: /perfum|maquiag|cosm(é|e)ti|beleza|skincar|hidrat/i, line: "Qualidade e cuidado no dia a dia para você se sentir ainda melhor." },
+];
+function persuasiveFallback(category: string | null, name: string): string {
+  const hay = `${category ?? ""} ${name}`;
+  for (const b of BENEFIT_LINES) if (b.kw.test(hay)) return b.line;
+  return "Peça versátil e cheia de estilo para compor looks incríveis no dia a dia, com muito conforto.";
+}
+
+function commercialCopy(p: CatalogPdfProduct): string {
+  const clean = polishDescription(p.description ?? "");
+  return clean || persuasiveFallback(p.category, p.name);
+}
+
+function discountPct(price: number, compare: number | null): number | null {
+  if (compare == null || compare <= price || compare <= 0) return null;
+  return Math.round(((compare - price) / compare) * 100);
+}
+
+/* ------------------------------------------------------------------ *
+ * Imagens: baixa + recomprime (leve) para embutir no PDF
+ * ------------------------------------------------------------------ */
+
+/** Imagem já pronta para o PDF: data URI + dimensões (para dimensionar sem cortar). */
+export type CatImg = { uri: string; w: number; h: number };
+
+/**
+ * Recomprime uma imagem para o PDF: redimensiona para no máx. `maxPx` de largura
+ * e reencoda como JPEG. Isso derruba o tamanho do PDF (fotos full-res deixavam o
+ * catálogo com vários MB). O `sharp` também converte WebP→JPEG. Devolve também as
+ * dimensões finais (para renderizar respeitando a proporção, sem cortar). Se
+ * falhar (formato exótico etc.), devolve o buffer original sem dimensões.
+ */
+async function compressForPdf(
+  buf: Buffer,
+  maxPx = 640,
+  quality = 70
+): Promise<{ buf: Buffer; mime: string; w: number; h: number }> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const { data, info } = await sharp(buf)
+      .rotate() // respeita orientação EXIF
+      .resize({ width: maxPx, height: maxPx, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality, mozjpeg: true })
+      .toBuffer({ resolveWithObject: true });
+    const w = info.width ?? 0;
+    const h = info.height ?? 0;
+    // Usa a versão comprimida quando fica menor; senão mantém os bytes originais,
+    // mas aproveita as dimensões (a proporção é a mesma).
+    if (data.length > 0 && data.length < buf.length) {
+      return { buf: data, mime: "image/jpeg", w, h };
+    }
+    return {
+      buf,
+      mime: buf[0] === 0x89 && buf[1] === 0x50 ? "image/png" : "image/jpeg",
+      w,
+      h,
+    };
+  } catch {
+    return { buf, mime: buf[0] === 0x89 && buf[1] === 0x50 ? "image/png" : "image/jpeg", w: 0, h: 0 };
+  }
+}
+
+/** Baixa uma imagem e devolve como data URI leve + dimensões (null se não der). */
 async function fetchImageDataUri(
   url: string,
+  maxPx = 640,
+  quality = 70,
   timeoutMs = 8000
-): Promise<string | null> {
+): Promise<CatImg | null> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -83,26 +219,25 @@ async function fetchImageDataUri(
     const buf = Buffer.from(await res.arrayBuffer());
     let mime = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
     if (mime !== "image/jpeg" && mime !== "image/png") {
-      // Descobre pelos bytes mágicos (o header pode vir errado/genérico).
       if (buf[0] === 0xff && buf[1] === 0xd8) mime = "image/jpeg";
       else if (buf[0] === 0x89 && buf[1] === 0x50) mime = "image/png";
       else {
         // WebP e afins: o @react-pdf não renderiza direto, mas o sharp converte.
-        const conv = await compressForPdf(buf);
+        const conv = await compressForPdf(buf, maxPx, quality);
         if (conv.mime === "image/jpeg" && conv.buf !== buf) {
-          return `data:image/jpeg;base64,${conv.buf.toString("base64")}`;
+          return { uri: `data:image/jpeg;base64,${conv.buf.toString("base64")}`, w: conv.w, h: conv.h };
         }
         return null;
       }
     }
-    const { buf: outBuf, mime: outMime } = await compressForPdf(buf);
-    return `data:${outMime};base64,${outBuf.toString("base64")}`;
+    const conv = await compressForPdf(buf, maxPx, quality);
+    return { uri: `data:${conv.mime};base64,${conv.buf.toString("base64")}`, w: conv.w, h: conv.h };
   } catch {
     return null;
   }
 }
 
-/** Resolve promessas com um limite de concorrência (não abre 60 fetches de uma vez). */
+/** Resolve promessas com um limite de concorrência (não abre N fetches de uma vez). */
 async function mapWithConcurrency<T, R>(
   items: T[],
   limit: number,
@@ -122,159 +257,543 @@ async function mapWithConcurrency<T, R>(
   return out;
 }
 
-const styles = StyleSheet.create({
-  page: {
-    paddingTop: 28,
-    paddingBottom: 40,
-    paddingHorizontal: 28,
-    fontFamily: "Helvetica",
-    color: "#0f172a",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    paddingBottom: 12,
-    marginBottom: 16,
-  },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
-  logo: { width: 44, height: 44, borderRadius: 8, objectFit: "cover" },
-  storeName: { fontSize: 18, fontFamily: "Helvetica-Bold" },
-  storeSub: { fontSize: 9, color: "#64748b", marginTop: 2 },
-  qrBox: { alignItems: "center", width: 92 },
-  qr: { width: 72, height: 72 },
-  qrCaption: { fontSize: 7, color: "#64748b", marginTop: 3, textAlign: "center" },
-  grid: { flexDirection: "row", flexWrap: "wrap" },
-  card: {
-    width: "50%",
-    padding: 6,
-  },
-  cardInner: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  image: { width: "100%", height: 150, objectFit: "cover" },
-  imagePlaceholder: {
-    width: "100%",
-    height: 150,
-    backgroundColor: "#f1f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  imagePlaceholderText: { fontSize: 8, color: "#94a3b8" },
-  cardBody: { padding: 8 },
-  name: { fontSize: 11, fontFamily: "Helvetica-Bold", marginBottom: 3 },
-  priceRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 3 },
-  price: { fontSize: 12, fontFamily: "Helvetica-Bold", color: "#0f172a" },
-  priceOld: { fontSize: 8, color: "#94a3b8", textDecoration: "line-through" },
-  promoTag: {
-    fontSize: 7,
-    color: "#ffffff",
-    backgroundColor: "#dc2626",
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
-  },
-  meta: { fontSize: 8, color: "#475569", marginTop: 1 },
-  desc: { fontSize: 8, color: "#64748b", marginTop: 3 },
-  footer: {
-    position: "absolute",
-    bottom: 18,
-    left: 28,
-    right: 28,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    fontSize: 8,
-    color: "#94a3b8",
-  },
-});
+/* ------------------------------------------------------------------ *
+ * Documento (react-pdf)
+ * ------------------------------------------------------------------ */
+
+type CatalogGroup = { category: string; items: CatalogPdfProduct[] };
+
+// Conectores que ficam minúsculos no meio do título (padronização de nomes).
+const LOWER_WORDS = new Set(["de", "da", "do", "das", "dos", "e", "com", "para", "a", "o", "em"]);
+/** Padroniza o nome da categoria: colapsa espaços e coloca em Title Case ptBR. */
+function titleCaseCategory(raw: string): string {
+  return raw
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .split(" ")
+    .map((w, i) =>
+      i > 0 && LOWER_WORDS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)
+    )
+    .join(" ");
+}
+
+/** Agrupa por categoria (case-insensitive, evita seções duplicadas) preservando a
+ * ordem de aparição; sem categoria vai por último. O rótulo sai padronizado. */
+function groupByCategory(products: CatalogPdfProduct[]): CatalogGroup[] {
+  const map = new Map<string, { label: string; items: CatalogPdfProduct[] }>();
+  const order: string[] = [];
+  const NONE = ""; // sentinel impossível de vir de uma categoria real
+  for (const p of products) {
+    const clean = (p.category ?? "").replace(/\s+/g, " ").trim();
+    const key = clean ? clean.toLowerCase() : NONE;
+    if (!map.has(key)) {
+      map.set(key, { label: clean ? titleCaseCategory(clean) : "", items: [] });
+      order.push(key);
+    }
+    map.get(key)!.items.push(p);
+  }
+  const groups: CatalogGroup[] = order
+    .filter((k) => k !== NONE)
+    .map((k) => ({ category: map.get(k)!.label, items: map.get(k)!.items }));
+  if (map.has(NONE)) {
+    groups.push({
+      category: groups.length ? "Mais produtos" : "Produtos",
+      items: map.get(NONE)!.items,
+    });
+  }
+  return groups;
+}
+
+const IMPACT_PHRASE =
+  "Peças selecionadas com estilo, conforto e qualidade para você usar todo dia. Escolha suas favoritas e chame no WhatsApp — rápido, fácil e sem complicação.";
+
+// --- Página no formato de CELULAR (mobile-first) ---------------------------
+// A LARGURA fixa (400pt) é o que define o tamanho do texto no celular: a página
+// escala para a largura da tela, então texto grande = leitura sem zoom. A ALTURA
+// é calculada por produto (a foto respeita a proporção real, sem cortar), então
+// cada produto ocupa a sua própria página do tamanho exato do conteúdo.
+const PAGE_W = 400;
+const PAGE_PAD_X = 22;
+const CARD_PAD = 14;
+const CARD_INNER_W = PAGE_W - PAGE_PAD_X * 2 - CARD_PAD * 2; // = 328 (largura da foto)
+const MAIN_IMG_MAX_H = 460; // teto da foto (a página cresce para acomodá-la)
+const MAIN_IMG_MIN_H = 220;
+// Miniaturas: meia largura (a única também), altura pela proporção real (sem cortar).
+const THUMB_GAP = 10;
+const THUMB_COL_W = (CARD_INNER_W - THUMB_GAP) / 2; // = 159 (largura de cada miniatura)
+const THUMB_MIN_H = 120;
+const THUMB_MAX_H = 230;
+const THUMB_MARGIN_TOP = 10;
+// Reservas verticais para montar a altura da página (dados + molduras).
+const HEADER_BLOCK = 34;
+const FOOTER_BLOCK = 30;
+const DATA_RESERVE = 244;
+
+/** Dá altura + `fit` de uma imagem numa coluna de largura `colW`, respeitando a
+ * proporção real: se cabe no teto, a caixa acompanha a proporção (cover, sem corte);
+ * se é um retrato muito alto, usa `contain` para mostrar a foto inteira. */
+function fittedBox(
+  img: CatImg | undefined,
+  colW: number,
+  minH: number,
+  maxH: number,
+  fallbackRatio = 1.25
+): { height: number; fit: "cover" | "contain" } {
+  const ratio = img && img.w > 0 && img.h > 0 ? img.h / img.w : fallbackRatio;
+  const natural = colW * ratio;
+  const height = Math.max(minH, Math.min(maxH, Math.round(natural)));
+  return { height, fit: natural > maxH + 1 ? "contain" : "cover" };
+}
+
+function mainImageLayout(img: CatImg | undefined) {
+  return fittedBox(img, CARD_INNER_W, MAIN_IMG_MIN_H, MAIN_IMG_MAX_H);
+}
+function thumbLayout(img: CatImg | undefined) {
+  return fittedBox(img, THUMB_COL_W, THUMB_MIN_H, THUMB_MAX_H);
+}
+/** Altura ocupada pela faixa de miniaturas (a maior das colunas + margem). */
+function thumbsBlockHeight(thumbs: CatImg[]): number {
+  if (thumbs.length === 0) return 0;
+  const tallest = Math.max(...thumbs.map((t) => thumbLayout(t).height));
+  return THUMB_MARGIN_TOP + tallest;
+}
+
+/** Altura total da página de um produto = molduras + foto + miniaturas + dados. */
+function productPageHeight(img: CatImg | undefined, thumbs: CatImg[]): number {
+  const imgH = mainImageLayout(img).height;
+  return Math.round(
+    20 + HEADER_BLOCK + CARD_PAD + imgH + thumbsBlockHeight(thumbs) + DATA_RESERVE + CARD_PAD + FOOTER_BLOCK
+  );
+}
+
+/** Valor de bookmark do @react-pdf (título + hierarquia). `parent` = ref do
+ * bookmark da divisória, para aninhar o produto na "pasta" da categoria. */
+type BookmarkValue = { title: string; parent?: number; expanded?: boolean; fit?: boolean };
+
+/** Página divisória (capa) de uma categoria + bookmark de "pasta" no índice do PDF. */
+function CategoryDivider({
+  category,
+  count,
+  C,
+  bookmark,
+}: {
+  category: string;
+  count: number;
+  C: Palette;
+  bookmark: BookmarkValue;
+}) {
+  return (
+    <Page
+      size={[PAGE_W, 300]}
+      bookmark={bookmark}
+      style={{ fontFamily: "Helvetica", backgroundColor: C.primary, padding: 0 }}
+    >
+      <View style={{ flex: 1, justifyContent: "center", paddingHorizontal: 34 }}>
+        <Text style={{ color: C.onPrimary, fontSize: 9, letterSpacing: 3, fontFamily: "Helvetica-Bold", opacity: 0.85 }}>
+          CATEGORIA
+        </Text>
+        <Text style={{ color: C.onPrimary, fontSize: 30, fontFamily: "Helvetica-Bold", marginTop: 8, lineHeight: 1.1 }}>
+          {category}
+        </Text>
+        <View style={{ width: 54, height: 3, backgroundColor: C.onPrimary, opacity: 0.8, marginTop: 16, borderRadius: 2 }} />
+        <Text style={{ color: C.onPrimary, fontSize: 11, marginTop: 16, opacity: 0.9 }}>
+          {count} {count === 1 ? "item" : "itens"}
+        </Text>
+      </View>
+    </Page>
+  );
+}
+
+/** Uma página inteira dedicada a um produto (formato celular, leitura sem zoom). */
+function ProductPage({
+  p,
+  category,
+  C,
+  logoDataUri,
+  storeName,
+  storeUrl,
+  bookmark,
+}: {
+  p: CatalogPdfProduct;
+  category: string;
+  C: Palette;
+  logoDataUri: string | null;
+  storeName: string;
+  storeUrl: string;
+  bookmark?: BookmarkValue;
+}) {
+  const pct = discountPct(p.price, p.compareAtPrice);
+  const hasPromo = p.isPromotion && pct != null;
+  const main = p.images[0];
+  const thumbs = p.images.slice(1, 3);
+  const mainBox = mainImageLayout(main);
+  const pageH = productPageHeight(main, thumbs);
+  return (
+    <Page
+      size={[PAGE_W, pageH]}
+      bookmark={bookmark}
+      style={{
+        fontFamily: "Helvetica",
+        color: "#111827",
+        backgroundColor: "#ffffff",
+        paddingHorizontal: PAGE_PAD_X,
+        paddingTop: 20,
+        paddingBottom: FOOTER_BLOCK,
+      }}
+    >
+      {/* Cabeçalho de marca — discreto */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+          {logoDataUri ? (
+            <Image src={logoDataUri} style={{ width: 20, height: 20, borderRadius: 5, objectFit: "cover" }} />
+          ) : null}
+          <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold" }}>{storeName}</Text>
+        </View>
+        <Text style={{ fontSize: 7.5, letterSpacing: 2, color: C.ink, fontFamily: "Helvetica-Bold" }}>
+          CATÁLOGO
+        </Text>
+      </View>
+
+      {/* Card do produto */}
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: "#eceef1",
+          borderRadius: 18,
+          padding: CARD_PAD,
+          backgroundColor: "#ffffff",
+        }}
+      >
+        {/* Foto principal grande — respeita a proporção (não corta) */}
+        <View
+          style={{
+            width: "100%",
+            height: mainBox.height,
+            borderRadius: 12,
+            overflow: "hidden",
+            backgroundColor: "#f4f5f7",
+            position: "relative",
+          }}
+        >
+          {main ? (
+            <Image src={main.uri} style={{ width: "100%", height: "100%", objectFit: mainBox.fit }} />
+          ) : (
+            <View style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 10, color: "#9ca3af" }}>Sem foto</Text>
+            </View>
+          )}
+          {hasPromo ? (
+            <View
+              style={{
+                position: "absolute",
+                top: 10,
+                left: 10,
+                backgroundColor: "#dc2626",
+                borderRadius: 6,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+              }}
+            >
+              <Text style={{ color: "#ffffff", fontSize: 11, fontFamily: "Helvetica-Bold" }}>-{pct}%</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Até 2 miniaturas — meia largura, altura pela proporção real (sem cortar);
+            só aparecem se existirem (sem espaço vazio). A única também fica em meia
+            largura, para não virar um "segundo banner". */}
+        {thumbs.length > 0 ? (
+          <View style={{ flexDirection: "row", gap: THUMB_GAP, marginTop: THUMB_MARGIN_TOP }}>
+            {thumbs.map((t, ti) => {
+              const tb = thumbLayout(t);
+              return (
+                <View
+                  key={ti}
+                  style={{
+                    width: THUMB_COL_W,
+                    height: tb.height,
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    backgroundColor: "#f4f5f7",
+                  }}
+                >
+                  <Image src={t.uri} style={{ width: "100%", height: "100%", objectFit: tb.fit }} />
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* Dados: categoria › nome › preço › cores › tamanhos › descrição › ref */}
+        <View style={{ marginTop: 16 }}>
+          <Text
+            style={{
+              fontSize: 8.5,
+              letterSpacing: 1.5,
+              color: C.ink,
+              fontFamily: "Helvetica-Bold",
+              textTransform: "uppercase",
+            }}
+          >
+            {category}
+          </Text>
+          <Text style={{ fontSize: 19, fontFamily: "Helvetica-Bold", marginTop: 4, lineHeight: 1.15 }}>
+            {p.name}
+          </Text>
+
+          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: 8 }}>
+            <Text style={{ fontSize: 25, fontFamily: "Helvetica-Bold", color: C.ink }}>{brl(p.price)}</Text>
+            {hasPromo ? (
+              <Text style={{ fontSize: 12, color: "#9ca3af", textDecoration: "line-through" }}>
+                {brl(p.compareAtPrice as number)}
+              </Text>
+            ) : null}
+            {hasPromo ? (
+              <View style={{ backgroundColor: "#fee2e2", borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 9, color: "#b91c1c", fontFamily: "Helvetica-Bold" }}>-{pct}%</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={{ height: 1, backgroundColor: "#f0f1f3", marginTop: 12, marginBottom: 12 }} />
+
+          {p.colors.length > 0 ? (
+            <Text style={{ fontSize: 10.5, color: "#374151", marginBottom: 5 }}>
+              <Text style={{ fontFamily: "Helvetica-Bold" }}>Cores: </Text>
+              {p.colors.join(", ")}
+            </Text>
+          ) : null}
+          {p.sizes.length > 0 ? (
+            <Text style={{ fontSize: 10.5, color: "#374151", marginBottom: 5 }}>
+              <Text style={{ fontFamily: "Helvetica-Bold" }}>Tamanhos: </Text>
+              {p.sizes.join(" · ")}
+            </Text>
+          ) : null}
+
+          <Text style={{ fontSize: 10.5, color: "#6b7280", marginTop: 3, lineHeight: 1.45 }}>
+            {commercialCopy(p)}
+          </Text>
+
+          {p.reference || p.barcode ? (
+            <View style={{ flexDirection: "row", gap: 14, marginTop: 12 }}>
+              {p.reference ? (
+                <Text style={{ fontSize: 8.5, color: "#9ca3af" }}>Ref. {p.reference}</Text>
+              ) : null}
+              {p.barcode ? (
+                <Text style={{ fontSize: 8.5, color: "#9ca3af" }}>Cód. {p.barcode}</Text>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      </View>
+
+      {/* Rodapé */}
+      <View
+        fixed
+        style={{
+          position: "absolute",
+          bottom: 12,
+          left: PAGE_PAD_X,
+          right: PAGE_PAD_X,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ fontSize: 7.5, color: C.ink, fontFamily: "Helvetica-Bold" }}>
+          {storeUrl.replace(/^https?:\/\//, "")}
+        </Text>
+        <Text
+          style={{ fontSize: 7.5, color: "#9ca3af" }}
+          render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`}
+        />
+      </View>
+    </Page>
+  );
+}
+
+/** Capa no mesmo formato celular. */
+function CoverPage({
+  storeName,
+  storeUrl,
+  logoDataUri,
+  qrDataUri,
+  hero,
+  C,
+  productCount,
+  categoryCount,
+}: {
+  storeName: string;
+  storeUrl: string;
+  logoDataUri: string | null;
+  qrDataUri: string | null;
+  hero: string | null;
+  C: Palette;
+  productCount: number;
+  categoryCount: number;
+}) {
+  return (
+    <Page size={[PAGE_W, 720]} style={{ fontFamily: "Helvetica", color: "#111827", padding: 0 }}>
+      <View
+        style={{
+          backgroundColor: C.primary,
+          paddingVertical: 20,
+          paddingHorizontal: PAGE_PAD_X,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        {logoDataUri ? (
+          <Image src={logoDataUri} style={{ width: 40, height: 40, borderRadius: 9, objectFit: "cover" }} />
+        ) : null}
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: C.onPrimary, fontSize: 8, letterSpacing: 2, fontFamily: "Helvetica-Bold" }}>
+            CATÁLOGO OFICIAL
+          </Text>
+          <Text style={{ color: C.onPrimary, fontSize: 20, fontFamily: "Helvetica-Bold", marginTop: 2 }}>
+            {storeName}
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ paddingHorizontal: PAGE_PAD_X, paddingTop: 24 }}>
+        <Text style={{ fontSize: 26, fontFamily: "Helvetica-Bold", lineHeight: 1.12 }}>
+          Novidades selecionadas pra você
+        </Text>
+        <Text style={{ fontSize: 11, color: "#6b7280", marginTop: 10, lineHeight: 1.45 }}>
+          {IMPACT_PHRASE}
+        </Text>
+      </View>
+
+      {hero ? (
+        <View
+          style={{
+            marginTop: 18,
+            marginHorizontal: PAGE_PAD_X,
+            height: 300,
+            borderRadius: 16,
+            overflow: "hidden",
+            backgroundColor: "#f4f5f7",
+          }}
+        >
+          <Image src={hero} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </View>
+      ) : null}
+
+      <View style={{ marginTop: 20, marginHorizontal: PAGE_PAD_X, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <View style={{ backgroundColor: C.primary, borderRadius: 999, paddingVertical: 11, paddingHorizontal: 18, alignSelf: "flex-start" }}>
+            <Text style={{ color: C.onPrimary, fontSize: 12, fontFamily: "Helvetica-Bold" }}>
+              Escolha seu modelo e peça agora →
+            </Text>
+          </View>
+          <Text style={{ fontSize: 9.5, color: "#6b7280", marginTop: 12 }}>
+            {`${productCount} ${productCount === 1 ? "produto" : "produtos"} • ${categoryCount} ${categoryCount === 1 ? "categoria" : "categorias"}`}
+          </Text>
+          <Text style={{ fontSize: 9.5, color: C.ink, marginTop: 2, fontFamily: "Helvetica-Bold" }}>
+            {storeUrl.replace(/^https?:\/\//, "")}
+          </Text>
+        </View>
+        {qrDataUri ? (
+          <View style={{ alignItems: "center" }}>
+            <Image src={qrDataUri} style={{ width: 84, height: 84 }} />
+            <Text style={{ fontSize: 7.5, color: "#6b7280", marginTop: 4 }}>Aponte a câmera</Text>
+          </View>
+        ) : null}
+      </View>
+    </Page>
+  );
+}
+
+type DividerEntry = { kind: "divider"; category: string; count: number; bookmark: BookmarkValue };
+type ProductEntry = { kind: "product"; p: CatalogPdfProduct; category: string; bookmark: BookmarkValue };
+
+/**
+ * Monta a sequência de páginas na ordem por categoria, com os **marcadores**
+ * (índice lateral do PDF) aninhados: a divisória de cada categoria é uma "pasta"
+ * e cada produto pendura nela (`parent`).
+ *
+ * O `ref` de cada bookmark é atribuído pelo @react-pdf na **ordem das páginas**
+ * (BFS a partir de Document.children); como a capa não tem bookmark, o 1º bookmark
+ * é a 1ª divisória (ref 0). Reproduzimos essa contagem aqui para saber o ref da
+ * divisória e passá-lo como `parent` dos produtos — o resolvedor da lib respeita o
+ * `parent` do objeto (`{ ref, parent, ...bookmark }`, spread por último).
+ */
+function buildEntries(groups: CatalogGroup[]): (DividerEntry | ProductEntry)[] {
+  const entries: (DividerEntry | ProductEntry)[] = [];
+  let ref = 0;
+  for (const g of groups) {
+    const dividerRef = ref++;
+    entries.push({
+      kind: "divider",
+      category: g.category,
+      count: g.items.length,
+      bookmark: { title: g.category, expanded: true },
+    });
+    for (const p of g.items) {
+      ref++; // consome o ref deste produto (mantém a contagem alinhada à lib)
+      entries.push({
+        kind: "product",
+        p,
+        category: g.category,
+        bookmark: { title: p.name, parent: dividerRef },
+      });
+    }
+  }
+  return entries;
+}
 
 function CatalogDocument(props: {
   storeName: string;
   storeUrl: string;
   logoDataUri: string | null;
   qrDataUri: string | null;
+  accent: string | null;
   products: CatalogPdfProduct[];
 }) {
   const { storeName, storeUrl, logoDataUri, qrDataUri, products } = props;
+  const C = buildPalette(props.accent);
+  const groups = groupByCategory(products);
+  const hero = products.find((p) => p.images[0])?.images[0]?.uri ?? logoDataUri ?? null;
+  const entries = buildEntries(groups);
+
   return (
     <Document title={`Catálogo - ${storeName}`} author={storeName}>
-      <Page size="A4" style={styles.page} wrap>
-        <View style={styles.header} fixed>
-          <View style={styles.headerLeft}>
-            {logoDataUri ? <Image style={styles.logo} src={logoDataUri} /> : null}
-            <View>
-              <Text style={styles.storeName}>{storeName}</Text>
-              <Text style={styles.storeSub}>
-                Catálogo de produtos • {products.length}{" "}
-                {products.length === 1 ? "item" : "itens"}
-              </Text>
-            </View>
-          </View>
-          {qrDataUri ? (
-            <View style={styles.qrBox}>
-              <Image style={styles.qr} src={qrDataUri} />
-              <Text style={styles.qrCaption}>Compre pelo site</Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.grid}>
-          {products.map((p, i) => {
-            const hasPromo =
-              p.isPromotion && p.compareAtPrice != null && p.compareAtPrice > p.price;
-            return (
-              <View style={styles.card} key={i} wrap={false}>
-                <View style={styles.cardInner}>
-                  {p.imageDataUri ? (
-                    <Image style={styles.image} src={p.imageDataUri} />
-                  ) : (
-                    <View style={styles.imagePlaceholder}>
-                      <Text style={styles.imagePlaceholderText}>Sem foto</Text>
-                    </View>
-                  )}
-                  <View style={styles.cardBody}>
-                    <Text style={styles.name}>{p.name}</Text>
-                    <View style={styles.priceRow}>
-                      <Text style={styles.price}>{brl(p.price)}</Text>
-                      {hasPromo ? (
-                        <>
-                          <Text style={styles.priceOld}>
-                            {brl(p.compareAtPrice as number)}
-                          </Text>
-                          <Text style={styles.promoTag}>PROMO</Text>
-                        </>
-                      ) : null}
-                    </View>
-                    {p.colors.length > 0 ? (
-                      <Text style={styles.meta}>Cores: {p.colors.join(", ")}</Text>
-                    ) : null}
-                    {p.sizes.length > 0 ? (
-                      <Text style={styles.meta}>Tamanhos: {p.sizes.join(", ")}</Text>
-                    ) : null}
-                    {p.description ? (
-                      <Text style={styles.desc}>
-                        {p.description.replace(/\s+/g, " ").trim().slice(0, 160)}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-
-        <View style={styles.footer} fixed>
-          <Text>{storeUrl}</Text>
-          <Text
-            render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`}
+      <CoverPage
+        storeName={storeName}
+        storeUrl={storeUrl}
+        logoDataUri={logoDataUri}
+        qrDataUri={qrDataUri}
+        hero={hero}
+        C={C}
+        productCount={products.length}
+        categoryCount={groups.length}
+      />
+      {entries.map((e, i) =>
+        e.kind === "divider" ? (
+          <CategoryDivider key={i} category={e.category} count={e.count} C={C} bookmark={e.bookmark} />
+        ) : (
+          <ProductPage
+            key={i}
+            p={e.p}
+            category={e.category}
+            C={C}
+            logoDataUri={logoDataUri}
+            storeName={storeName}
+            storeUrl={storeUrl}
+            bookmark={e.bookmark}
           />
-        </View>
-      </Page>
+        )
+      )}
     </Document>
   );
 }
@@ -284,27 +803,36 @@ export async function buildCatalogPdfBuffer(args: {
   storeName: string;
   storeUrl: string;
   logoUrl: string | null;
+  accent?: string | null;
   products: CatalogPdfProduct[];
 }): Promise<Buffer> {
-  const [logoDataUri, qrDataUri] = await Promise.all([
-    args.logoUrl ? fetchImageDataUri(args.logoUrl) : Promise.resolve(null),
-    QRCode.toDataURL(args.storeUrl, { margin: 1, width: 200 }).catch(() => null),
+  const [logo, qrDataUri] = await Promise.all([
+    args.logoUrl ? fetchImageDataUri(args.logoUrl, 240, 80) : Promise.resolve(null),
+    QRCode.toDataURL(args.storeUrl, { margin: 1, width: 220 }).catch(() => null),
   ]);
   return renderToBuffer(
     <CatalogDocument
       storeName={args.storeName}
       storeUrl={args.storeUrl}
-      logoDataUri={logoDataUri}
+      logoDataUri={logo?.uri ?? null}
       qrDataUri={qrDataUri}
+      accent={args.accent ?? null}
       products={args.products}
     />
   );
 }
 
+/* ------------------------------------------------------------------ *
+ * Carregamento a partir do banco
+ * ------------------------------------------------------------------ */
+
 type ProductRow = {
   name?: unknown;
   price?: unknown;
   description?: unknown;
+  category?: unknown;
+  product_reference?: unknown;
+  barcode?: unknown;
   colors?: unknown;
   sizes?: unknown;
   image?: string | null;
@@ -313,28 +841,46 @@ type ProductRow = {
   compare_at_price?: unknown;
 };
 
-/** Busca os produtos ativos da loja e baixa as fotos de capa (como data URI). */
+function str(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+/** Busca os produtos ativos da loja e baixa as fotos (capa + até 2 secundárias). */
 async function loadCatalogProducts(
   admin: SupabaseClient,
   storeId: string
 ): Promise<CatalogPdfProduct[]> {
+  // `select("*")` é robusto a colunas ausentes (category/product_reference/barcode
+  // podem não existir em bases legadas — simplesmente não vêm no retorno).
   const { data } = await admin
     .from("products")
-    .select(
-      "name, price, description, colors, sizes, image, images, is_promotion, compare_at_price, active, created_at"
-    )
+    .select("*")
     .eq("store_id", storeId)
     .or("active.eq.true,active.is.null")
     .order("created_at", { ascending: false })
     .limit(80);
 
   const rows = (data ?? []) as ProductRow[];
-  const covers = rows.map(
-    (r) => getProductImageUrls({ image: r.image, images: r.images })[0] ?? null
+
+  // Monta a lista achatada de imagens (máx. 3 por produto) para baixar com
+  // concorrência limitada; a capa vem em 640px e as secundárias menores (220px).
+  const perProduct = rows.map((r) =>
+    getProductImageUrls({ image: r.image, images: r.images }).slice(0, 3)
   );
-  const dataUris = await mapWithConcurrency(covers, 8, (url) =>
-    url ? fetchImageDataUri(url) : Promise.resolve(null)
+  type Slot = { pi: number; idx: number; url: string };
+  const flat: Slot[] = [];
+  perProduct.forEach((urls, pi) =>
+    urls.forEach((url, idx) => flat.push({ pi, idx, url }))
   );
+  // Capa maior (nitidez) e secundárias médias; valores moderados para o arquivo
+  // ficar leve mesmo numa loja cheia (80 produtos × 3 fotos < 10 MB).
+  const flatUris = await mapWithConcurrency(flat, 10, (s) =>
+    s.idx === 0 ? fetchImageDataUri(s.url, 680, 70) : fetchImageDataUri(s.url, 380, 68)
+  );
+  const grouped: (CatImg | null)[][] = perProduct.map((u) => u.map(() => null));
+  flat.forEach((s, i) => {
+    grouped[s.pi][s.idx] = flatUris[i];
+  });
 
   return rows.map((r, i) => {
     const price =
@@ -346,16 +892,38 @@ async function loadCatalogProducts(
         ? r.compare_at_price
         : parseFloat(String(r.compare_at_price)) || null;
     return {
-      name: typeof r.name === "string" ? r.name : "Produto",
+      name: str(r.name) || "Produto",
+      category: str(r.category) || null,
+      reference: str(r.product_reference) || null,
+      barcode: str(r.barcode) || null,
       price,
       description: typeof r.description === "string" ? r.description : null,
       colors: optionArrayFromDb(r.colors),
       sizes: optionArrayFromDb(r.sizes),
-      imageDataUri: dataUris[i],
+      images: grouped[i].filter((x): x is CatImg => !!x),
       isPromotion: r.is_promotion === true,
       compareAtPrice: compare,
     };
   });
+}
+
+/** Lê a cor de acento da loja (`storefront.themePrimary`), se houver. */
+async function loadStoreAccent(
+  admin: SupabaseClient,
+  storeId: string
+): Promise<string | null> {
+  try {
+    const { data } = await admin
+      .from("stores")
+      .select("storefront")
+      .eq("id", storeId)
+      .maybeSingle();
+    const sf = data?.storefront as { themePrimary?: unknown } | null;
+    const hex = str(sf?.themePrimary);
+    return hexToRgb(hex) ? hex : null;
+  } catch {
+    return null;
+  }
 }
 
 const CATALOG_BUCKET = "product-images";
@@ -405,13 +973,17 @@ export async function ensureCatalogPdfUrl(
     // Sem cache utilizável: segue e regenera.
   }
 
-  const products = await loadCatalogProducts(admin, args.storeId);
+  const [products, accent] = await Promise.all([
+    loadCatalogProducts(admin, args.storeId),
+    loadStoreAccent(admin, args.storeId),
+  ]);
   if (products.length === 0) return null;
 
   const buffer = await buildCatalogPdfBuffer({
     storeName: args.storeName,
     storeUrl,
     logoUrl: args.logoUrl,
+    accent,
     products,
   });
 
