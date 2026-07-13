@@ -130,28 +130,10 @@ function polishDescription(raw: string): string {
   return s;
 }
 
-/** Frase de benefício por tipo de produto quando não há descrição cadastrada.
- * São elogios genéricos e honestos (não afirmam tecido/medida específicos). */
-const BENEFIT_LINES: { kw: RegExp; line: string }[] = [
-  { kw: /camis|polo|blus|regat|top|cropped|body/i, line: "Peça versátil e confortável, com ótimo caimento para compor um visual moderno no dia a dia." },
-  { kw: /bermud|short/i, line: "Leve, confortável e cheia de estilo — perfeita para o dia a dia com liberdade de movimento." },
-  { kw: /cal(ç|c)a|jeans|legg|pantalon/i, line: "Caimento impecável e muito conforto: combina com diferentes looks e ocasiões." },
-  { kw: /conjunt/i, line: "Conjunto prático e cheio de estilo: peças que combinam entre si para montar o look completo sem esforço." },
-  { kw: /vestid|saia|macac|macaquinho/i, line: "Elegante e confortável, do casual ao arrumadinho, para você se sentir bem em qualquer ocasião." },
-  { kw: /jaquet|casac|moletom|blaz|cardig|sueter|su(é|e)ter/i, line: "Sofisticação e conforto para se aquecer com muito estilo em qualquer look." },
-  { kw: /t(ê|e)nis|sapat|sand(á|a)li|chinel|calçad|bota|sap|slide/i, line: "Modelo confortável e estiloso para acompanhar você o dia inteiro com muito conforto." },
-  { kw: /bols|mochil|carteir|acess(ó|o)ri|bon(é|e)|cinto|(ó|o)culos|rel(ó|o)gio|colar|brinc|anel|pulseir|len(ç|c)o/i, line: "O detalhe que eleva qualquer produção e combina com diferentes estilos." },
-  { kw: /perfum|maquiag|cosm(é|e)ti|beleza|skincar|hidrat/i, line: "Qualidade e cuidado no dia a dia para você se sentir ainda melhor." },
-];
-function persuasiveFallback(category: string | null, name: string): string {
-  const hay = `${category ?? ""} ${name}`;
-  for (const b of BENEFIT_LINES) if (b.kw.test(hay)) return b.line;
-  return "Peça versátil e cheia de estilo para compor looks incríveis no dia a dia, com muito conforto.";
-}
-
+/** Só a descrição REAL cadastrada pelo lojista (limpa/normalizada). Sem texto
+ * inventado: se o produto não tem descrição, volta vazio e o card não mostra nada. */
 function commercialCopy(p: CatalogPdfProduct): string {
-  const clean = polishDescription(p.description ?? "");
-  return clean || persuasiveFallback(p.category, p.name);
+  return polishDescription(p.description ?? "");
 }
 
 function discountPct(price: number, compare: number | null): number | null {
@@ -578,9 +560,11 @@ function ProductPage({
             </Text>
           ) : null}
 
-          <Text style={{ fontSize: 10.5, color: "#6b7280", marginTop: 3, lineHeight: 1.45 }}>
-            {commercialCopy(p)}
-          </Text>
+          {commercialCopy(p) ? (
+            <Text style={{ fontSize: 10.5, color: "#6b7280", marginTop: 3, lineHeight: 1.45 }}>
+              {commercialCopy(p)}
+            </Text>
+          ) : null}
 
           {p.reference || p.barcode ? (
             <View style={{ flexDirection: "row", gap: 14, marginTop: 12 }}>

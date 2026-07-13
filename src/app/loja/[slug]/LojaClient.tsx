@@ -1373,7 +1373,7 @@ function ProductDetailModal({
             )}
             {/* Galeria principal: deslize horizontal (snap) no mobile; toque sem arrastar abre zoom */}
             <div
-              className={`relative w-full min-w-0 mx-0 shrink-0 max-sm:flex-none sm:flex-1 sm:min-h-0 aspect-auto min-h-[min(52vw,220px)] h-[min(88vh,36rem)] md:h-[min(72vh,34rem)] bg-stone-200 shadow-sm touch-pan-x max-sm:rounded-t-2xl sm:rounded-2xl ${
+              className={`relative w-full min-w-0 mx-0 shrink-0 max-sm:flex-none sm:flex-1 sm:min-h-0 aspect-[3/4] max-h-[86vh] md:max-h-[80vh] bg-stone-200 shadow-sm touch-pan-x max-sm:rounded-t-2xl sm:rounded-2xl ${
                 media.length > 1 ? "max-sm:rounded-b-none" : "max-sm:rounded-b-2xl"
               }`}
             >
