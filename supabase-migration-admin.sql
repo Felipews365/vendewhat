@@ -27,48 +27,50 @@ insert into public.plans (id, title, description, monthly, features, accent, ico
 values
   (
     'essencial',
-    'Plano Essencial',
-    'A opção perfeita para quem precisa criar um catálogo virtual simples e receber pedidos pelo WhatsApp.',
+    'Sem IA',
+    'A vitrine essencial para sua loja aparecer bem e vender mais.',
     89.90,
     array[
-      '1 número de WhatsApp para atendimento',
-      'Cadastro de produtos ilimitados',
-      'Pedidos ilimitados sem taxas',
-      'Controle de pedidos e clientes',
-      'Pagamento via PIX'
+      'Vitrine da loja',
+      'Catálogo de produtos',
+      'Link para WhatsApp',
+      'Página de contato',
+      'Localização da loja',
+      'Suporte básico'
     ],
     'pink', 'bolt', false, 0
   ),
   (
     'profissional',
-    'Plano Profissional',
-    'A melhor escolha para quem quer uma IA atendendo no WhatsApp e receber pagamentos direto pela plataforma.',
-    299.00,
+    'IA Completo',
+    'Atendimento inteligente com IA para responder rápido e vender melhor.',
+    500.00,
     array[
-      'Todos os recursos do plano Essencial',
-      'Atendimento por IA no WhatsApp 24h',
-      'Gateway de pagamento (cartão, PIX e link de cobrança)',
-      '1 número de WhatsApp para atendimento',
-      'Conecte seu domínio (ex: sualoja.com.br)',
-      'Cálculo do valor e prazo de entrega',
-      'Criação de cupons de desconto',
-      'Vídeo nos produtos (limitado)'
+      'Tudo do plano Sem IA',
+      'IA para tirar dúvidas dos clientes',
+      'Respostas sobre valores e produtos',
+      'Envio do link do catálogo',
+      'Envio de catálogo em PDF',
+      'Localização da loja pela IA',
+      'Até 1.000 conversas com clientes por mês',
+      'Ideal para atendimento frequente'
     ],
     'cyan', 'star', true, 1
   ),
   (
     'empresarial',
-    'Plano Empresarial',
-    'Ideal para empresas com grande demanda que precisam de CRM, IA e múltiplos atendentes no WhatsApp.',
-    599.00,
+    'IA Sob Medida',
+    'IA personalizada para o seu negócio, com pagamento por uso.',
+    350.00,
     array[
-      'Todos os recursos do plano Profissional',
-      'CRM de clientes completo',
-      'Até 3 números de WhatsApp para atendimento',
-      'Vídeos ilimitados nos produtos',
-      'Recuperação de carrinhos abandonados',
-      'API ilimitada e integração com ERP',
-      'Cadastro de equipe e permissões'
+      'Ajustes personalizados nas respostas',
+      'Treinamento com dados da sua loja',
+      'Configuração mais fina do fluxo',
+      'Integrações específicas',
+      'Suporte mais próximo',
+      'Créditos pré-pagos para uso da IA',
+      'Recarrega quando quiser, a partir de R$ 30',
+      'Controle total do seu custo'
     ],
     'purple', 'briefcase', false, 2
   )

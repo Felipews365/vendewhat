@@ -18,8 +18,47 @@ import {
   generateReply,
   parseReplyDirectives,
 } from "@/lib/ai/attendant";
+import {
+  consumeTokens,
+  hasAiBalance,
+  markEmptyWarned,
+} from "@/lib/aiCredits";
 
 type AnyObj = Record<string, unknown>;
+
+/**
+ * Avisa o DONO da loja (no próprio WhatsApp conectado) quando os créditos de IA
+ * estão acabando ou acabaram. Não lança: se o WhatsApp não estiver conectado, só
+ * ignora. Nunca vai para o cliente — é uma mensagem interna para o lojista.
+ */
+async function notifyOwnerCredits(
+  cfg: WhatsAppConfig,
+  kind: "empty" | "low",
+  conversationsLeft: number
+): Promise<void> {
+  if (cfg.connectionStatus !== "connected" || !cfg.connectedNumber) return;
+  const msg =
+    kind === "empty"
+      ? [
+          "⚠️ *Créditos de IA esgotados*",
+          "",
+          "Sua IA parou de atender os clientes automaticamente porque o saldo de conversas acabou.",
+          "",
+          "Recarregue no painel (Créditos da IA) para a IA voltar a responder. 🙂",
+        ].join("\n")
+      : [
+          "⏳ *Seus créditos de IA estão acabando*",
+          "",
+          `Restam cerca de ${conversationsLeft} conversa${conversationsLeft === 1 ? "" : "s"}.`,
+          "",
+          "Recarregue no painel (Créditos da IA) para a IA não parar de atender. 🙂",
+        ].join("\n");
+  try {
+    await sendText(cfg.evolutionInstance, cfg.connectedNumber, msg);
+  } catch (e) {
+    console.error("[whatsappRespond] notifyOwnerCredits", e);
+  }
+}
 
 /**
  * Quebra a resposta da IA em partes para enviar como mensagens separadas (cara de
@@ -160,6 +199,17 @@ export async function respondToCustomer(
   const customerWantsCatalog =
     /\bcat[aá]logos?\b|lista de produtos|\bpdf\b/i.test(combinedUserText);
 
+  // Motor de créditos: sem saldo, a IA NÃO responde ao cliente e o dono é avisado
+  // uma vez (Opção A). O aviso vai para o WhatsApp da própria loja, nunca ao cliente.
+  const balance = await hasAiBalance(admin, cfg.storeId);
+  if (!balance.ok) {
+    if (!balance.state.emptyWarnedAt) {
+      await notifyOwnerCredits(cfg, "empty", 0);
+      await markEmptyWarned(admin, cfg.storeId);
+    }
+    return false;
+  }
+
   const systemPrompt = buildSystemPrompt({
     storeName,
     slug: String(store.slug),
@@ -190,7 +240,7 @@ export async function respondToCustomer(
     sendVideo,
     sendCatalog,
     sendPix,
-  } = parseReplyDirectives(reply);
+  } = parseReplyDirectives(reply.text);
   // Rede de segurança do link: o gpt-4o-mini às vezes ANUNCIA o link ("segue o
   // link", "confira o catálogo") mas esquece de colar a URL (o cliente recebe só a
   // promessa). Se o texto fala de link/catálogo e não tem nenhuma URL, anexa a URL
@@ -306,5 +356,22 @@ export async function respondToCustomer(
       console.error("[whatsappRespond] sendPix", e);
     }
   }
+
+  // Desconta os tokens realmente gastos nesta resposta (mesmo se algum balão falhou
+  // no envio — o custo com a OpenAI já ocorreu) e avisa o dono se o saldo cruzou os
+  // limites de "acabando" ou "esgotado".
+  if (reply.tokens > 0) {
+    try {
+      const consumed = await consumeTokens(admin, cfg.storeId, reply.tokens);
+      if (consumed.justEmptied) {
+        await notifyOwnerCredits(cfg, "empty", 0);
+      } else if (consumed.justLow) {
+        await notifyOwnerCredits(cfg, "low", consumed.state.conversationsLeft);
+      }
+    } catch (e) {
+      console.error("[whatsappRespond] consumeTokens", e);
+    }
+  }
+
   return sent;
 }

@@ -248,11 +248,17 @@ export function parseReplyDirectives(reply: string): ReplyDirectives {
 }
 
 /** Gera a resposta do atendente. Retorna o texto, ou null se não houver conteúdo. */
+export type ReplyResult = {
+  text: string;
+  /** Tokens totais gastos nesta chamada (para o motor de créditos descontar). */
+  tokens: number;
+};
+
 export async function generateReply(
   systemPrompt: string,
   history: ChatTurn[],
   userMessage: string
-): Promise<string | null> {
+): Promise<ReplyResult | null> {
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
   const completion = await getClient().chat.completions.create({
     model,
@@ -264,7 +270,8 @@ export async function generateReply(
     ],
   });
   const text = completion.choices[0]?.message?.content;
-  return text ? text.trim() : null;
+  if (!text) return null;
+  return { text: text.trim(), tokens: completion.usage?.total_tokens ?? 0 };
 }
 
 /**
@@ -346,7 +353,7 @@ export async function transcribeAudio(
 export async function generateFollowupReply(
   systemPrompt: string,
   history: ChatTurn[]
-): Promise<string | null> {
+): Promise<ReplyResult | null> {
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
   const completion = await getClient().chat.completions.create({
     model,
@@ -362,7 +369,8 @@ export async function generateFollowupReply(
     ],
   });
   const text = completion.choices[0]?.message?.content;
-  return text ? text.trim() : null;
+  if (!text) return null;
+  return { text: text.trim(), tokens: completion.usage?.total_tokens ?? 0 };
 }
 
 /** Primeiro nome do cliente (para personalizar a mensagem). */
@@ -393,7 +401,7 @@ export async function generatePostsaleReply(
   systemPrompt: string,
   customerName: string,
   orderNumber: number | null
-): Promise<string | null> {
+): Promise<ReplyResult | null> {
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
   const nome = firstName(customerName);
   const completion = await getClient().chat.completions.create({
@@ -414,7 +422,8 @@ export async function generatePostsaleReply(
     ],
   });
   const text = completion.choices[0]?.message?.content;
-  return text ? text.trim() : null;
+  if (!text) return null;
+  return { text: text.trim(), tokens: completion.usage?.total_tokens ?? 0 };
 }
 
 /**
@@ -425,7 +434,7 @@ export async function generateAbandonedCartReply(
   systemPrompt: string,
   customerName: string,
   items: { name: string; quantity: number }[]
-): Promise<string | null> {
+): Promise<ReplyResult | null> {
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
   const nome = firstName(customerName);
   const lista = items
@@ -451,5 +460,6 @@ export async function generateAbandonedCartReply(
     ],
   });
   const text = completion.choices[0]?.message?.content;
-  return text ? text.trim() : null;
+  if (!text) return null;
+  return { text: text.trim(), tokens: completion.usage?.total_tokens ?? 0 };
 }

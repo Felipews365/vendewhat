@@ -18,6 +18,7 @@ import {
   type WhatsAppConfig,
 } from "@/lib/whatsappConfig";
 import { toWhatsAppNumber } from "@/lib/customerPhone";
+import { consumeTokens, hasAiBalance } from "@/lib/aiCredits";
 import { isEvolutionConfigured, sendText } from "@/lib/evolution";
 import {
   type AttendantProduct,
@@ -154,9 +155,16 @@ async function runSilenceFollowups(
       try {
         let message = custom;
         if (!message && prompt) {
+          // Follow-up por IA consome créditos: sem saldo, não cutuca (mensagem
+          // fixa continua funcionando, pois não passa por aqui).
+          const bal = await hasAiBalance(admin, cfg.storeId);
+          if (!bal.ok) continue;
           const history = await getRecentHistory(admin, cfg.storeId, phone, 10);
           const reply = await generateFollowupReply(prompt.systemPrompt, history);
-          message = reply ?? "";
+          if (reply) {
+            message = reply.text;
+            await consumeTokens(admin, cfg.storeId, reply.tokens);
+          }
         }
         if (!message) continue;
 
@@ -214,13 +222,21 @@ async function runPostsale(
       try {
         let message = custom;
         if (!message) {
+          // Pós-venda por IA consome créditos; sem saldo, cai na mensagem padrão
+          // (grátis, sem IA) — o pós-venda ainda sai, só não personalizado.
           if (prompt) {
-            const reply = await generatePostsaleReply(
-              prompt.systemPrompt,
-              order.customerName,
-              order.orderNumber
-            );
-            message = reply ?? "";
+            const bal = await hasAiBalance(admin, cfg.storeId);
+            if (bal.ok) {
+              const reply = await generatePostsaleReply(
+                prompt.systemPrompt,
+                order.customerName,
+                order.orderNumber
+              );
+              if (reply) {
+                message = reply.text;
+                await consumeTokens(admin, cfg.storeId, reply.tokens);
+              }
+            }
           }
           if (!message) {
             message = defaultPostsaleMessage(
@@ -282,12 +298,18 @@ async function runAbandonedCarts(
       try {
         let message = custom;
         if (!message && prompt) {
+          // Recuperação por IA consome créditos: sem saldo, não cutuca.
+          const bal = await hasAiBalance(admin, cfg.storeId);
+          if (!bal.ok) continue;
           const reply = await generateAbandonedCartReply(
             prompt.systemPrompt,
             cart.customerName,
             cart.items
           );
-          message = reply ?? "";
+          if (reply) {
+            message = reply.text;
+            await consumeTokens(admin, cfg.storeId, reply.tokens);
+          }
         }
         if (!message) continue;
 
