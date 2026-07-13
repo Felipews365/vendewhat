@@ -221,10 +221,13 @@ function SlideInner({
   slide,
   content,
   primary,
+  mobile = false,
 }: {
   slide: HeroSlide;
   content: HeroSlideContent;
   primary: string;
+  /** true = prévia de celular (empilha foto em cima, texto embaixo). */
+  mobile?: boolean;
 }) {
   // "Só a foto": mostra apenas a imagem preenchendo o card.
   if (slide.noText) {
@@ -240,6 +243,8 @@ function SlideInner({
   const tpl = slide.template ?? "overlay";
 
   // Estilos gráficos: usa o MESMO componente da loja (animações inclusas).
+  // `forceLayout` fixa o layout na prévia (o `sm:` do componente responde ao
+  // viewport do PC, então sem isso o mockup de celular mostraria o de desktop).
   if (isGraphicTemplate(tpl)) {
     return (
       <HeroTemplateSlide
@@ -247,6 +252,7 @@ function SlideInner({
         content={content}
         primary={primary}
         onCta={(e) => e.preventDefault()}
+        forceLayout={mobile ? "mobile" : "desktop"}
       />
     );
   }
@@ -294,19 +300,22 @@ function SlideInner({
     </div>
   );
 
-  // Split: foto de um lado, texto num painel colorido do outro.
+  // Split: foto de um lado, texto num painel colorido do outro. No celular
+  // (mobile) empilha — foto em cima, painel embaixo — igual à loja real.
   if (tpl === "split") {
-    const photoCol = <div className="relative w-1/2">{photo}</div>;
+    const photoCol = (
+      <div className={`relative ${mobile ? "h-1/2 w-full" : "w-1/2"}`}>{photo}</div>
+    );
     const textCol = (
       <div
-        className="flex w-1/2 flex-col justify-center p-4"
+        className={`flex flex-col justify-center p-4 ${mobile ? "h-1/2 w-full" : "w-1/2"}`}
         style={{ backgroundColor: "var(--store-secondary)" }}
       >
         {textBlock}
       </div>
     );
     return (
-      <div className="absolute inset-0 flex">
+      <div className={`absolute inset-0 flex ${mobile ? "flex-col" : ""}`}>
         {slide.photoSide === "left" ? (
           <>
             {photoCol}
@@ -362,7 +371,7 @@ function BannerPreview({
             key={animKey}
             className="vw-banner-in relative h-[300px] w-full overflow-hidden rounded-[1.35rem]"
           >
-            <SlideInner slide={slide} content={content} primary={primary} />
+            <SlideInner slide={slide} content={content} primary={primary} mobile />
           </div>
         </div>
       </div>
@@ -1078,6 +1087,13 @@ export default function BannerEditPage() {
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Prévia em tempo real
               </p>
+              <p className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                Veja como o banner fica <b>no computador</b> e <b>no celular</b> — escolha a
+                imagem que fica boa nos dois formatos.
+              </p>
+              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                💻 No computador
+              </p>
               <BannerPreview
                 slide={draft}
                 content={draftContent}
@@ -1089,7 +1105,7 @@ export default function BannerEditPage() {
                 O gradiente animado do texto destaque e o brilho do botão aparecem na loja.
               </p>
               <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                📱 Mobile
+                📱 No celular
               </p>
               <BannerPreview
                 slide={draft}

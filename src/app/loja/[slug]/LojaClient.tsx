@@ -1373,7 +1373,7 @@ function ProductDetailModal({
             )}
             {/* Galeria principal: deslize horizontal (snap) no mobile; toque sem arrastar abre zoom */}
             <div
-              className={`relative w-full min-w-0 mx-0 shrink-0 max-sm:flex-none sm:flex-1 sm:min-h-0 aspect-[3/4] max-h-[86vh] md:max-h-[80vh] bg-stone-200 shadow-sm touch-pan-x max-sm:rounded-t-2xl sm:rounded-2xl ${
+              className={`relative w-full min-w-0 mx-0 shrink-0 max-sm:flex-none sm:flex-1 sm:min-h-0 aspect-[3/4] max-h-[86vh] md:max-h-[80vh] bg-stone-200 shadow-sm [touch-action:pan-x_pan-y] max-sm:rounded-t-2xl sm:rounded-2xl ${
                 media.length > 1 ? "max-sm:rounded-b-none" : "max-sm:rounded-b-2xl"
               }`}
             >
@@ -1409,7 +1409,7 @@ function ProductDetailModal({
                                 : `${product.name} — foto ${item.imgIndex + 1}`
                             }
                             fill
-                            className="object-contain object-center select-none pointer-events-none bg-stone-200"
+                            className="object-cover object-center select-none pointer-events-none bg-stone-200"
                             style={imgFocusStyle(item.imgIndex)}
                             draggable={false}
                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 55vw, 480px"
@@ -1419,7 +1419,7 @@ function ProductDetailModal({
                             role="button"
                             tabIndex={0}
                             aria-label="Ampliar foto"
-                            className="absolute inset-0 z-[1] cursor-zoom-in touch-pan-x"
+                            className="absolute inset-0 z-[1] cursor-zoom-in [touch-action:pan-x_pan-y]"
                             onPointerDown={(e) => {
                               pointerStartRef.current = { x: e.clientX, y: e.clientY };
                             }}
@@ -1466,7 +1466,7 @@ function ProductDetailModal({
                       src={imgs[0]}
                       alt={product.name}
                       fill
-                      className="object-contain object-center select-none pointer-events-none bg-stone-200"
+                      className="object-cover object-center select-none pointer-events-none bg-stone-200"
                       style={imgFocusStyle(0)}
                       draggable={false}
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 55vw, 480px"
@@ -1476,7 +1476,7 @@ function ProductDetailModal({
                       role="button"
                       tabIndex={0}
                       aria-label="Ampliar foto"
-                      className="absolute inset-0 z-[1] cursor-zoom-in touch-pan-x"
+                      className="absolute inset-0 z-[1] cursor-zoom-in [touch-action:pan-x_pan-y]"
                       onPointerDown={(e) => {
                         pointerStartRef.current = { x: e.clientX, y: e.clientY };
                       }}

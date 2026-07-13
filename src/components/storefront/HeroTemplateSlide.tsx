@@ -50,12 +50,19 @@ export function HeroTemplateSlide({
   content,
   primary,
   onCta,
+  forceLayout,
 }: {
   slide: HeroSlide;
   content: HeroSlideContent;
   /** Cor primária da loja (fallback quando o slide não tem gradiente/cor de botão). */
   primary: string;
   onCta: (e: React.MouseEvent, href: string) => void;
+  /**
+   * Força um layout ignorando o viewport (usado nas PRÉVIAS do editor, que
+   * mostram "como fica no celular" e "no PC" lado a lado num mesmo PC).
+   * Sem valor = responsivo (empilha no celular, lado a lado no `sm+`).
+   */
+  forceLayout?: "mobile" | "desktop";
 }) {
   const template = (slide.template ?? "overlay") as HeroTemplate;
   const bgFrom = slide.bgFrom || primary;
@@ -65,6 +72,9 @@ export function HeroTemplateSlide({
   const btnDark = adjustHex(btnBase, -0.15);
   const photoLeft = slide.photoSide === "left";
   const img = slide.url;
+  const accent = btnBase;
+  // Todas as fotos do slide (a principal + extras dos estilos strips/duo).
+  const allPhotos = [img, ...(slide.images ?? [])].filter(Boolean) as string[];
 
   const gradient = bgVia
     ? `linear-gradient(135deg, ${bgFrom}, ${bgVia}, ${bgTo})`
@@ -137,9 +147,106 @@ export function HeroTemplateSlide({
     </>
   );
 
+  // ── Texto compacto para o EMPILHADO do celular (adapta a cor ao fundo) ─
+  const MobileCopy = ({ light }: { light: boolean }) => (
+    <>
+      {content.badge && (
+        <p
+          className="text-[10px] font-bold uppercase tracking-widest"
+          style={{ color: light ? accent : "rgba(255,255,255,0.85)" }}
+        >
+          {content.badge}
+        </p>
+      )}
+      {content.title && (
+        <h2
+          className="font-display text-lg font-black leading-tight"
+          style={{ color: light ? "#1a1a2e" : "#ffffff" }}
+        >
+          {content.title}
+        </h2>
+      )}
+      {content.highlight && (
+        <p className="leading-none">
+          <span
+            className="vw-anim-gradient font-script text-xl font-bold"
+            style={{
+              backgroundImage: light
+                ? `linear-gradient(110deg, ${accent} 0%, ${accent} 38%, ${adjustHex(accent, 0.85)} 50%, ${accent} 62%, ${accent} 100%)`
+                : "linear-gradient(to right, #FFD600, #ffffff, #9DC4FF)",
+            }}
+          >
+            {content.highlight}
+          </span>
+        </p>
+      )}
+      {content.subtitle && (
+        <p className={`mt-0.5 line-clamp-1 text-xs ${light ? "text-gray-500" : "text-white/80"}`}>
+          {content.subtitle}
+        </p>
+      )}
+    </>
+  );
+
+  // ── EMPILHADO no celular: foto(s) em cima (largura total) + texto embaixo ─
+  // Evita espremer as fotos numa telinha estreita. No desktop (sm+) volta o
+  // layout lado a lado de cada estilo. O texto e o botão ficam na MESMA linha
+  // (texto à esquerda, "Ver produtos" à direita) — painel baixo, sem sobra
+  // branca embaixo, e a foto ganha altura.
+  const MobileStack = ({ light }: { light: boolean }) => (
+    <div
+      className="flex h-full w-full flex-col"
+      style={{ background: light ? "#ffffff" : gradient }}
+    >
+      <div className="relative w-full flex-1 overflow-hidden">
+        {allPhotos.length > 1 ? (
+          <div className="absolute inset-0 flex gap-[3px]">
+            {allPhotos.slice(0, 3).map((src, k) => (
+              <div key={k} className="relative flex-1 overflow-hidden">
+                <Image src={src} alt="" fill className="vw-photo-in object-cover object-center" sizes="50vw" />
+              </div>
+            ))}
+          </div>
+        ) : img ? (
+          <Image src={img} alt={content.title} fill className="vw-photo-in object-cover object-top" sizes="100vw" priority />
+        ) : null}
+      </div>
+      <div className="vw-reveal-stagger flex items-center justify-between gap-3 px-5 py-3">
+        <div className="flex min-w-0 flex-col">
+          <MobileCopy light={light} />
+        </div>
+        {content.ctaLabel && <div className="shrink-0"><Cta /></div>}
+      </div>
+    </div>
+  );
+
+  // Envolve o layout de desktop de cada estilo: esconde no celular e mostra o
+  // MobileStack empilhado no lugar. `light` = texto escuro sobre fundo claro.
+  // `forceLayout` (prévias do editor) fixa um dos dois, ignorando o viewport.
+  const wrap = (desktop: React.ReactNode, light: boolean) => {
+    if (forceLayout === "mobile") {
+      return (
+        <div className="absolute inset-0">
+          <MobileStack light={light} />
+        </div>
+      );
+    }
+    if (forceLayout === "desktop") {
+      return <div className="absolute inset-0">{desktop}</div>;
+    }
+    return (
+      <>
+        <div className="absolute inset-0 sm:hidden">
+          <MobileStack light={light} />
+        </div>
+        <div className="absolute inset-0 hidden sm:block">{desktop}</div>
+      </>
+    );
+  };
+
   // ── GRADIENTE (fundo colorido inteiro, foto opcional de um lado) ──────
   if (template === "gradient") {
-    return (
+    return wrap((
       <div className="absolute inset-0" style={{ background: gradient }}>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_40%,rgba(255,255,255,0.08)_0%,transparent_55%)]" />
         {img && (
@@ -163,7 +270,7 @@ export function HeroTemplateSlide({
           <TextOnColor />
         </div>
       </div>
-    );
+    ), false);
   }
 
   // ── DIAGONAL (foto + painel colorido com recorte diagonal) ────────────
@@ -174,7 +281,7 @@ export function HeroTemplateSlide({
     const photoClip = photoLeft
       ? "polygon(0 0, 100% 0, 82% 100%, 0 100%)"
       : "polygon(18% 0, 100% 0, 100% 100%, 0 100%)";
-    return (
+    return wrap((
       <div className="absolute inset-0 overflow-hidden bg-white">
         {img && (
           <div
@@ -194,7 +301,7 @@ export function HeroTemplateSlide({
           <TextOnColor />
         </div>
       </div>
-    );
+    ), false);
   }
 
   // ── FASHION (foto retangular + painel + badge círculo) ────────────────
@@ -202,7 +309,7 @@ export function HeroTemplateSlide({
     const shapeClip = photoLeft
       ? "polygon(18% 0, 100% 0, 100% 100%, 0 100%)"
       : "polygon(0 0, 82% 0, 100% 100%, 0 100%)";
-    return (
+    return wrap((
       <div className="absolute inset-0 overflow-hidden" style={{ background: "#f5f0ec" }}>
         <div
           className={`absolute inset-y-0 ${photoLeft ? "right-0" : "left-0"} w-[68%]`}
@@ -249,7 +356,7 @@ export function HeroTemplateSlide({
           <Cta />
         </div>
       </div>
-    );
+    ), false);
   }
 
   // ── MAGAZINE (texto colorido sobre branco + foto recortada) ───────────
@@ -260,7 +367,7 @@ export function HeroTemplateSlide({
     const photoClip = photoLeft
       ? "polygon(0 0, 83% 0, 97% 100%, 0 100%)"
       : "polygon(17% 0, 100% 0, 100% 100%, 3% 100%)";
-    return (
+    return wrap((
       <div className="absolute inset-0 overflow-hidden bg-white">
         <div
           className={`absolute inset-y-0 ${photoLeft ? "left-0" : "right-0"} w-[60%]`}
@@ -296,12 +403,12 @@ export function HeroTemplateSlide({
           <Cta />
         </div>
       </div>
-    );
+    ), true);
   }
 
   // ── SPRING (fundo branco + forma diagonal + badge giratório) ──────────
   if (template === "spring") {
-    return (
+    return wrap((
       <div className="absolute inset-0 overflow-hidden bg-white">
         <div
           className={`absolute inset-y-0 ${!photoLeft ? "left-0" : "right-0"} w-[55%]`}
@@ -352,12 +459,12 @@ export function HeroTemplateSlide({
           <Cta />
         </div>
       </div>
-    );
+    ), true);
   }
 
   // ── SALE (foto + badge % OFF pulsante no centro) ──────────────────────
   if (template === "sale") {
-    return (
+    return wrap((
       <div className="absolute inset-0 overflow-hidden bg-white">
         <div
           className={`absolute inset-y-0 ${!photoLeft ? "right-0" : "left-0"} w-[58%]`}
@@ -409,7 +516,7 @@ export function HeroTemplateSlide({
           <Cta />
         </div>
       </div>
-    );
+    ), false);
   }
 
   // ── STRIPS (3 faixas diagonais + painel de texto CLARO, como a referência) ─
@@ -418,9 +525,8 @@ export function HeroTemplateSlide({
     const strips = photos.length
       ? Array.from({ length: 3 }, (_, k) => photos[k % photos.length]!)
       : [];
-    // Cor de destaque (eyebrow/cursivo/botão) = cor do botão ou a primária da loja.
-    const accent = btnBase;
-    return (
+    // Cor de destaque (eyebrow/cursivo/botão) = `accent` (cor do botão / primária).
+    return wrap((
       <div className="absolute inset-0 overflow-hidden bg-white">
         {/* Faixas de foto: a borda esquerda (inclinada) contra o branco vira a
             diagonal — por isso o painel NÃO cobre as fotos (sem sobreposição). */}
@@ -485,7 +591,7 @@ export function HeroTemplateSlide({
           <Cta />
         </div>
       </div>
-    );
+    ), true);
   }
 
   // ── DUO (2 fotos lado a lado + painel claro com destaque cursivo) ──────
@@ -494,8 +600,7 @@ export function HeroTemplateSlide({
     const pair = photos.length
       ? Array.from({ length: 2 }, (_, k) => photos[k % photos.length]!)
       : [];
-    const accent = btnBase;
-    return (
+    return wrap((
       <div className="absolute inset-0 overflow-hidden bg-white">
         {pair.length > 0 && (
           <div
@@ -542,7 +647,7 @@ export function HeroTemplateSlide({
           <Cta />
         </div>
       </div>
-    );
+    ), true);
   }
 
   // Fallback (não deveria chegar aqui — overlay/split são tratados fora).
