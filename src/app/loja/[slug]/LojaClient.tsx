@@ -1162,6 +1162,9 @@ function ProductDetailModal({
   const skipLightboxScrollRef = useRef(false);
   const lightboxNeedsInitialScrollRef = useRef(false);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  /** Scroller externo (celular) + card, para o gesto de arrastar-para-fechar. */
+  const sheetScrollRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const imgs = product.images.length > 0 ? product.images : product.image ? [product.image] : [];
   /**
@@ -1239,6 +1242,98 @@ function ProductDetailModal({
     return () => { document.body.style.overflow = ""; };
   }, []);
 
+  /**
+   * Arrastar para baixo fecha o produto (celular): com a galeria no topo
+   * (scroll no início), puxar o dedo para baixo faz o card acompanhar o dedo e,
+   * se passar do limite, volta ao catálogo — como uma "folha" que se solta.
+   * Subir o dedo continua sendo o scroll normal (revela os dados + a foto sobe
+   * junto), então só capturamos gestos verticais PARA BAIXO no topo.
+   */
+  useEffect(() => {
+    const scroller = sheetScrollRef.current;
+    const card = cardRef.current;
+    if (!scroller || !card) return;
+
+    let startY = 0;
+    let startX = 0;
+    let active = false; // gesto candidato (começou no topo, 1 dedo)
+    let dragging = false; // já decidimos que é arrasto vertical p/ baixo
+    let curY = 0;
+    const isMobile = () => window.matchMedia("(max-width: 767px)").matches;
+
+    const reset = () => {
+      active = false;
+      dragging = false;
+      curY = 0;
+    };
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || !isMobile()) return reset();
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      active = scroller.scrollTop <= 0;
+      dragging = false;
+      curY = 0;
+      card.style.transition = "none";
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (!active) return;
+      const dy = e.touches[0].clientY - startY;
+      const dx = e.touches[0].clientX - startX;
+      if (!dragging) {
+        if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return;
+        // só captura arrasto claramente vertical, para baixo, ainda no topo
+        if (dy > 0 && Math.abs(dy) > Math.abs(dx) && scroller.scrollTop <= 0) {
+          dragging = true;
+        } else {
+          active = false;
+          return;
+        }
+      }
+      if (scroller.scrollTop > 0) {
+        // rolou no meio do caminho: solta o card e deixa o scroll normal seguir
+        active = false;
+        dragging = false;
+        card.style.transform = "";
+        card.style.borderTopLeftRadius = "";
+        card.style.borderTopRightRadius = "";
+        return;
+      }
+      e.preventDefault();
+      curY = Math.max(0, dy);
+      card.style.transform = `translateY(${curY}px)`;
+      card.style.borderTopLeftRadius = curY > 0 ? "1.25rem" : "";
+      card.style.borderTopRightRadius = curY > 0 ? "1.25rem" : "";
+    };
+
+    const onEnd = () => {
+      if (!dragging) return reset();
+      card.style.transition = "transform .25s ease, opacity .25s ease";
+      if (curY > 110) {
+        card.style.transform = "translateY(100%)";
+        card.style.opacity = "0";
+        window.setTimeout(onClose, 220);
+      } else {
+        card.style.transform = "";
+        card.style.borderTopLeftRadius = "";
+        card.style.borderTopRightRadius = "";
+      }
+      reset();
+    };
+
+    scroller.addEventListener("touchstart", onStart, { passive: true });
+    scroller.addEventListener("touchmove", onMove, { passive: false });
+    scroller.addEventListener("touchend", onEnd);
+    scroller.addEventListener("touchcancel", onEnd);
+    return () => {
+      scroller.removeEventListener("touchstart", onStart);
+      scroller.removeEventListener("touchmove", onMove);
+      scroller.removeEventListener("touchend", onEnd);
+      scroller.removeEventListener("touchcancel", onEnd);
+    };
+  }, [onClose]);
+
   useEffect(() => {
     setQtyDraft(saleMin);
   }, [product.id, colorForCart, sizeForCart, saleMin]);
@@ -1304,15 +1399,21 @@ function ProductDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-stretch justify-center overflow-y-auto bg-black/40 md:items-start md:px-10 md:py-20"
+      ref={sheetScrollRef}
+      className="fixed inset-0 z-50 flex items-stretch justify-center overflow-y-auto overscroll-y-contain bg-black/40 md:items-start md:px-10 md:py-20"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="relative bg-white shadow-2xl w-full min-h-full overflow-hidden md:min-h-0 md:my-auto md:max-w-4xl md:rounded-2xl md:ring-1 md:ring-stone-200/60"
+        ref={cardRef}
+        className="relative bg-white shadow-2xl w-full min-h-full overflow-hidden will-change-transform md:min-h-0 md:my-auto md:max-w-4xl md:rounded-2xl md:ring-1 md:ring-stone-200/60"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Alça de arrastar (celular): puxar para baixo fecha e volta ao catálogo */}
+        <div className="md:hidden absolute top-0 inset-x-0 z-30 flex justify-center pt-2 pointer-events-none">
+          <span className="h-1.5 w-10 rounded-full bg-white/70 shadow-sm" />
+        </div>
         <button
           type="button"
           onClick={onClose}
@@ -1512,7 +1613,7 @@ function ProductDetailModal({
           </div>
 
           {/* Info do produto */}
-          <div className="md:w-[45%] p-6 pb-8 md:p-8 md:pb-10 md:pl-9 flex flex-col overflow-y-auto max-h-[80vh] md:max-h-[min(640px,85vh)]">
+          <div className="md:w-[45%] p-6 pb-8 md:p-8 md:pb-10 md:pl-9 flex flex-col md:overflow-y-auto md:max-h-[min(640px,85vh)]">
             <h2 className="text-xl md:text-2xl font-semibold text-stone-900 tracking-tight">
               {product.name}
             </h2>

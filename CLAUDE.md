@@ -158,8 +158,23 @@ Orientações para o Claude Code trabalhar neste repositório.
     - **Container ÚNICO e contido:** `HeroBannerBlock` monta o slide ativo dentro de um card
       **`max-w-[1260px]` arredondado com sombra**, **altura fluida** `clamp(240px, 55vw, 460px)` +
       `min-h-[420px] sm:min-h-0` (cabe o layout no celular sem cortar). Bolinhas **por dentro** e uma
-      **transição** `.vw-banner-in` (desliza+fade) a cada troca de slide (via `key={idx}`). Strips/Duo
-      renderizam lado a lado (texto ~40% + fotos ~62%) também no celular, igual à referência.
+      **transição** `.vw-banner-in` (desliza+fade) a cada troca de slide (via `key={idx}`).
+    - **EMPILHA no celular (`< sm`):** todos os 8 estilos gráficos (gradient/diagonal/fashion/magazine/
+      spring/sale/strips/duo) empilham no celular — **foto(s) em largura total em cima** + painel de
+      texto embaixo (texto à esquerda e o botão **"Ver produtos" à direita, na mesma linha**, para o
+      painel ficar baixo e a foto não diminuir). No **desktop/tablet (`sm+`)** volta o layout **lado a
+      lado** de cada estilo (recortes diagonais, faixas etc.). Feito no próprio
+      [HeroTemplateSlide.tsx](src/components/storefront/HeroTemplateSlide.tsx): `MobileStack`
+      (empilhado) + `wrap(desktop, light)` que alterna por breakpoint (`sm:hidden` × `hidden sm:block`);
+      `light` = texto escuro sobre fundo claro (magazine/spring/strips/duo). O `overlay` já usa a foto
+      de fundo e o `split` já empilhava (`flex-col md:flex-row`), então não precisaram do wrapper.
+    - **Prévia fiel celular/PC (prop `forceLayout`):** como o empilhado usa `sm:` (media query do
+      **viewport**), num PC o mockup de celular do editor mostraria o layout de desktop. Por isso o
+      `HeroTemplateSlide` aceita **`forceLayout: "mobile" | "desktop"`** que fixa o layout ignorando o
+      viewport — usado **só nas prévias** do editor (a loja real fica responsiva, sem a prop). O
+      `SlideInner`/`BannerPreview` em [/dashboard/banner](src/app/dashboard/banner/page.tsx) passam
+      `forceLayout` conforme a `variant`; a prévia "💻 No computador" força lado a lado e a "📱 No
+      celular" força empilhado (o `split` da prévia também empilha no mockup mobile).
     - Campos de estilo por slide no JSONB: `bgFrom`/`bgVia`/`bgTo`, `ctaBgColor`, `height` (px; só os
       templates gráficos usam — Strips/Duo/overlay/split usam a altura fluida do container).
     - **CTA = `ShimmerButton`** (Magic UI) com o degradê da cor do botão da loja.
@@ -282,7 +297,11 @@ imagens ao bucket `product-images` e guarda a ordem em `products.images` + o foc
     não fica mais num bloco solto acima da galeria). A miniatura do vídeo mostra um ▶; o slide grande
     reproduz o vídeo (controles/mudo/loop). Cada item de imagem carrega o `imgIndex` original (o ponto
     de foco e o **zoom/lightbox** continuam por foto — vídeo não abre lightbox). `scrollCarouselToIndex`
-    /`onCarouselScroll` passaram a usar `media.length`.
+    /`onCarouselScroll` passaram a usar `media.length`. A moldura e a camada de toque da foto usam
+    **`touch-action: pan-x pan-y`** (arbitrary `[touch-action:pan-x_pan-y]`, não mais só `touch-pan-x`):
+    arrastar na **horizontal** troca a foto (carrossel); arrastar na **vertical** rola o modal/página,
+    então dá para rolar pra ver cores/tamanho **começando o gesto em cima da foto**. (O carrossel do
+    lightbox segue `touch-pan-x` — é tela cheia, sem rolagem vertical.)
   - **Prévia no card da loja (hover/toque):** o `ProductCatalogCard` toca o vídeo **por cima da foto de
     capa** ao passar o **mouse** (`onMouseEnter`/`onMouseLeave`, desktop) ou o **dedo**
     (`onTouchStart`, celular — sem precisar clicar para abrir). Um `IntersectionObserver` **pausa** a
@@ -362,8 +381,9 @@ seguem o formato escolhido (3:4 recorta em retrato). Na loja, o card usa
 
 O `ProductCatalogCard` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) recebe `imageRatio` e
 troca `aspect-square` ↔ `aspect-[3/4]`; a foto é `object-cover` com ponto de foco, então **não
-distorce** em nenhum formato. Só afeta a grade — a foto grande no **detalhe** do
-produto continua inteira (`object-contain`) de propósito.
+distorce** em nenhum formato. A foto grande no **detalhe** do produto também usa **`object-cover`**
+(preenche o quadro 3:4 respeitando o ponto de foco, sem barras cinzas de letterbox); só o **zoom
+(lightbox)** mostra a foto inteira (`object-contain`), para quem quiser ver 100% sem corte.
 
 ### Fundo da página + largura (loja pública)
 
