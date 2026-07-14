@@ -597,9 +597,12 @@ totalItems)` (`{ required, met, missingValue, missingQty, ... }`), `describeMinO
 IA) e `formatBRL`. Em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx), `minOrder` (useMemo) entra
 no `checkoutReady` (**os botões de finalizar/pagar só liberam com o mínimo atingido**) e um aviso
 abaixo do **Total** no carrinho mostra o mínimo exigido e **quanto falta** (valor/itens), virando ✓
-verde ao atingir. Editado no painel **"Pix, pagamentos e rodapé"** do
-[StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (bloco "Pedido mínimo", dois
-campos, **auto-save**). **A IA sabe:** `describeMinOrder(sf)` vai por
+verde ao atingir. **Editado num lugar só:** o **valor/qtd mínimos** ficam na aba **"Configuração IA"**
+(seção "O que a sua loja aceita") em [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) — **não**
+mais no editor visual (o antigo bloco "Pedido mínimo" do
+[StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) foi **removido** para não
+duplicar; no lugar dele o painel "Pix, pagamentos e rodapé" só traz um aviso com link para a aba de
+Atendimento). **A IA sabe:** `describeMinOrder(sf)` vai por
 [whatsappRespond.ts](src/lib/whatsappRespond.ts) → `buildSystemPrompt({ minOrder })`
 ([attendant.ts](src/lib/ai/attendant.ts)), que instrui a IA a informar o mínimo real (proibida de
 inventar) quando o cliente pergunta e a incentivar a completar o carrinho. Substitui o antigo hábito
@@ -609,8 +612,12 @@ de escrever "pedido mínimo" à mão nos `infoBullets` (abaixo do logo).
 escolhe entre `pix` / `dinheiro` / `cartao` / `mercadopago` (`PAYMENT_METHODS`), mas **só aparecem as
 que a loja ativou** no painel. Os toggles moram no JSONB `storefront`: `checkoutPixEnabled` (default
 `true`, exige `pixKey`), `checkoutCashEnabled`, `checkoutCardEnabled` e `checkoutMercadoPagoEnabled`
-(default `true`), editados no painel "Rodapé da vitrine" (subseção "Formas de pagamento no checkout").
-Em LojaClient, `enabledPayMethods` deriva a lista; se estiver vazia, **não** mostra o seletor
+(default `true`), editados **na aba "Configuração IA"** (seção "O que a sua loja aceita") em
+[whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) — **não** mais no editor visual (os checkboxes
+foram **removidos** do painel "Pix, pagamentos e rodapé" para não duplicar; ele só mostra um aviso com
+link para a aba de Atendimento). A **chave Pix**/titular e o toggle "IA envia Pix" continuam no editor
+visual (são específicos do Pix, não duplicavam). Em LojaClient, `enabledPayMethods` deriva a lista; se
+estiver vazia, **não** mostra o seletor
 (retrocompatível). O **Mercado Pago** só aparece se `mpAvailable = paymentEnabled &&
 checkoutMercadoPagoEnabled` (ou seja, gateway conectado **E** ativado no painel); o botão azul "Pagar
 com Mercado Pago" só é exibido quando `paymentMethod === "mercadopago"`. A escolha vai na mensagem
@@ -731,8 +738,9 @@ segmentado, verde = Sim); `tipoVenda` e `tipoMinimo` usam radio de múltiplas op
     (`minOrderStatus` só exige com valor/qtd > 0). `tipoMinimo` → `minOrderType`
     (`valor`/`quantidade`/`ambos`); `valorMinimoPedido` → `minOrderValue`; `quantidadeMinimaPedido` →
     `minOrderQty`; `mensagemMinimoPedido` → `minOrderMessage` (usado pela IA ao explicar o mínimo). Obs.:
-    o **editor visual** ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx))
-    continua com o toggle `minOrderEnabled` independente — só a aba de IA amarrou ao `saleMode`.
+    esta aba é o **único lugar** que edita valor/qtd do mínimo — os campos do **editor visual**
+    ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)) foram removidos (ver
+    "Editado num lugar só" acima), então não há mais dois editores a sincronizar.
 - **Persistência:** o "Salvar configurações" da aba chama `handleSaveConfig`, que manda tudo para
   [/api/whatsapp/config](src/app/api/whatsapp/config/route.ts). A rota faz um **patch** no `storefront`
   (preserva o resto), gravando só os campos que vieram no corpo (booleanos de pagamento/envio,
@@ -741,9 +749,8 @@ segmentado, verde = Sim); `tipoVenda` e `tipoMinimo` usam radio de múltiplas op
   deriva de `minOrderValue > 0 || minOrderQty > 0`, então lojas antigas continuam exigindo o mínimo. O
   cálculo efetivo respeita o interruptor + o tipo via `effectiveMinOrder(sf)` (desligado → `{0,0}`;
   `valor` zera a qtd; `quantidade` zera o valor); `minOrderStatus`/`describeMinOrder` consomem esse
-  efetivo. O bloco "Pedido mínimo" do editor visual
-  ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)) também **liga/desliga
-  `minOrderEnabled`** ao mexer nos valores, mantendo os dois editores em sincronia.
+  efetivo. Como o mínimo agora é editado só na aba de IA (`minOrderEnabled` derivado do `saleMode`), não
+  há mais um segundo editor no visual para manter em sincronia.
 - **Checkout gateado (envios):** em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) o seletor de
   "Forma de envio" só mostra as formas habilitadas (`enabledShippingModeIds(sf)` filtrando
   `SHIPPING_MODES`); se **nenhuma** estiver ligada, exibe um aviso para combinar pelo WhatsApp.

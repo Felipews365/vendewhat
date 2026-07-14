@@ -272,6 +272,20 @@ export default function WhatsAppIaPage() {
     "conexao" | "configuracoes" | "conversas" | "pausar"
   >("conexao");
 
+  // Permite abrir direto numa aba via ?tab= (ex.: link do editor da loja para
+  // "Configuração IA"). Lê da URL só no mount para não exigir <Suspense>.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (
+      t === "conexao" ||
+      t === "configuracoes" ||
+      t === "conversas" ||
+      t === "pausar"
+    ) {
+      setTab(t);
+    }
+  }, []);
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = useCallback(() => {
