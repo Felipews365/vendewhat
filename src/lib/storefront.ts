@@ -453,6 +453,18 @@ export type StorefrontSettings = {
    * estoque — nunca mostra "Esgotado" e não limita a quantidade.
    */
   stockControlEnabled: boolean;
+  /**
+   * Pedido mínimo em **valor** (R$). `0` = sem mínimo de valor. Quando > 0, o
+   * checkout na loja pública só libera se o subtotal atingir esse valor. Aparece
+   * no carrinho (não abaixo do logo) e a IA do WhatsApp é informada.
+   */
+  minOrderValue: number;
+  /**
+   * Pedido mínimo em **quantidade** de itens. `0` = sem mínimo de quantidade.
+   * Quando > 0, o checkout só libera com pelo menos essa quantidade de itens.
+   * Se valor E quantidade forem definidos, ambos precisam ser atingidos.
+   */
+  minOrderQty: number;
   /** Frases curtas abaixo do logo (ex.: pedido mínimo) */
   infoBullets: string[];
   /** Cor de destaque (botões catálogo, detalhes) — ex. rosa pó */
@@ -545,6 +557,8 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   cardFreeShipping: "",
   cardShowRatings: true,
   stockControlEnabled: true,
+  minOrderValue: 0,
+  minOrderQty: 0,
   infoBullets: [],
   themePrimary: "#c9a8ac",
   themeSecondary: "#5c2e36",
@@ -620,6 +634,76 @@ function installmentsMaxFromDb(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v);
   if (!Number.isFinite(n)) return DEFAULT_STOREFRONT.cardInstallmentsMax;
   return Math.max(0, Math.min(12, Math.floor(n)));
+}
+
+/** Formata um valor em reais (ex.: `99.9` → `R$ 99,90`). */
+export function formatBRL(value: number): string {
+  return `R$ ${value.toFixed(2).replace(".", ",")}`;
+}
+
+/**
+ * Estado do pedido mínimo para um carrinho (subtotal + quantidade de itens).
+ * `required` = a loja definiu algum mínimo; `met` = o carrinho satisfaz TODOS
+ * os mínimos configurados (valor E quantidade, quando ambos > 0).
+ */
+export function minOrderStatus(
+  sf: Pick<StorefrontSettings, "minOrderValue" | "minOrderQty">,
+  subtotal: number,
+  totalItems: number
+): {
+  required: boolean;
+  met: boolean;
+  minValue: number;
+  minQty: number;
+  valueMet: boolean;
+  qtyMet: boolean;
+  missingValue: number;
+  missingQty: number;
+} {
+  const minValue = minOrderValueFromDb(sf.minOrderValue);
+  const minQty = minOrderQtyFromDb(sf.minOrderQty);
+  const valueMet = minValue <= 0 || subtotal >= minValue - 0.001;
+  const qtyMet = minQty <= 0 || totalItems >= minQty;
+  return {
+    required: minValue > 0 || minQty > 0,
+    met: valueMet && qtyMet,
+    minValue,
+    minQty,
+    valueMet,
+    qtyMet,
+    missingValue: valueMet ? 0 : Math.max(0, minValue - subtotal),
+    missingQty: qtyMet ? 0 : Math.max(0, minQty - totalItems),
+  };
+}
+
+/**
+ * Frase curta descrevendo o pedido mínimo da loja (ex.: "R$ 100,00 em produtos
+ * e pelo menos 3 itens"). Vazio quando não há mínimo. Usado na IA do WhatsApp.
+ */
+export function describeMinOrder(
+  sf: Pick<StorefrontSettings, "minOrderValue" | "minOrderQty">
+): string {
+  const minValue = minOrderValueFromDb(sf.minOrderValue);
+  const minQty = minOrderQtyFromDb(sf.minOrderQty);
+  const parts: string[] = [];
+  if (minValue > 0) parts.push(`${formatBRL(minValue)} em produtos`);
+  if (minQty > 0)
+    parts.push(`pelo menos ${minQty} ${minQty === 1 ? "item" : "itens"}`);
+  return parts.join(" e ");
+}
+
+/** Valor mínimo do pedido (R$). Negativo/NaN vira 0 (sem mínimo); 2 casas. */
+function minOrderValueFromDb(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(1_000_000, Math.round(n * 100) / 100);
+}
+
+/** Quantidade mínima de itens do pedido. Negativo/NaN vira 0 (sem mínimo). */
+function minOrderQtyFromDb(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(100_000, Math.floor(n));
 }
 
 /** Máximo de blocos de conteúdo guardados (defensivo). */
@@ -857,6 +941,8 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       o.stockControlEnabled,
       DEFAULT_STOREFRONT.stockControlEnabled
     ),
+    minOrderValue: minOrderValueFromDb(o.minOrderValue),
+    minOrderQty: minOrderQtyFromDb(o.minOrderQty),
     infoBullets: bulletsFromDb(o.infoBullets),
     themePrimary: str(o.themePrimary, DEFAULT_STOREFRONT.themePrimary),
     themeSecondary: str(o.themeSecondary, DEFAULT_STOREFRONT.themeSecondary),
@@ -945,6 +1031,8 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     cardFreeShipping: s.cardFreeShipping.trim().slice(0, 40),
     cardShowRatings: s.cardShowRatings,
     stockControlEnabled: s.stockControlEnabled,
+    minOrderValue: minOrderValueFromDb(s.minOrderValue),
+    minOrderQty: minOrderQtyFromDb(s.minOrderQty),
     infoBullets: s.infoBullets.map((b) => b.trim()).filter(Boolean),
     themePrimary: s.themePrimary.trim(),
     themeSecondary: s.themeSecondary.trim(),

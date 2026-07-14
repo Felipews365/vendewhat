@@ -101,6 +101,11 @@ export function buildSystemPrompt(args: {
   hasCatalogPdf?: boolean;
   /** A loja recebe por Pix e ativou o envio pela IA: manda a chave ao fechar o pedido. */
   hasPix?: boolean;
+  /**
+   * Descrição do pedido mínimo da loja (ex.: "R$ 100,00 em produtos e pelo
+   * menos 3 itens"). Vazio = sem pedido mínimo.
+   */
+  minOrder?: string;
 }): string {
   const {
     storeName,
@@ -120,7 +125,9 @@ export function buildSystemPrompt(args: {
     pickupInstructions,
     hasCatalogPdf,
     hasPix,
+    minOrder,
   } = args;
+  const minOrderText = (minOrder ?? "").trim();
   const storeUrl = `${baseUrl.replace(/\/+$/, "")}/loja/${slug}`;
   const address = (storeAddress ?? "").trim();
   // Retirada só faz sentido em loja com ponto físico.
@@ -184,6 +191,9 @@ export function buildSystemPrompt(args: {
       : "",
     hasPickup
       ? "- RETIRADA: quando o cliente escolher retirar o pedido no local (o pedido chega marcado como 'Retirada'), OU perguntar como/onde retirar, explique proativamente, sem enrolar, onde e como retirar, usando as informações em RETIRADA DE PEDIDOS abaixo (endereço e instruções). Não invente horários nem regras que não estejam ali."
+      : "",
+    minOrderText
+      ? `- PEDIDO MÍNIMO: esta loja exige um pedido mínimo de ${minOrderText}. Se o cliente perguntar se tem pedido mínimo, qual o valor/quantidade mínima, ou quiser fechar um pedido abaixo disso, informe o mínimo com clareza (${minOrderText}) e incentive-o a completar o carrinho para atingir o mínimo e conseguir finalizar. No catálogo online, o botão de finalizar só libera quando o pedido atinge esse mínimo. NÃO invente um valor diferente deste.`
       : "",
     "",
     onlineOnly

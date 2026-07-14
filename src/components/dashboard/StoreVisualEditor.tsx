@@ -2581,6 +2581,88 @@ export function StoreVisualEditor({
             </span>
           </label>
         </div>
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-slate-700">Pedido mínimo</p>
+            <p className="text-[11px] text-slate-500">
+              O cliente só consegue finalizar o pedido quando o carrinho atinge o
+              mínimo. Aparece no <strong>carrinho</strong> e a IA do WhatsApp
+              avisa o cliente quando perguntar. Deixe <strong>0</strong> para não
+              exigir mínimo.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-[11px] font-medium text-slate-600 mb-1">
+                Valor mínimo (R$)
+              </span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                value={sf.minOrderValue || ""}
+                placeholder="0,00"
+                onChange={(e) => {
+                  const n = Number(e.target.value.replace(",", "."));
+                  const nextSf: StorefrontSettings = {
+                    ...sf,
+                    minOrderValue: Number.isFinite(n) && n > 0 ? n : 0,
+                  };
+                  setSf(nextSf);
+                  onAutoSaveStorefront?.(nextSf);
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
+              />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-medium text-slate-600 mb-1">
+                Qtd. mínima de itens
+              </span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                value={sf.minOrderQty || ""}
+                placeholder="0"
+                onChange={(e) => {
+                  const n = Math.floor(Number(e.target.value));
+                  const nextSf: StorefrontSettings = {
+                    ...sf,
+                    minOrderQty: Number.isFinite(n) && n > 0 ? n : 0,
+                  };
+                  setSf(nextSf);
+                  onAutoSaveStorefront?.(nextSf);
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
+              />
+            </label>
+          </div>
+          {(sf.minOrderValue > 0 || sf.minOrderQty > 0) && (
+            <p className="text-[11px] text-slate-500">
+              Exigindo{" "}
+              <strong>
+                {[
+                  sf.minOrderValue > 0
+                    ? `R$ ${sf.minOrderValue.toFixed(2).replace(".", ",")}`
+                    : null,
+                  sf.minOrderQty > 0
+                    ? `${sf.minOrderQty} ${
+                        sf.minOrderQty === 1 ? "item" : "itens"
+                      }`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" e ")}
+              </strong>
+              {sf.minOrderValue > 0 && sf.minOrderQty > 0
+                ? " (os dois precisam ser atingidos)."
+                : "."}
+            </p>
+          )}
+        </div>
         <p className="text-[11px] text-slate-500">
           Instagram, Facebook, TikTok e YouTube ficam em{" "}
           <button

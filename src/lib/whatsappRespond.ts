@@ -11,7 +11,7 @@ import {
   type WhatsAppConfig,
 } from "@/lib/whatsappConfig";
 import { sendLocation, sendMedia, sendText } from "@/lib/evolution";
-import { storefrontFromDb } from "@/lib/storefront";
+import { storefrontFromDb, describeMinOrder } from "@/lib/storefront";
 import {
   type AttendantProduct,
   buildSystemPrompt,
@@ -166,6 +166,10 @@ export async function respondToCustomer(
   const pixKey = sf.pixKey.trim();
   const pixEnabled = sf.aiSendPixOnCheckout && Boolean(pixKey);
 
+  // Pedido mínimo da loja (valor e/ou quantidade): a IA informa quando o cliente
+  // pergunta. Vazio = sem mínimo.
+  const minOrder = describeMinOrder(sf);
+
   // Loja sem controle de estoque: a IA não deve dizer "sem estoque" (trata tudo
   // como disponível, igual à loja pública). Só afeta o texto do catálogo no prompt.
   let products = mapProducts((productRows ?? []) as AnyObj[]);
@@ -228,6 +232,7 @@ export async function respondToCustomer(
     pickupInstructions,
     hasCatalogPdf,
     hasPix: pixEnabled,
+    minOrder,
   });
 
   const reply = await generateReply(systemPrompt, contextHistory, combinedUserText);

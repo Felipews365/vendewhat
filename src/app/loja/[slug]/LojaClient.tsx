@@ -15,6 +15,8 @@ import {
   type StorefrontCategoryItem,
   type StorefrontSettings,
   storefrontRichFooterVisible,
+  minOrderStatus,
+  formatBRL,
 } from "@/lib/storefront";
 import { discountPercent } from "@/lib/productCardMeta";
 import {
@@ -2641,6 +2643,13 @@ export function LojaClient({
     enabledPayMethods.length === 0 ||
     (paymentMethod != null && enabledPayMethods.includes(paymentMethod));
 
+  // Pedido mínimo (valor e/ou quantidade) definido pela loja. Só libera o
+  // checkout quando o carrinho atinge o(s) mínimo(s) configurado(s).
+  const minOrder = useMemo(
+    () => minOrderStatus(storefront, subtotal, totalItems),
+    [storefront, subtotal, totalItems]
+  );
+
   // Condição única para liberar o envio/pagamento do pedido.
   const checkoutReady =
     customerName.trim().length >= 2 &&
@@ -2649,7 +2658,8 @@ export function LojaClient({
     (!needsAddress || addressComplete) &&
     excursionComplete &&
     carrierComplete &&
-    paymentComplete;
+    paymentComplete &&
+    minOrder.met;
 
   function setAddressField(field: keyof typeof address, value: string) {
     setAddress((a) => ({ ...a, [field]: value }));
@@ -4004,6 +4014,45 @@ export function LojaClient({
                       R$ {subtotal.toFixed(2).replace(".", ",")}
                     </span>
                   </div>
+                  {minOrder.required && (
+                    <div
+                      className={`mt-1 rounded-lg px-3 py-2 text-xs ${
+                        minOrder.met
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-amber-50 text-amber-800"
+                      }`}
+                    >
+                      {minOrder.met ? (
+                        <>✓ Pedido mínimo atingido.</>
+                      ) : (
+                        <>
+                          <strong>Pedido mínimo:</strong>{" "}
+                          {[
+                            minOrder.minValue > 0
+                              ? formatBRL(minOrder.minValue)
+                              : null,
+                            minOrder.minQty > 0
+                              ? `${minOrder.minQty} ${
+                                  minOrder.minQty === 1 ? "item" : "itens"
+                                }`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" e ")}
+                          .{" "}
+                          {!minOrder.valueMet && minOrder.missingValue > 0 && (
+                            <>Faltam {formatBRL(minOrder.missingValue)}. </>
+                          )}
+                          {!minOrder.qtyMet && minOrder.missingQty > 0 && (
+                            <>
+                              Adicione mais {minOrder.missingQty}{" "}
+                              {minOrder.missingQty === 1 ? "item" : "itens"}.
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -4072,7 +4121,12 @@ export function LojaClient({
                 </p>
                 {!checkoutReady ? (
                   <p className="text-xs text-amber-700 text-center mt-2">
-                    {customerName.trim().length < 2 ? (
+                    {!minOrder.met ? (
+                      <>
+                        Este pedido ainda não atingiu o{" "}
+                        <strong>pedido mínimo</strong> da loja.
+                      </>
+                    ) : customerName.trim().length < 2 ? (
                       <>
                         Preencha <strong>seu nome</strong>, <strong>telefone</strong> e{" "}
                         <strong>forma de envio</strong>.
