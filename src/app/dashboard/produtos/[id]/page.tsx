@@ -64,6 +64,7 @@ import {
   type ColorOptionEntry,
 } from "@/components/ProductColorsEditor";
 import { VariantStockEditor } from "@/components/VariantStockEditor";
+import { storefrontFromDb } from "@/lib/storefront";
 import { colorHexesFromDb, normalizeHex } from "@/lib/productColorHexes";
 import {
   priceMoneyInputHandlers,
@@ -184,6 +185,7 @@ export default function EditarProdutoPage() {
   const [tab, setTab] = useState<ProductTab>("produto");
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [storeId, setStoreId] = useState<string | null>(null);
+  const [stockControl, setStockControl] = useState(true);
   const [categorySuggestionsRefresh, setCategorySuggestionsRefresh] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoUploading, setVideoUploading] = useState(false);
@@ -264,6 +266,14 @@ export default function EditarProdutoPage() {
         };
         const sid = (product as { store_id?: string }).store_id;
         setStoreId(typeof sid === "string" && sid ? sid : null);
+        if (typeof sid === "string" && sid) {
+          const { data: store } = await supabase
+            .from("stores")
+            .select("storefront")
+            .eq("id", sid)
+            .maybeSingle();
+          setStockControl(storefrontFromDb(store?.storefront).stockControlEnabled);
+        }
 
         const catRaw = row.category;
         const categoryStr =
@@ -854,9 +864,11 @@ export default function EditarProdutoPage() {
           >
             Variações
           </TabButton>
-          <TabButton active={tab === "estoque"} onClick={() => setTab("estoque")}>
-            Estoque
-          </TabButton>
+          {stockControl && (
+            <TabButton active={tab === "estoque"} onClick={() => setTab("estoque")}>
+              Estoque
+            </TabButton>
+          )}
         </div>
 
         {error && (
@@ -1257,11 +1269,13 @@ export default function EditarProdutoPage() {
                     label="Variações (cor e tamanho)"
                     onClick={() => setTab("variacoes")}
                   />
-                  <SidebarRow
-                    icon="📦"
-                    label="Estoque"
-                    onClick={() => setTab("estoque")}
-                  />
+                  {stockControl && (
+                    <SidebarRow
+                      icon="📦"
+                      label="Estoque"
+                      onClick={() => setTab("estoque")}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -1288,7 +1302,7 @@ export default function EditarProdutoPage() {
                   presetGroups={SIZE_PRESET_GROUPS}
                 />
               </section>
-              {hasVariantOptions && (
+              {stockControl && hasVariantOptions && (
                 <VariantStockEditor
                   colors={colors}
                   sizes={sizes}
@@ -1299,7 +1313,7 @@ export default function EditarProdutoPage() {
             </div>
           )}
 
-          {tab === "estoque" && (
+          {stockControl && tab === "estoque" && (
             <div className="max-w-lg space-y-4">
               {hasVariantOptions ? (
                 <p className="text-sm text-slate-600 dark:text-slate-300">

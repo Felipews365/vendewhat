@@ -17,6 +17,7 @@ import {
   type ColorOptionEntry,
 } from "@/components/ProductColorsEditor";
 import { VariantStockEditor } from "@/components/VariantStockEditor";
+import { storefrontFromDb } from "@/lib/storefront";
 import {
   IMAGES_MIGRATION_HINT,
   OPTIONS_MIGRATION_HINT,
@@ -150,6 +151,7 @@ export default function NovoProdutoPage() {
   const [error, setError] = useState("");
   const [saveOk, setSaveOk] = useState(false);
   const [tab, setTab] = useState<ProductTab>("produto");
+  const [stockControl, setStockControl] = useState(true);
   const saveNavRef = useRef<"stay" | "list">("list");
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [colorEntries, setColorEntries] = useState<ColorOptionEntry[]>([]);
@@ -198,10 +200,13 @@ export default function NovoProdutoPage() {
       if (!user || cancelled) return;
       const { data: store } = await supabase
         .from("stores")
-        .select("id")
+        .select("id, storefront")
         .eq("user_id", user.id)
         .maybeSingle();
-      if (!cancelled && store?.id) setStoreId(store.id as string);
+      if (!cancelled && store?.id) {
+        setStoreId(store.id as string);
+        setStockControl(storefrontFromDb(store.storefront).stockControlEnabled);
+      }
     })();
     return () => {
       cancelled = true;
@@ -765,9 +770,11 @@ export default function NovoProdutoPage() {
           >
             Variações
           </TabButton>
-          <TabButton active={tab === "estoque"} onClick={() => setTab("estoque")}>
-            Estoque
-          </TabButton>
+          {stockControl && (
+            <TabButton active={tab === "estoque"} onClick={() => setTab("estoque")}>
+              Estoque
+            </TabButton>
+          )}
         </div>
 
         {error && (
@@ -1187,11 +1194,13 @@ export default function NovoProdutoPage() {
                     label="Variações (cor e tamanho)"
                     onClick={() => setTab("variacoes")}
                   />
-                  <SidebarRow
-                    icon="📦"
-                    label="Estoque"
-                    onClick={() => setTab("estoque")}
-                  />
+                  {stockControl && (
+                    <SidebarRow
+                      icon="📦"
+                      label="Estoque"
+                      onClick={() => setTab("estoque")}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -1218,7 +1227,7 @@ export default function NovoProdutoPage() {
                   presetGroups={SIZE_PRESET_GROUPS}
                 />
               </section>
-              {hasVariantOptions && (
+              {stockControl && hasVariantOptions && (
                 <VariantStockEditor
                   colors={colors}
                   sizes={sizes}
@@ -1229,7 +1238,7 @@ export default function NovoProdutoPage() {
             </div>
           )}
 
-          {tab === "estoque" && (
+          {stockControl && tab === "estoque" && (
             <div className="max-w-lg space-y-4">
               {hasVariantOptions ? (
                 <p className="text-sm text-slate-600 dark:text-slate-300">

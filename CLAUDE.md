@@ -513,16 +513,27 @@ são reviews reais). Sanitizados em `storefrontFromDb`/`storefrontToDb`.
 
 ### Controlar estoque ou não (por loja)
 
-Toggle `storefront.stockControlEnabled` (default `true`, JSONB — **sem migration**), editado no painel
-**"Rodapé da vitrine"** do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
-(caixa "Controle de estoque"). Marcado = comportamento de sempre: produto/variação sem estoque
-aparece como **"Esgotado"** e limita a quantidade. Desmarcado = a loja **não controla estoque**:
-nunca mostra "Esgotado" e não limita a quantidade (para quem faz sob encomenda / repõe sempre).
-Em vez de espalhar a flag por dezenas de componentes, a [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)
-**normaliza os produtos** num `useMemo` quando desativado (estoque "infinito" 999999 + `variantStock: []`),
-então `productSoldOut`/`maxQtyForCartLine` e os avisos de variação tratam tudo como disponível. Para
-manter a **IA** consistente, [whatsappRespond.ts](src/lib/whatsappRespond.ts) também zera o "sem estoque"
-do catálogo do prompt quando `stockControlEnabled` é `false`.
+Toggle `storefront.stockControlEnabled` (default `true`, JSONB — **sem migration**), editado como um
+**cartão com switch no topo da lista de produtos** ([/dashboard/produtos](src/app/dashboard/produtos/page.tsx),
+"📦 Controlar estoque") — perto de onde o lojista pensa em estoque, não mais dentro do painel de
+Pix/pagamentos do editor visual. O switch **salva na hora** (grava o `storefront` inteiro via
+`storefrontToDb` + toast; estado otimista com desfazer no erro). Marcado = comportamento de sempre:
+produto/variação sem estoque aparece como **"Esgotado"** e limita a quantidade. Desmarcado = a loja
+**não controla estoque**: nunca mostra "Esgotado" e não limita a quantidade (para quem faz sob
+encomenda / repõe sempre). Em vez de espalhar a flag por dezenas de componentes, a
+[LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) **normaliza os produtos** num `useMemo` quando
+desativado (estoque "infinito" 999999 + `variantStock: []`), então `productSoldOut`/`maxQtyForCartLine`
+e os avisos de variação tratam tudo como disponível. Para manter a **IA** consistente,
+[whatsappRespond.ts](src/lib/whatsappRespond.ts) também zera o "sem estoque" do catálogo do prompt
+quando `stockControlEnabled` é `false`.
+
+- **Some o estoque do cadastro quando desligado:** com o controle desativado, as duas páginas de
+  produto ([novo](src/app/dashboard/produtos/novo/page.tsx) e [id](src/app/dashboard/produtos/[id]/page.tsx))
+  **escondem** a aba/linha **"Estoque"**, o campo de quantidade e o `VariantStockEditor` (a grade de
+  estoque por cor/tamanho continua na aba Variações **só** quando o controle está ligado) — o lojista
+  não preenche mais estoque que a loja ignora. Ambas leem `stockControlEnabled` do `storefront` no
+  load (`stockControl`, default `true`). A **lista de produtos** também oculta o selo "Esgotado" e a
+  linha "Estoque: N unidades" nesse modo.
 
 ## Loja pública — carrinho e formas de envio
 

@@ -9,6 +9,12 @@ import {
   storagePathsFromProductUrls,
 } from "@/lib/productImages";
 import { displayTotalStock } from "@/lib/productVariants";
+import {
+  storefrontFromDb,
+  storefrontToDb,
+  type StorefrontSettings,
+} from "@/lib/storefront";
+import { useToast } from "@/components/Toast";
 
 interface Product {
   id: string;
@@ -27,10 +33,13 @@ interface Product {
 
 export default function ProdutosPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [storeId, setStoreId] = useState<string | null>(null);
+  const [sf, setSf] = useState<StorefrontSettings | null>(null);
+  const [savingStock, setSavingStock] = useState(false);
 
   useEffect(() => {
     loadProducts();
@@ -47,7 +56,7 @@ export default function ProdutosPage() {
 
     const { data: store } = await supabase
       .from("stores")
-      .select("id")
+      .select("id, storefront")
       .eq("user_id", user.id)
       .single();
 
@@ -56,6 +65,7 @@ export default function ProdutosPage() {
       return;
     }
     setStoreId(store.id);
+    setSf(storefrontFromDb(store.storefront));
 
     const { data, error } = await supabase
       .from("products")
@@ -72,6 +82,36 @@ export default function ProdutosPage() {
       setProducts(data || []);
     }
     setLoading(false);
+  }
+
+  async function toggleStockControl(enabled: boolean) {
+    if (!storeId || !sf) return;
+    const next: StorefrontSettings = { ...sf, stockControlEnabled: enabled };
+    setSf(next); // otimista
+    setSavingStock(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("stores")
+        .update({
+          storefront: storefrontToDb(next),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", storeId);
+      if (error) {
+        setSf({ ...sf, stockControlEnabled: !enabled }); // desfaz
+        showToast("Não foi possível salvar. Tente de novo.", "error");
+      } else {
+        showToast(
+          enabled ? "Controle de estoque ativado!" : "Controle de estoque desativado!"
+        );
+      }
+    } catch {
+      setSf({ ...sf, stockControlEnabled: !enabled });
+      showToast("Erro de conexão ao salvar.", "error");
+    } finally {
+      setSavingStock(false);
+    }
   }
 
   async function toggleActive(product: Product) {
@@ -150,6 +190,55 @@ export default function ProdutosPage() {
           </Link>
         </div>
 
+        {sf && (
+          <div className="mb-8 bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-4 sm:p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <span aria-hidden>📦</span> Controlar estoque
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  {sf.stockControlEnabled ? (
+                    <>
+                      Produto ou variação sem estoque aparece como{" "}
+                      <strong className="text-slate-600 dark:text-slate-300">
+                        Esgotado
+                      </strong>{" "}
+                      e limita a quantidade no carrinho.
+                    </>
+                  ) : (
+                    <>
+                      A loja <strong className="text-slate-600 dark:text-slate-300">
+                        não controla estoque
+                      </strong>
+                      : nunca mostra “Esgotado” nem limita a quantidade (ideal
+                      para quem faz sob encomenda ou repõe sempre).
+                    </>
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={sf.stockControlEnabled}
+                disabled={savingStock}
+                onClick={() => toggleStockControl(!sf.stockControlEnabled)}
+                className={`relative shrink-0 inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${
+                  sf.stockControlEnabled
+                    ? "bg-whatsapp"
+                    : "bg-slate-300 dark:bg-slate-700"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    sf.stockControlEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
         {products.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-12 text-center shadow-sm">
             <span className="text-5xl block mb-4">📦</span>
@@ -200,11 +289,13 @@ export default function ProdutosPage() {
                       Promoção
                     </span>
                   )}
-                  {displayTotalStock(product) === 0 && product.active && (
-                    <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
-                      Esgotado
-                    </span>
-                  )}
+                  {sf?.stockControlEnabled !== false &&
+                    displayTotalStock(product) === 0 &&
+                    product.active && (
+                      <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
+                        Esgotado
+                      </span>
+                    )}
                 </div>
 
                 <div className="p-4">
@@ -223,9 +314,11 @@ export default function ProdutosPage() {
                       R$ {product.price.toFixed(2)}
                     </p>
                   </div>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                    Estoque: {displayTotalStock(product)} unidades
-                  </p>
+                  {sf?.stockControlEnabled !== false && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                      Estoque: {displayTotalStock(product)} unidades
+                    </p>
+                  )}
 
                   <div className="flex items-center gap-2 mt-4">
                     <Link
