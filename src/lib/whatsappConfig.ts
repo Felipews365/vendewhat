@@ -723,10 +723,12 @@ export async function listDuePostsaleOrders(
 }
 
 /**
- * Nome salvo do cliente (de um pedido anterior) para um número de WhatsApp.
- * O telefone do WhatsApp (com DDI) é comparado com o do pedido normalizando
- * ambos por `toWhatsAppNumber`. Devolve o nome do pedido mais recente, ou "".
- * Usado para a IA saudar pelo nome quem já é cliente da casa.
+ * Nome salvo do cliente para um número de WhatsApp. Procura primeiro no contato
+ * salvo (`whatsapp_contacts` — renomeado pelo lojista OU salvo pela IA ao fechar
+ * um pedido), que tem prioridade; se não houver, cai no nome do pedido mais
+ * recente (`orders`). O telefone do WhatsApp (com DDI) é comparado normalizando
+ * ambos por `toWhatsAppNumber`. Devolve "" se não achar. Usado para a IA saudar
+ * pelo nome quem já é cliente da casa.
  */
 export async function findCustomerName(
   db: SupabaseClient,
@@ -735,6 +737,26 @@ export async function findCustomerName(
 ): Promise<string> {
   const target = toWhatsAppNumber(whatsappPhone);
   if (!target) return "";
+  // 1) Contato salvo (prioridade): renomeado pelo lojista ou salvo pela IA.
+  try {
+    const phone = whatsappPhone.replace(/\D/g, "");
+    if (phone) {
+      const { data } = await db
+        .from(CONTACTS)
+        .select("display_name")
+        .eq("store_id", storeId)
+        .eq("customer_phone", phone)
+        .maybeSingle();
+      const name =
+        data && typeof (data as Record<string, unknown>).display_name === "string"
+          ? String((data as Record<string, unknown>).display_name).trim()
+          : "";
+      if (name) return name;
+    }
+  } catch {
+    // tabela ausente (migration não aplicada) — segue para os pedidos.
+  }
+  // 2) Nome de um pedido anterior.
   const { data } = await db
     .from("orders")
     .select("customer_name, customer_phone, created_at")

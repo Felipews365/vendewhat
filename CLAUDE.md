@@ -947,11 +947,43 @@ uma instância Evolution e uma config de IA por loja.
   follow-up/pós-venda/carrinho abandonado; as instruções inline desses crons que ainda diziam "à
   disposição" foram trocadas por condução ativa.
 - **Saudar cliente salvo pelo nome:** `findCustomerName`
-  ([whatsappConfig.ts](src/lib/whatsappConfig.ts)) busca o **nome de um pedido anterior** pelo
-  telefone (compara normalizando ambos com `toWhatsAppNumber`, DDI 55). O
-  `respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)) passa esse `customerName`
-  para o `buildSystemPrompt`, que instrui a IA a **tratar pelo primeiro nome** quem já é cliente da
-  casa e a **NÃO inventar** nome quando não há. Sem migration (lê a `orders`).
+  ([whatsappConfig.ts](src/lib/whatsappConfig.ts)) busca o nome pelo telefone (compara normalizando
+  ambos com `toWhatsAppNumber`, DDI 55), procurando **primeiro no contato salvo**
+  (`whatsapp_contacts` — renomeado pelo lojista **ou salvo pela IA** ao fechar um pedido; tem
+  prioridade, com `try/catch` p/ tolerar a tabela ausente) e, se não houver, no **nome de um pedido
+  anterior** (`orders`). O `respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts))
+  passa esse `customerName` para o `buildSystemPrompt`, que instrui a IA a **tratar pelo primeiro
+  nome** quem já é cliente da casa e a **NÃO inventar** nome quando não há. Sem migration.
+- **Fechamento de pedido + captura do nome (a IA fecha pela conversa/PDF):** o `buildSystemPrompt`
+  ([attendant.ts](src/lib/ai/attendant.ts)) ganhou instruções para (1) **reconhecer o pedido vindo
+  do site** — a mensagem já formatada (`*Pedido — …*`, `*Cliente:*`, `*Itens do pedido:*`, envio/
+  endereço/retirada, pagamento) tem **todos os dados**, então a IA confirma sem re-perguntar nome/
+  endereço e vai direto ao pagamento (Pix se houver); e (2) **fechar pela conversa ou pelo catálogo
+  em PDF** (quando não veio o pedido do site) coletando os dados que faltam **um de cada vez**: nome
+  (se desconhecido) → como quer receber (**só as formas de envio que a loja aceita**; entrega pede
+  endereço completo, retirada só se `hasPickup`) → forma de pagamento → resumo e finalização. Ao
+  **descobrir o nome** (apresentação ou pedido do site), a IA emite **uma vez** o marcador
+  `[[NOME_CLIENTE:...]]`; `parseReplyDirectives` extrai em `customerName` (cap 80 chars, strip do
+  texto) e o `respondToCustomer` **persiste via `setContactName`** — mas **só quando ainda não havia
+  nome salvo** (`identifiedName && !customerName`), para não sobrescrever rename do lojista/pedido
+  anterior. Sem migration (reaproveita `whatsapp_contacts`).
+- **IA registra o pedido no painel (bloco `[[PEDIDO]]`):** ao **confirmar** um pedido fechado pela
+  conversa/PDF (não o do site, que já grava sozinho), a IA emite no fim da mensagem um bloco
+  `[[PEDIDO]]{json}[[/PEDIDO]]` com `itens` (nome exato do catálogo + cor/tamanho/qtd), `envio`
+  (`retirada|correios|excursao|transportadora`), `pagamento` (`pix|dinheiro|cartao|mercadopago`),
+  `endereco`/`excursao`/`transportadora`. `parseAiOrderJson` ([attendant.ts](src/lib/ai/attendant.ts),
+  tolerante a cercas ```json e texto solto) devolve o `AiOrderDraft`; `parseReplyDirectives` o expõe
+  em `orderDraft` e **remove o bloco do texto**. No `respondToCustomer`
+  ([whatsappRespond.ts](src/lib/whatsappRespond.ts)), `registerConversationOrder` **resolve os nomes
+  contra o catálogo** (`normalizeName` sem acento; nome exato → parcial; cor/tamanho casados com as
+  opções reais via `matchOption`) e cria o pedido pela **mesma via do checkout** — `createStoreOrder`
+  em **[orders.server.ts](src/lib/orders.server.ts)** (extraído de [/api/orders](src/app/api/orders/route.ts),
+  que agora só valida a entrada e chama o helper; **fonte única**, sem duplicar a lógica de
+  preço/estoque/insert). Segurança: **não registra** se algum produto não for reconhecido, se faltar
+  forma de envio (usa a única habilitada como fallback) ou nome do cliente (`< 2` chars), e **dedup**
+  de 3 min por telefone (a IA pode reemitir o bloco). O pedido nasce `status: "novo"` (aparece em
+  Pedidos para o lojista revisar) e a IA confirma ao cliente com o número (`Pedido registrado #N`).
+  Sem migration.
 - **Modo de venda (`storefront.saleMode`: `"varejo"` (default) / `"atacado"` / `"ambos"`, JSONB — sem
   migration):** orienta a **condução comercial** da IA. **atacado** → reforça o pedido mínimo e
   conduz por quantidade/revenda; **ambos** → primeiro descobre se é uso próprio ou revenda e segue a
@@ -1248,8 +1280,15 @@ própria, ver abaixo).
 - **Dados:** a lista de contatos vem do mesmo `conversations` que a página já carrega de
   `GET /api/whatsapp/pause` (`listRecentCustomers`); o histórico completo de um contato vem de
   `GET /api/whatsapp/conversation?phone=` (`getFullConversation` em
-  [whatsappConfig.ts](src/lib/whatsappConfig.ts), com horário por mensagem). O thread **atualiza
-  sozinho a cada 12s** (polling) enquanto aberto.
+  [whatsappConfig.ts](src/lib/whatsappConfig.ts), com horário por mensagem).
+- **Conversas "ao vivo" (quase tempo real, por polling):** enquanto a aba **Conversas** está aberta,
+  a página ([whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx)) recarrega a **lista** de
+  conversas (`loadPauses`: mensagens novas, nomes salvos, pausas) **a cada 6s**, e o
+  `ConversationsPanel` recarrega a **thread aberta a cada 4s** — o lojista vê o atendimento da IA
+  acontecendo e pode assumir na hora. Para o polling frequente não atrapalhar quem lê o histórico, o
+  thread **só rola para o fim quando chegam mensagens novas** (`next.length > prev.length`), não a
+  cada atualização. (Não é WebSocket/Supabase Realtime — `whatsapp_messages` é service-role, sem RLS
+  para o cliente do browser; o polling curto entrega a sensação de tempo real sem expor a tabela.)
 - **Enviar (você assume a conversa):** `POST /api/whatsapp/conversation` `{phone, text}`
   ([route](src/app/api/whatsapp/conversation/route.ts), autentica o dono + service role) envia via
   `sendText` (Evolution), grava a mensagem como `assistant` no histórico **e pausa a IA para aquele

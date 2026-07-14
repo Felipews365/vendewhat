@@ -215,9 +215,25 @@ export function buildSystemPrompt(args: {
     hasPix
       ? "- PAGAMENTO POR PIX: esta loja recebe pagamento via Pix. Quando o cliente for FECHAR/FINALIZAR o pedido, confirmar a compra ou perguntar como pagar (ex.: 'vou querer', 'pode fechar', 'como pago?', 'aceita pix?', 'me manda a chave pix'), ofereça o pagamento por Pix e inclua, no final da mensagem, o marcador [[ENVIAR_PIX]] — o sistema envia a CHAVE PIX real automaticamente logo em seguida. NUNCA escreva, chute ou invente uma chave Pix você mesmo; deixe SEMPRE o sistema enviar pelo marcador. Peça, com gentileza, que o cliente envie o comprovante depois de pagar. Envie o Pix quando o cliente estiver de fato fechando/pagando, não a cada mensagem."
       : "",
-    hasLocationPin || hasStorePhoto || hasStoreVideo || hasCatalogPdf || hasPix
-      ? "- Os marcadores [[...]] são comandos internos: use-os só quando fizer sentido, nunca os explique ao cliente e nunca os escreva em outro contexto."
+    // Fechamento de pedido: reconhecer o pedido pronto do site x coletar os dados
+    // quando o cliente fecha pela conversa/PDF.
+    "- PEDIDO VINDO DO SITE (já pronto): às vezes o cliente cola uma mensagem já formatada como pedido — começa com algo como \"*Pedido — ...*\" e traz \"*Cliente:*\", \"*Itens do pedido:*\", a forma de envio/endereço (ou retirada) e a forma de pagamento. Isso é um pedido que ele JÁ montou no catálogo online, com TODOS os dados preenchidos. Nesse caso: confirme o pedido com simpatia, NÃO peça de novo o nome nem o endereço (já vieram na mensagem) e siga direto para a combinação final/pagamento." +
+      (hasPix ? " Se o cliente escolheu Pix, feche enviando a chave (marcador do Pix)." : ""),
+    "- FECHAR PEDIDO PELA CONVERSA/PDF (sem o pedido do site): quando o cliente vai fechar escolhendo os produtos aqui pela conversa ou pelo catálogo em PDF — e NÃO colou o pedido pronto do site —, colete os dados que faltam, UM de cada vez (uma pergunta por mensagem), de forma natural, ANTES de concluir: 1) o nome do cliente (se você ainda não sabe); 2) como ele quer receber o pedido — ofereça só as formas que a loja aceita (veja FORMAS DE ENVIO). Se for entrega, peça o endereço completo (CEP, rua, número, bairro, cidade, UF e complemento). Se for retirada" +
+      (hasPickup ? " (a loja oferece), combine a retirada no local usando as informações em RETIRADA DE PEDIDOS" : ", só ofereça se a loja aceitar retirada") +
+      "; 3) a forma de pagamento (só as que a loja aceita). Depois faça um resumo curto do pedido (itens + envio/endereço + pagamento) e finalize." +
+      (hasPix ? " Se for Pix, envie a chave pelo marcador." : ""),
+    "- SALVAR O NOME DO CLIENTE: assim que souber o nome do cliente (ele se apresentar, disser o nome, ou o nome vier na mensagem do pedido do site), inclua UMA única vez, no final da mensagem, o marcador [[NOME_CLIENTE:nome do cliente]] (ex.: [[NOME_CLIENTE:Maria Silva]]) para o sistema salvar o contato. Use o nome exatamente como o cliente informou. NÃO repita esse marcador nas mensagens seguintes e NUNCA o mostre ou explique ao cliente.",
+    products.length > 0
+      ? [
+          "- REGISTRAR O PEDIDO NO SISTEMA: quando o cliente CONFIRMAR o fechamento de um pedido montado aqui pela conversa ou pelo catálogo em PDF (NÃO o pedido pronto do site, que já é registrado sozinho) e você já tiver os itens, a forma de envio/endereço e a forma de pagamento, inclua no FINAL da mensagem um bloco de pedido para o sistema registrar no painel da loja, EXATAMENTE neste formato (abre, o JSON numa linha, fecha):",
+          "[[PEDIDO]]",
+          '{"itens":[{"nome":"NOME EXATO DO PRODUTO","cor":"","tamanho":"","qtd":1}],"envio":"retirada","pagamento":"pix","endereco":"","excursao":"","transportadora":""}',
+          "[[/PEDIDO]]",
+          "Regras do bloco: use o NOME EXATO de cada produto como aparece em PRODUTOS DA LOJA (não invente produtos fora do catálogo); preencha cor/tamanho só se o cliente escolheu (senão deixe \"\"); qtd é a quantidade (número). No campo envio use SÓ uma destas palavras: retirada, correios, excursao, transportadora. No campo pagamento use SÓ: pix, dinheiro, cartao, mercadopago. Preencha endereco quando for entrega (não na retirada); excursao/transportadora só quando o envio for esse. Emita o bloco UMA única vez, apenas no fechamento confirmado; NUNCA o mostre nem o explique ao cliente e não escreva você o número do pedido — o sistema confirma o registro.",
+        ].join("\n")
       : "",
+    "- Os marcadores [[...]] e o bloco [[PEDIDO]] são comandos internos: use-os só quando fizer sentido, nunca os explique ao cliente e nunca os escreva em outro contexto.",
     hasPickup
       ? "- RETIRADA: quando o cliente escolher retirar o pedido no local (o pedido chega marcado como 'Retirada'), OU perguntar como/onde retirar, explique proativamente, sem enrolar, onde e como retirar, usando as informações em RETIRADA DE PEDIDOS abaixo (endereço e instruções). Não invente horários nem regras que não estejam ali."
       : "",
@@ -282,7 +298,92 @@ export type ReplyDirectives = {
   sendCatalog: boolean;
   /** A IA pediu para enviar a chave Pix (fechamento do pedido). */
   sendPix: boolean;
+  /**
+   * Nome do cliente que a IA identificou (apresentação ou pedido vindo do site).
+   * Vazio = nada a salvar. O sistema persiste no contato para saudar pelo nome
+   * nas próximas conversas.
+   */
+  customerName: string;
+  /**
+   * Pedido que a IA fechou pela conversa/PDF (bloco [[PEDIDO]]…[[/PEDIDO]]), para
+   * o sistema registrar no painel. null = nenhum pedido a registrar.
+   */
+  orderDraft: AiOrderDraft | null;
 };
+
+/** Item de um pedido que a IA montou pela conversa (nome exato do catálogo). */
+export type AiOrderItem = {
+  nome: string;
+  cor?: string;
+  tamanho?: string;
+  qtd?: number;
+};
+
+/**
+ * Pedido fechado pela IA na conversa (bloco [[PEDIDO]]{json}[[/PEDIDO]]). Os
+ * nomes dos produtos/cores/tamanhos são resolvidos contra o catálogo pelo
+ * sistema; envio/pagamento usam os ids conhecidos.
+ */
+export type AiOrderDraft = {
+  itens: AiOrderItem[];
+  /** excursao | correios | transportadora | retirada */
+  envio?: string;
+  /** pix | dinheiro | cartao | mercadopago */
+  pagamento?: string;
+  endereco?: string;
+  excursao?: string;
+  transportadora?: string;
+};
+
+/**
+ * Interpreta o conteúdo do bloco [[PEDIDO]] como JSON (tolerante a cercas ```json
+ * e a texto solto em volta). Devolve null se não for um pedido válido (pelo menos
+ * um item com nome).
+ */
+export function parseAiOrderJson(raw: string): AiOrderDraft | null {
+  let s = raw.trim();
+  if (!s) return null;
+  // Remove cercas de código, se a IA envolver em ```json … ```.
+  s = s.replace(/^```[a-z]*\s*/i, "").replace(/```\s*$/i, "").trim();
+  // Se vier texto antes/depois, isola o primeiro objeto {...}.
+  const first = s.indexOf("{");
+  const last = s.lastIndexOf("}");
+  if (first === -1 || last === -1 || last < first) return null;
+  s = s.slice(first, last + 1);
+  let obj: unknown;
+  try {
+    obj = JSON.parse(s);
+  } catch {
+    return null;
+  }
+  if (!obj || typeof obj !== "object") return null;
+  const o = obj as Record<string, unknown>;
+  const rawItens = Array.isArray(o.itens) ? o.itens : [];
+  const itens: AiOrderItem[] = [];
+  for (const it of rawItens) {
+    if (!it || typeof it !== "object") continue;
+    const r = it as Record<string, unknown>;
+    const nome = String(r.nome ?? "").trim();
+    if (!nome) continue;
+    const qtdNum = Math.floor(Number(r.qtd));
+    itens.push({
+      nome: nome.slice(0, 200),
+      cor: r.cor != null ? String(r.cor).trim().slice(0, 80) : "",
+      tamanho: r.tamanho != null ? String(r.tamanho).trim().slice(0, 80) : "",
+      qtd: Number.isFinite(qtdNum) && qtdNum > 0 ? qtdNum : 1,
+    });
+  }
+  if (itens.length === 0) return null;
+  const str = (v: unknown) => (v != null ? String(v).trim() : "");
+  return {
+    itens,
+    envio: str(o.envio).toLowerCase(),
+    pagamento: str(o.pagamento).toLowerCase(),
+    endereco: str(o.endereco).slice(0, 500),
+    excursao: str(o.excursao).slice(0, 120),
+    transportadora: str(o.transportadora).slice(0, 120),
+  };
+}
 
 /**
  * Separa a resposta da IA dos marcadores internos ([[ENVIAR_LOCALIZACAO]],
@@ -296,16 +397,35 @@ export function parseReplyDirectives(reply: string): ReplyDirectives {
   const sendVideo = /\[\[\s*ENVIAR_VIDEO\s*\]\]/i.test(reply);
   const sendCatalog = /\[\[\s*ENVIAR_CATALOGO\s*\]\]/i.test(reply);
   const sendPix = /\[\[\s*ENVIAR_PIX\s*\]\]/i.test(reply);
+  // Nome do cliente: [[NOME_CLIENTE:João Silva]] — captura até o "]]".
+  const nameMatch = reply.match(/\[\[\s*NOME_CLIENTE\s*:\s*([^\]]+?)\s*\]\]/i);
+  const customerName = (nameMatch?.[1] ?? "").trim().slice(0, 80);
+  // Pedido fechado pela conversa: [[PEDIDO]]{json}[[/PEDIDO]].
+  const orderMatch = reply.match(
+    /\[\[\s*PEDIDO\s*\]\]([\s\S]*?)\[\[\s*\/\s*PEDIDO\s*\]\]/i
+  );
+  const orderDraft = orderMatch ? parseAiOrderJson(orderMatch[1]) : null;
   const text = reply
+    .replace(/\[\[\s*PEDIDO\s*\]\][\s\S]*?\[\[\s*\/\s*PEDIDO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_LOCALIZACAO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_FOTO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_VIDEO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_CATALOGO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_PIX\s*\]\]/gi, "")
+    .replace(/\[\[\s*NOME_CLIENTE\s*:[^\]]*\]\]/gi, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { text, sendLocation, sendPhoto, sendVideo, sendCatalog, sendPix };
+  return {
+    text,
+    sendLocation,
+    sendPhoto,
+    sendVideo,
+    sendCatalog,
+    sendPix,
+    customerName,
+    orderDraft,
+  };
 }
 
 /** Gera a resposta do atendente. Retorna o texto, ou null se não houver conteúdo. */

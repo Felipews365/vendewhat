@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
 import { normalizeStoreSlug } from "@/lib/storeSlug";
-import {
-  type OrderLineInput,
-  type ProductRowForOrder,
-  validateOrderAgainstProducts,
-} from "@/lib/orderLines";
+import { type OrderLineInput } from "@/lib/orderLines";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { isCustomerPhoneValid, toWhatsAppNumber } from "@/lib/customerPhone";
-import { markCartConverted } from "@/lib/whatsappConfig";
-import { isMissingColumnError } from "@/lib/dbColumnErrors";
-import { isShippingModeId, shippingModeLabel } from "@/lib/shippingModes";
-import { isPaymentMethodId } from "@/lib/paymentMethods";
+import { isCustomerPhoneValid } from "@/lib/customerPhone";
+import { isShippingModeId } from "@/lib/shippingModes";
+import { createStoreOrder } from "@/lib/orders.server";
 
 export const runtime = "nodejs";
 
@@ -102,174 +96,47 @@ export async function POST(req: Request) {
   }
 
   const storeId = store.id as string;
-  const mergedForIds = new Set(lines.map((l) => l.productId).filter(Boolean));
-  if (mergedForIds.size === 0) {
+  if (lines.filter((l) => l.productId).length === 0) {
     return NextResponse.json({ ok: false, error: "Carrinho vazio." }, { status: 400 });
   }
 
-  const orderProductSelectWithRef =
-    "id, store_id, name, price, colors, sizes, variant_stock, stock, product_reference, barcode, active";
-  const orderProductSelectNoRef =
-    "id, store_id, name, price, colors, sizes, variant_stock, stock, active";
-
-  const q1 = await admin
-    .from("products")
-    .select(orderProductSelectWithRef)
-    .eq("store_id", storeId)
-    .in("id", Array.from(mergedForIds));
-
-  let products = q1.data as ProductRowForOrder[] | null;
-  let prodErr = q1.error;
-
-  // Bases sem `product_reference` e/ou sem `barcode` (migrations não rodadas):
-  // cai no select mínimo (sem ambas). São opcionais e só enfeitam o comprovante.
-  if (
-    prodErr &&
-    (isMissingColumnError(prodErr.message, "product_reference", prodErr.code) ||
-      isMissingColumnError(prodErr.message, "barcode", prodErr.code))
-  ) {
-    const q2 = await admin
-      .from("products")
-      .select(orderProductSelectNoRef)
-      .eq("store_id", storeId)
-      .in("id", Array.from(mergedForIds));
-    products = q2.data as ProductRowForOrder[] | null;
-    prodErr = q2.error;
-  }
-
-  if (prodErr || !products?.length) {
-    return NextResponse.json(
-      { ok: false, error: "Não foi possível validar os produtos." },
-      { status: 400 }
-    );
-  }
-
-  const activeProducts = products.filter(
-    (p) => p.active === true || p.active == null
-  ) as ProductRowForOrder[];
-
-  const validated = validateOrderAgainstProducts(lines, activeProducts, storeId);
-  if (!validated.ok) {
-    return NextResponse.json({ ok: false, error: validated.error }, { status: 400 });
-  }
-
-  const notes =
-    typeof body.notes === "string" ? body.notes.trim().slice(0, 2000) : "";
-
+  // A forma de entrega é obrigatória no checkout (mensagem específica).
   const rawMode = String(body.shippingMode ?? "").trim();
-  const shippingMode = isShippingModeId(rawMode) ? rawMode : "";
-  if (!shippingMode) {
+  if (!isShippingModeId(rawMode)) {
     return NextResponse.json(
       {
         ok: false,
-        error:
-          "Escolha a forma de entrega: excursão, Correios ou retirada.",
+        error: "Escolha a forma de entrega: excursão, Correios ou retirada.",
       },
       { status: 400 }
     );
   }
-  const shippingModeLabelPt = shippingModeLabel(shippingMode) ?? shippingMode;
 
-  // Endereço só faz sentido para entrega (excursão / correios); na retirada fica vazio.
-  const customerAddress =
-    shippingMode === "retirada"
-      ? ""
-      : String(body.customerAddress ?? "").trim().slice(0, 500);
+  // Criação do pedido (fonte única, compartilhada com a IA do WhatsApp).
+  const result = await createStoreOrder(admin, {
+    storeId,
+    customerName,
+    customerPhone,
+    lines,
+    shippingMode: rawMode,
+    paymentMethod: String(body.paymentMethod ?? ""),
+    customerAddress: String(body.customerAddress ?? ""),
+    excursionName: String(body.excursionName ?? ""),
+    carrierName: String(body.carrierName ?? ""),
+    notes: typeof body.notes === "string" ? body.notes : "",
+  });
 
-  // Nome da excursão só faz sentido quando a forma de envio é "excursao".
-  const excursionName =
-    shippingMode === "excursao"
-      ? String(body.excursionName ?? "").trim().slice(0, 120)
-      : "";
-
-  // Nome da transportadora só faz sentido quando a forma de envio é "transportadora".
-  const carrierName =
-    shippingMode === "transportadora"
-      ? String(body.carrierName ?? "").trim().slice(0, 120)
-      : "";
-
-  // Forma de pagamento escolhida pelo cliente (opcional; validada contra a lista).
-  const rawPaymentMethod = String(body.paymentMethod ?? "").trim();
-  const paymentMethod = isPaymentMethodId(rawPaymentMethod)
-    ? rawPaymentMethod
-    : "";
-
-  const payloadLines = validated.pricedLines.map((l) => ({
-    productId: l.productId,
-    name: l.name,
-    quantity: l.quantity,
-    color: l.color,
-    size: l.size,
-    unitPrice: l.unitPrice,
-    lineTotal: l.unitPrice * l.quantity,
-    productReference: l.productReference,
-    barcode: l.barcode,
-  }));
-
-  const subtotal = payloadLines.reduce((s, l) => s + l.lineTotal, 0);
-
-  const { data: lastNumRow } = await admin
-    .from("orders")
-    .select("order_number")
-    .eq("store_id", storeId)
-    .order("order_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const lastN =
-    typeof lastNumRow?.order_number === "number" && !Number.isNaN(lastNumRow.order_number)
-      ? lastNumRow.order_number
-      : 0;
-  const orderNumber = lastN + 1;
-
-  const { data: inserted, error: insErr } = await admin
-    .from("orders")
-    .insert({
-      store_id: storeId,
-      order_number: orderNumber,
-      customer_name: customerName,
-      customer_phone: customerPhone || null,
-      subtotal,
-      notes: notes || null,
-      status: "novo",
-      payload: {
-        lines: payloadLines,
-        subtotal,
-        customerName,
-        customerPhone: customerPhone || undefined,
-        orderNumber,
-        shippingMode,
-        shippingModeLabel: shippingModeLabelPt,
-        excursionName: excursionName || undefined,
-        carrierName: carrierName || undefined,
-        paymentMethod: paymentMethod || undefined,
-        customerAddress: customerAddress || undefined,
-      },
-    })
-    .select("id, order_number")
-    .single();
-
-  if (insErr) {
-    console.error("[api/orders] insert", insErr);
+  if (!result.ok) {
     return NextResponse.json(
-      { ok: false, error: "Não foi possível salvar o pedido." },
-      { status: 500 }
+      { ok: false, error: result.error },
+      { status: result.status }
     );
-  }
-
-  // O pedido saiu: o carrinho não está mais abandonado — não cutuca esse cliente.
-  if (customerPhone) {
-    try {
-      await markCartConverted(admin, storeId, toWhatsAppNumber(customerPhone));
-    } catch (err) {
-      console.error("[api/orders] markCartConverted", err);
-    }
   }
 
   return NextResponse.json({
     ok: true,
     saved: true,
-    id: inserted?.id,
-    orderNumber: inserted?.order_number ?? orderNumber,
+    id: result.id,
+    orderNumber: result.orderNumber,
   });
 }

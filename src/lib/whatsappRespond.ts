@@ -8,6 +8,7 @@ import {
   appendMessage,
   findCustomerName,
   getRecentHistory,
+  setContactName,
   type ChatTurn,
   type WhatsAppConfig,
 } from "@/lib/whatsappConfig";
@@ -18,8 +19,12 @@ import {
   describeAttendance,
   enabledShippingModeIds,
 } from "@/lib/storefront";
-import { shippingModeLabel } from "@/lib/shippingModes";
+import { isShippingModeId, shippingModeLabel } from "@/lib/shippingModes";
+import { optionArrayFromDb } from "@/lib/productOptions";
+import { createStoreOrder } from "@/lib/orders.server";
+import type { OrderLineInput } from "@/lib/orderLines";
 import {
+  type AiOrderDraft,
   type AttendantProduct,
   buildSystemPrompt,
   generateReply,
@@ -126,6 +131,143 @@ function mapProducts(rows: AnyObj[]): AttendantProduct[] {
       compareAtPrice: compare,
     };
   });
+}
+
+/** Normaliza para comparação: minúsculas, sem acento, espaços colapsados. */
+function normalizeName(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type OrderProductRow = {
+  id: string;
+  name: string;
+  colors: unknown;
+  sizes: unknown;
+};
+
+/** Acha a melhor opção (cor/tamanho) do catálogo que casa com o que a IA passou. */
+function matchOption(given: string, options: string[]): string {
+  const g = normalizeName(given);
+  if (!g) return "";
+  const exact = options.find((o) => normalizeName(o) === g);
+  if (exact) return exact;
+  const partial = options.find(
+    (o) => normalizeName(o).includes(g) || g.includes(normalizeName(o))
+  );
+  return partial ?? given.trim();
+}
+
+/**
+ * Registra no painel o pedido que a IA fechou pela conversa/PDF. Resolve os nomes
+ * dos produtos contra o catálogo da loja (nome exato, depois parcial) e cria o
+ * pedido pela mesma via do checkout (`createStoreOrder`). Devolve o número do
+ * pedido gravado, ou null se não deu para registrar (nome de produto não
+ * encontrado, sem forma de envio, sem nome do cliente, duplicado etc.) — nesse
+ * caso a conversa segue normal, só não gera pedido. Nunca lança.
+ */
+async function registerConversationOrder(
+  admin: SupabaseClient,
+  args: {
+    storeId: string;
+    customerPhone: string;
+    customerName: string;
+    draft: AiOrderDraft;
+    enabledShipping: string[];
+  }
+): Promise<number | null> {
+  const { storeId, customerPhone, customerName, draft, enabledShipping } = args;
+  try {
+    const name = customerName.trim();
+    if (name.length < 2) return null; // sem nome não registra (a IA deve coletar)
+
+    // Forma de envio: usa a informada; se vazia e só houver uma habilitada, assume-a.
+    let shippingMode = isShippingModeId(draft.envio ?? "") ? String(draft.envio) : "";
+    if (!shippingMode && enabledShipping.length === 1) shippingMode = enabledShipping[0];
+    if (!isShippingModeId(shippingMode)) return null;
+
+    // Carrega o catálogo (id/nome/cores/tamanhos) para resolver os nomes.
+    const { data: rows } = await admin
+      .from("products")
+      .select("id, name, colors, sizes")
+      .eq("store_id", storeId)
+      .eq("active", true)
+      .limit(300);
+    const products = (rows ?? []) as OrderProductRow[];
+    if (products.length === 0) return null;
+
+    const byNorm = new Map<string, OrderProductRow>();
+    for (const p of products) {
+      const key = normalizeName(String(p.name ?? ""));
+      if (key && !byNorm.has(key)) byNorm.set(key, p);
+    }
+    const findProduct = (nome: string): OrderProductRow | null => {
+      const g = normalizeName(nome);
+      if (!g) return null;
+      const exact = byNorm.get(g);
+      if (exact) return exact;
+      // Parcial: o nome do produto contém o texto (ou vice-versa).
+      const partial = products.find((p) => {
+        const pn = normalizeName(String(p.name ?? ""));
+        return pn.includes(g) || g.includes(pn);
+      });
+      return partial ?? null;
+    };
+
+    const lines: OrderLineInput[] = [];
+    for (const it of draft.itens) {
+      const p = findProduct(it.nome);
+      if (!p) return null; // item não reconhecido → não registra pedido incompleto
+      const colors = optionArrayFromDb(p.colors);
+      const sizes = optionArrayFromDb(p.sizes);
+      lines.push({
+        productId: p.id,
+        color: it.cor ? matchOption(it.cor, colors) : "",
+        size: it.tamanho ? matchOption(it.tamanho, sizes) : "",
+        quantity: Math.max(1, Math.floor(Number(it.qtd) || 1)),
+      });
+    }
+    if (lines.length === 0) return null;
+
+    // Dedup: se já houve um pedido deste cliente há pouco (a IA pode reemitir o
+    // bloco), não cria de novo.
+    const { data: recent } = await admin
+      .from("orders")
+      .select("created_at")
+      .eq("store_id", storeId)
+      .eq("customer_phone", customerPhone)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (recent?.created_at) {
+      const ageMs = Date.now() - new Date(String(recent.created_at)).getTime();
+      if (ageMs >= 0 && ageMs < 3 * 60 * 1000) return null; // < 3 min = provável duplicado
+    }
+
+    const result = await createStoreOrder(admin, {
+      storeId,
+      customerName: name,
+      customerPhone,
+      lines,
+      shippingMode,
+      paymentMethod: draft.pagamento ?? "",
+      customerAddress: draft.endereco ?? "",
+      excursionName: draft.excursao ?? "",
+      carrierName: draft.transportadora ?? "",
+    });
+    if (!result.ok) {
+      console.warn("[whatsappRespond] registerConversationOrder", result.error);
+      return null;
+    }
+    return result.orderNumber;
+  } catch (e) {
+    console.error("[whatsappRespond] registerConversationOrder", e);
+    return null;
+  }
 }
 
 /**
@@ -272,7 +414,43 @@ export async function respondToCustomer(
     sendVideo,
     sendCatalog,
     sendPix,
+    customerName: identifiedName,
+    orderDraft,
   } = parseReplyDirectives(reply.text);
+
+  // Nome do cliente conhecido nesta conversa (salvo antes OU identificado agora
+  // pela IA). Usado para salvar o contato e para registrar o pedido.
+  const knownName = (customerName || identifiedName).trim();
+
+  // Salva o nome do cliente quando a IA o identificou (apresentação ou pedido
+  // vindo do site) e ainda não havia um nome salvo — para saudar pelo nome nas
+  // próximas conversas. Não sobrescreve um nome já existente (ex.: renomeado pelo
+  // lojista ou de um pedido anterior). Nunca lança: só loga em caso de erro.
+  if (identifiedName && !customerName) {
+    try {
+      await setContactName(admin, cfg.storeId, customerPhone, identifiedName);
+    } catch (e) {
+      console.error("[whatsappRespond] setContactName", e);
+    }
+  }
+
+  // Registra no painel o pedido que a IA fechou pela conversa/PDF (bloco
+  // [[PEDIDO]]). Resolve os nomes contra o catálogo e cria o pedido pela mesma via
+  // do checkout. Em caso de sucesso, confirma ao cliente com o número do pedido.
+  let orderConfirmationMsg = "";
+  if (orderDraft) {
+    const orderNumber = await registerConversationOrder(admin, {
+      storeId: cfg.storeId,
+      customerPhone,
+      customerName: knownName,
+      draft: orderDraft,
+      enabledShipping: enabledShippingModeIds(sf),
+    });
+    if (orderNumber != null) {
+      orderConfirmationMsg = `Prontinho! Seu pedido foi registrado ✅\nNúmero do pedido: #${orderNumber}`;
+    }
+  }
+
   // Rede de segurança do link: o gpt-4o-mini às vezes ANUNCIA o link ("segue o
   // link", "confira o catálogo") mas esquece de colar a URL (o cliente recebe só a
   // promessa). Se o texto fala de link/catálogo e não tem nenhuma URL, anexa a URL
@@ -282,6 +460,12 @@ export async function respondToCustomer(
   const hasUrl = /https?:\/\//i.test(finalText);
   if (finalText && baseUrl && (mentionsLink || sendCatalog || customerWantsCatalog) && !hasUrl) {
     finalText = `${finalText}\n\n${storeUrl}`;
+  }
+  // Confirmação do pedido registrado (balão próprio, ao final).
+  if (orderConfirmationMsg) {
+    finalText = finalText
+      ? `${finalText}\n\n${orderConfirmationMsg}`
+      : orderConfirmationMsg;
   }
 
   // O catálogo em PDF acompanha o LINK da loja como opção a mais: sempre que esta

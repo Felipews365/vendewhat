@@ -440,6 +440,16 @@ export default function WhatsAppIaPage() {
     return () => stopPolling();
   }, [router, refreshStatus, stopPolling, loadPauses]);
 
+  // Conversas "ao vivo": enquanto a aba Conversas está aberta, recarrega a lista
+  // (novas mensagens, nomes salvos, pausas) a cada 6s, para o lojista ver o
+  // atendimento acontecendo em tempo quase real e poder assumir a conversa.
+  useEffect(() => {
+    if (tab !== "conversas") return;
+    loadPauses();
+    const id = setInterval(loadPauses, 6_000);
+    return () => clearInterval(id);
+  }, [tab, loadPauses]);
+
   async function handleConnect() {
     setError("");
     setConnecting(true);

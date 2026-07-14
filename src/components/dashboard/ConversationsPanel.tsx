@@ -236,8 +236,13 @@ export default function ConversationsPanel({
         );
         const data = await res.json();
         if (data?.ok && Array.isArray(data.messages)) {
-          setMessages(data.messages as ConversationMessage[]);
-          scrollToBottom();
+          const next = data.messages as ConversationMessage[];
+          // Só rola para o fim quando chegam mensagens novas (ou no 1º load) —
+          // assim o polling frequente não atrapalha quem está lendo o histórico.
+          setMessages((prev) => {
+            if (!silent || next.length > prev.length) scrollToBottom();
+            return next;
+          });
         }
       } catch {
         /* silencioso */
@@ -265,7 +270,9 @@ export default function ConversationsPanel({
       return;
     }
     loadThread(selected);
-    pollRef.current = setInterval(() => loadThread(selected, true), 12_000);
+    // Atualiza a conversa aberta a cada 4s (quase ao vivo) para o lojista
+    // acompanhar/assumir o atendimento em tempo real.
+    pollRef.current = setInterval(() => loadThread(selected, true), 4_000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
