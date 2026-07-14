@@ -650,9 +650,13 @@ preenchida ou com o toggle desligado, `hasPix` é `false` → a IA nunca oferece
 aparece em **dois lugares** (mesmo campo `storefront.aiSendPixOnCheckout`): no painel de pagamentos do
 [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (abaixo da chave Pix) **e** na
 aba **Atendente de IA** ([whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx), estado
-`sendPixOnCheckout`, com aviso quando não há chave Pix). Como a aba de IA salva `store_whatsapp`, a
-rota [/api/whatsapp/config](src/app/api/whatsapp/config/route.ts) recebe `aiSendPixOnCheckout` e faz um
-**patch preservando o resto do JSONB** `stores.storefront` (só grava quando o campo vem no corpo).
+`sendPixOnCheckout`). Ao ligar o toggle na aba de IA, **os campos de chave Pix + titular aparecem ali
+mesmo** (estados `pixKey`/`pixName`; `hasPixKey` é derivado de `pixKey.trim()`, então o aviso e o hint
+de "Aceita Pix?" reagem na hora), para o lojista cadastrar sem sair para Configurações. Como a aba de
+IA salva `store_whatsapp`, a rota [/api/whatsapp/config](src/app/api/whatsapp/config/route.ts) recebe
+`aiSendPixOnCheckout` — **e também `pixKey`/`pixName`** — e faz um **patch preservando o resto do JSONB**
+`stores.storefront` (só grava quando o campo vem no corpo; `pixKey`/`pixName` são `trim`+cap 200 chars).
+É o **mesmo campo** `storefront.pixKey`, então vale igual no checkout e no editor visual (fonte única).
 
 > **Nota de UI:** o painel `footer` do editor (antigo "Rodapé da vitrine") foi retitulado para
 > **"Pix, pagamentos e rodapé"** e ganhou um atalho **destacado (verde) "💳 Pix e pagamentos"** no
@@ -761,7 +765,7 @@ segmentado, verde = Sim); `tipoVenda` e `tipoMinimo` usam radio de múltiplas op
   palavras do lojista ao explicar o mínimo. A **retirada** só é oferecida pela IA se
   `shipRetiradaEnabled` (senão `pickupAddress`/`pickupInstructions` são zerados no prompt).
 - **Nav:** o item do menu do painel que apontava para essa página foi renomeado de **"WhatsApp"** para
-  **"Atendimento"** (o ícone do WhatsApp continua) em
+  **"Atendimento & IA"** (o ícone do WhatsApp continua) em
   [DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx) (`DASH_NAV`).
 
 ### Impressão de pedidos
