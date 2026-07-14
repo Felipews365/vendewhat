@@ -36,6 +36,11 @@ const nextConfig = {
 
 if (host) {
   nextConfig.images = {
+    // Entrega moderna: o next/image negocia AVIF (mais leve) e cai para WebP;
+    // gera automaticamente as larguras responsivas (celular → desktop) a partir
+    // da única origem, então banners e fotos ficam leves e nítidos em cada tela.
+    formats: ["image/avif", "image/webp"],
+    deviceSizes: [360, 640, 828, 1080, 1280, 1600, 1920],
     remotePatterns: [
       {
         protocol: "https",

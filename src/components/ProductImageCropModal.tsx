@@ -5,6 +5,9 @@ import Cropper, { type Area } from "react-easy-crop";
 
 const MAX_OUTPUT = 1600;
 
+/** Tipo/formato de saída da imagem recortada. */
+type OutputType = "image/jpeg" | "image/webp";
+
 function createImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -15,15 +18,50 @@ function createImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
+/** Gera o blob no formato pedido; se WebP não for suportado, cai para JPEG. */
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  type: OutputType,
+  quality: number
+): Promise<{ blob: Blob; type: OutputType }> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (b) => {
+        if (b) {
+          resolve({ blob: b, type });
+          return;
+        }
+        // Browser sem suporte a WebP no toBlob → tenta JPEG.
+        if (type !== "image/jpeg") {
+          canvas.toBlob(
+            (jb) =>
+              jb
+                ? resolve({ blob: jb, type: "image/jpeg" })
+                : reject(new Error("Falha ao gerar imagem")),
+            "image/jpeg",
+            0.92
+          );
+          return;
+        }
+        reject(new Error("Falha ao gerar imagem"));
+      },
+      type,
+      quality
+    );
+  });
+}
+
 async function getCroppedImageFile(
   imageSrc: string,
   pixelCrop: Area,
-  outName: string
+  outName: string,
+  outputType: OutputType,
+  outputMaxWidth: number
 ): Promise<File> {
   const image = await createImage(imageSrc);
   const scale = Math.min(
     1,
-    MAX_OUTPUT / Math.max(pixelCrop.width, pixelCrop.height)
+    outputMaxWidth / Math.max(pixelCrop.width, pixelCrop.height)
   );
   const w = Math.max(1, Math.round(pixelCrop.width * scale));
   const h = Math.max(1, Math.round(pixelCrop.height * scale));
@@ -46,16 +84,13 @@ async function getCroppedImageFile(
     h
   );
 
-  const blob: Blob = await new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("Falha ao gerar imagem"))),
-      "image/jpeg",
-      0.92
-    );
-  });
+  // WebP comprime melhor com qualidade um pouco menor sem perda visual perceptível.
+  const quality = outputType === "image/webp" ? 0.85 : 0.92;
+  const { blob, type } = await canvasToBlob(canvas, outputType, quality);
+  const ext = type === "image/webp" ? ".webp" : ".jpg";
 
-  return new File([blob], outName.replace(/\.[^.]+$/i, "") + ".jpg", {
-    type: "image/jpeg",
+  return new File([blob], outName.replace(/\.[^.]+$/i, "") + ext, {
+    type,
     lastModified: Date.now(),
   });
 }
@@ -82,6 +117,14 @@ type Props = {
   showRatioToggle?: boolean;
   /** Chamado quando o lojista escolhe 1:1 ou 3:4 no seletor (sincroniza o card). */
   onRatioChange?: (ratio: "1:1" | "3:4") => void;
+  /**
+   * Formato da imagem gerada. Padrão `"image/jpeg"` (comportamento antigo);
+   * o editor de banner passa `"image/webp"` para imagens mais leves. Se o
+   * browser não suportar WebP no canvas, cai automaticamente para JPEG.
+   */
+  outputType?: OutputType;
+  /** Largura/altura máxima da imagem gerada (px). Padrão 1600. */
+  outputMaxWidth?: number;
 };
 
 const RATIO_VALUE = { "1:1": 1, "3:4": 3 / 4 } as const;
@@ -102,6 +145,8 @@ export function ProductImageCropModal({
   confirmLabel = "Usar este enquadramento",
   showRatioToggle = false,
   onRatioChange,
+  outputType = "image/jpeg",
+  outputMaxWidth = MAX_OUTPUT,
 }: Props) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -149,7 +194,13 @@ export function ProductImageCropModal({
     try {
       const base =
         sourceFileName.replace(/\.[^.]+$/i, "").trim() || "foto-produto";
-      const file = await getCroppedImageFile(imageSrc, pixels, `${base}.jpg`);
+      const file = await getCroppedImageFile(
+        imageSrc,
+        pixels,
+        base,
+        outputType,
+        outputMaxWidth
+      );
       onComplete(file);
     } catch {
       onCancel();

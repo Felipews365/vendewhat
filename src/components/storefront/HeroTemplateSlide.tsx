@@ -76,6 +76,28 @@ export function HeroTemplateSlide({
   // Todas as fotos do slide (a principal + extras dos estilos strips/duo).
   const allPhotos = [img, ...(slide.images ?? [])].filter(Boolean) as string[];
 
+  /**
+   * Preenche a área de foto de um estilo. Com 1 foto = comportamento antigo
+   * (uma imagem preenchendo o container). Com 2-3 fotos = divide o espaço em
+   * colunas (mosaico), então o mesmo modelo se adapta a 1, 2 ou 3 fotos.
+   */
+  const MultiPhoto = ({ className, sizes }: { className: string; sizes: string }) => {
+    if (allPhotos.length <= 1) {
+      return allPhotos.length === 1 ? (
+        <Image src={allPhotos[0]!} alt={content.title} fill className={className} sizes={sizes} priority />
+      ) : null;
+    }
+    return (
+      <div className="absolute inset-0 flex gap-[2px]">
+        {allPhotos.slice(0, 3).map((src, k) => (
+          <div key={k} className="relative h-full flex-1 overflow-hidden">
+            <Image src={src} alt="" fill className={className} sizes={sizes} />
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const gradient = bgVia
     ? `linear-gradient(135deg, ${bgFrom}, ${bgVia}, ${bgTo})`
     : `linear-gradient(135deg, ${bgFrom}, ${bgTo})`;
@@ -259,7 +281,7 @@ export function HeroTemplateSlide({
                 background: `linear-gradient(to ${photoLeft ? "right" : "left"}, ${photoLeft ? bgFrom : bgTo}, transparent)`,
               }}
             />
-            <Image src={img} alt={content.title} fill className="vw-photo-in object-cover object-top" sizes="42vw" priority />
+            <MultiPhoto className="vw-photo-in object-cover object-top" sizes="42vw" />
           </div>
         )}
         <div
@@ -288,7 +310,7 @@ export function HeroTemplateSlide({
             className={`absolute inset-y-0 ${photoLeft ? "left-0" : "right-0"} w-[54%]`}
             style={{ clipPath: photoClip }}
           >
-            <Image src={img} alt={content.title} fill className="vw-photo-in object-cover object-center" sizes="54vw" priority />
+            <MultiPhoto className="vw-photo-in object-cover object-center" sizes="54vw" />
           </div>
         )}
         <div
@@ -596,10 +618,8 @@ export function HeroTemplateSlide({
 
   // ── DUO (2 fotos lado a lado + painel claro com destaque cursivo) ──────
   if (template === "duo") {
-    const photos = [img, ...(slide.images ?? [])].filter(Boolean);
-    const pair = photos.length
-      ? Array.from({ length: 2 }, (_, k) => photos[k % photos.length]!)
-      : [];
+    // 1 foto = preenche a área; 2 fotos = divide em duas colunas (adaptativo).
+    const pair = allPhotos.slice(0, 2);
     return wrap((
       <div className="absolute inset-0 overflow-hidden bg-white">
         {pair.length > 0 && (

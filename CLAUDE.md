@@ -141,6 +141,35 @@ Orientações para o Claude Code trabalhar neste repositório.
     (`saveRest`) que persiste o resto. O clique no banner dentro do
     [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (canvas + FAB) navega para
     essa página (`openBannerEditor`); o antigo painel `banner` do modal ficou **legado/inacessível**.
+  - **Modelos prontos (`HERO_PRESETS` em [src/lib/heroPresets.ts](src/lib/heroPresets.ts)):** ~15
+    "receitas" prontas (ex.: Lançamento, Black Friday, Coleção Verão, Elegante, Fashion, Vitrine
+    dupla, Mosaico, Neon, Premium…) exibidas como **galeria de cards no topo do formulário**, cada um
+    com **miniatura REAL** (`PresetPreview` reusa o `SlideInner`/`HeroTemplateSlide`, sem fotos) e um
+    selo "N 📷" (fotos que aproveita). Cada preset é só um `HeroTemplate` existente + paleta curada +
+    altura/lado + textos de exemplo — **não cria layout novo** (baixo risco; a miniatura bate 1:1 com
+    a loja). Um clique chama `applyPreset`, que aplica estilo/cores e **só preenche os textos VAZIOS**
+    com o exemplo (⇒ **trocar de modelo sem perder** o que já foi digitado/enviado) e ajusta o nº de
+    fotos com `clampSlidePhotos`. O antigo seletor de **estilo cru** (`StyleThumb`, 10 estilos) virou
+    um `<details>` **"Ajuste fino (avançado)"** (mantido para quem quer montar do zero).
+  - **Fotos adaptáveis 1/2/3 (`heroTemplateMaxPhotos` em [heroPresets.ts](src/lib/heroPresets.ts)):**
+    cada estilo aceita um nº de fotos — **strips → 3, gradient/diagonal/duo → 2, os demais → 1**
+    (overlay/split são renderizados fora do `HeroTemplateSlide`, por isso ficam com 1). O editor mostra
+    os slots "Foto 2/3" conforme esse máximo (não mais fixo em strips/duo). No render
+    ([HeroTemplateSlide.tsx](src/components/storefront/HeroTemplateSlide.tsx)) o helper **`MultiPhoto`**
+    divide a área da foto em colunas quando há 2-3 fotos e mantém o **caminho de 1 foto IDÊNTICO** ao
+    anterior (guardado por `allPhotos.length <= 1` → zero regressão em banners existentes); `duo`/`strips`
+    usam a quantidade real de fotos. O schema **não muda** (o `heroSlideStyleFromRaw` já guardava até 2
+    fotos extra = 3 no total).
+  - **Imagens leves (WebP na origem + AVIF/responsivo na entrega):** o recorte do banner
+    ([ProductImageCropModal.tsx](src/components/ProductImageCropModal.tsx)) agora aceita props
+    `outputType`/`outputMaxWidth` (default segue **JPEG/1600**, então fotos de produto **não mudam**);
+    a página do banner passa **`image/webp` + 1920px**, gerando um arquivo leve e moderno já no upload
+    (com **fallback automático para JPEG** se o browser não suportar WebP no `canvas.toBlob`). Na
+    entrega, `next/image` ([next.config.mjs](next.config.mjs): `formats: ["image/avif","image/webp"]` +
+    `deviceSizes`) negocia **AVIF→WebP** e gera as larguras **responsivas** (celular→desktop) a partir da
+    única origem — sem armazenar arquivos extras (uma versão mobile em storage foi **propositalmente
+    evitada** porque o `next/image` já faz isso na entrega). A prévia do painel usa o próprio blob
+    otimizado, então mostra a imagem já leve.
   - **Migração:** `storefrontFromDb` (`heroSlidesFromDb`) migra formatos antigos — `heroImages:
     string[]`, `heroCarousels` (faixas), `heroImage` (única) → viram slides herdando o antigo formato
     global `heroLayout`/`heroSplitPhotoSide`. Sem migration de banco: tudo no JSONB.

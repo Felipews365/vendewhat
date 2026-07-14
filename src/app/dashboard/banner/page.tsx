@@ -22,7 +22,6 @@ import {
   DEFAULT_STOREFRONT,
   bannerPhotoLimitForPlan,
   HERO_TARGET_RATIO,
-  heroTemplatePhotoCount,
   MAX_PROMO_CARDS,
   PROMO_CARD_COLORS,
   PROMO_CARD_PRESETS,
@@ -34,6 +33,12 @@ import {
   storefrontFromDb,
   storefrontToDb,
 } from "@/lib/storefront";
+import {
+  HERO_PRESETS,
+  clampSlidePhotos,
+  heroTemplateMaxPhotos,
+  type HeroPreset,
+} from "@/lib/heroPresets";
 import {
   HeroTemplateSlide,
   type HeroSlideContent,
@@ -391,6 +396,65 @@ function BannerPreview({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Modelos prontos (cards com miniatura real)                       */
+/* ------------------------------------------------------------------ */
+
+/** Constrói um `HeroSlide` "de exemplo" a partir do preset (sem fotos). */
+function presetToSlide(p: HeroPreset): HeroSlide {
+  return {
+    url: "",
+    layout: p.template === "split" ? "split" : "overlay",
+    photoSide: p.photoSide ?? "right",
+    template: p.template,
+    bgFrom: p.bgFrom,
+    bgVia: p.bgVia,
+    bgTo: p.bgTo,
+    ctaBgColor: p.ctaBgColor,
+    height: p.height,
+    badge: p.sample.badge,
+    title: p.sample.title,
+    highlight: p.sample.highlight,
+    subtitle: p.sample.subtitle,
+    ctaLabel: p.sample.ctaLabel,
+  };
+}
+
+function presetContent(p: HeroPreset): HeroSlideContent {
+  return {
+    badge: p.sample.badge ?? "",
+    title: p.sample.title || "Título do banner",
+    highlight: p.sample.highlight ?? "",
+    subtitle: p.sample.subtitle ?? "",
+    ctaLabel: p.sample.ctaLabel || "Ver coleção",
+    ctaHref: "#catalogo",
+  };
+}
+
+/** Miniatura REAL do modelo (mesmo render da loja, sem fotos). */
+function PresetPreview({
+  preset,
+  primary,
+  secondary,
+}: {
+  preset: HeroPreset;
+  primary: string;
+  secondary: string;
+}) {
+  const vars = {
+    ["--store-primary"]: primary,
+    ["--store-secondary"]: secondary,
+  } as React.CSSProperties;
+  return (
+    <div
+      className="relative aspect-[16/7] w-full overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800"
+      style={vars}
+    >
+      <SlideInner slide={presetToSlide(preset)} content={presetContent(preset)} primary={primary} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Página                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -411,6 +475,8 @@ export default function BannerEditPage() {
   const [draft, setDraft] = useState<HeroSlide | null>(null);
   const [draftIndex, setDraftIndex] = useState<number | null>(null); // null = novo
   const [draftOrder, setDraftOrder] = useState(1); // 1-based
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const [showAdvancedStyle, setShowAdvancedStyle] = useState(false);
   const formRef = useRef<HTMLDivElement | null>(null);
 
   const mainInputRef = useRef<HTMLInputElement>(null);
@@ -504,6 +570,8 @@ export default function BannerEditPage() {
     setDraft(newSlide());
     setDraftIndex(null);
     setDraftOrder(slides.length + 1);
+    setActivePresetId(null);
+    setShowAdvancedStyle(false);
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
@@ -511,6 +579,8 @@ export default function BannerEditPage() {
     setDraft({ ...slides[i] });
     setDraftIndex(i);
     setDraftOrder(i + 1);
+    setActivePresetId(null);
+    setShowAdvancedStyle(false);
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
@@ -522,8 +592,43 @@ export default function BannerEditPage() {
   const patchDraft = (patch: Partial<HeroSlide>) =>
     setDraft((d) => (d ? { ...d, ...patch } : d));
 
+  /**
+   * Aplica um MODELO pronto: estilo + paleta + altura/lado, preenchendo só os
+   * textos VAZIOS com o exemplo (para trocar de modelo sem perder o que já foi
+   * digitado/enviado). Ajusta o nº de fotos ao que o modelo aproveita.
+   */
+  function applyPreset(preset: HeroPreset) {
+    setActivePresetId(preset.id);
+    setDraft((d) => {
+      const base = d ?? newSlide();
+      const keep = (cur: string | undefined, sample: string | undefined) =>
+        cur?.trim() ? cur : sample;
+      const next: HeroSlide = {
+        ...base,
+        template: preset.template,
+        layout:
+          preset.template === "overlay" || preset.template === "split"
+            ? preset.template
+            : base.layout,
+        photoSide: preset.photoSide ?? base.photoSide,
+        bgFrom: preset.bgFrom ?? base.bgFrom,
+        bgVia: preset.bgVia ?? base.bgVia,
+        bgTo: preset.bgTo ?? base.bgTo,
+        ctaBgColor: preset.ctaBgColor ?? base.ctaBgColor,
+        height: preset.height ?? base.height,
+        badge: keep(base.badge, preset.sample.badge),
+        title: keep(base.title, preset.sample.title),
+        highlight: keep(base.highlight, preset.sample.highlight),
+        subtitle: keep(base.subtitle, preset.sample.subtitle),
+        ctaLabel: keep(base.ctaLabel, preset.sample.ctaLabel),
+      };
+      return clampSlidePhotos(next);
+    });
+  }
+
   /** Escolhe o estilo do banner, aplicando padrões de cor/altura/lado. */
   function chooseStyle(tpl: HeroTemplate) {
+    setActivePresetId(null);
     setDraft((d) => {
       if (!d) return d;
       const patch: Partial<HeroSlide> = { template: tpl };
@@ -539,7 +644,8 @@ export default function BannerEditPage() {
             ? "right"
             : "left";
       }
-      return { ...d, ...patch };
+      // Ajusta fotos ao novo estilo (dropa extras que ele não aproveita).
+      return clampSlidePhotos({ ...d, ...patch });
     });
   }
 
@@ -687,6 +793,7 @@ export default function BannerEditPage() {
   }
 
   const graphic = isGraphicTemplate(draft?.template);
+  const maxPhotos = heroTemplateMaxPhotos(draft?.template);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -768,42 +875,96 @@ export default function BannerEditPage() {
           <div className="grid gap-6 lg:grid-cols-[1fr,300px]">
             {/* ---- Coluna do formulário ---- */}
             <div className="space-y-5">
-              {/* Estilo do banner */}
+              {/* Modelos prontos (cards com miniatura real) */}
               <div>
-                <Label>Estilo do banner</Label>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {STYLE_OPTIONS.map((opt) => {
-                    const active = (draft.template ?? "overlay") === opt.v;
+                <Label>
+                  Escolha um modelo{" "}
+                  <span className="font-normal text-slate-400">
+                    (1 clique aplica — depois é só trocar as fotos e os textos)
+                  </span>
+                </Label>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  {HERO_PRESETS.map((preset) => {
+                    const active = activePresetId === preset.id;
                     return (
                       <button
-                        key={opt.v}
+                        key={preset.id}
                         type="button"
-                        onClick={() => chooseStyle(opt.v)}
-                        className={`rounded-xl border-2 p-2 text-left transition ${
+                        onClick={() => applyPreset(preset)}
+                        title={`${preset.label} — usa até ${preset.photoCount} foto${preset.photoCount > 1 ? "s" : ""}`}
+                        className={`group overflow-hidden rounded-xl border-2 text-left transition ${
                           active
-                            ? "border-landing-primary bg-teal-50 dark:bg-teal-900/20"
+                            ? "border-landing-primary ring-2 ring-landing-primary/30"
                             : "border-slate-200 hover:border-slate-300 dark:border-slate-700"
                         }`}
                       >
-                        <StyleThumb tpl={opt.v} />
-                        <span className="mt-1.5 block text-xs font-bold text-slate-800 dark:text-slate-100">
-                          {opt.label}
-                        </span>
-                        <span className="block text-[10px] leading-tight text-slate-500 dark:text-slate-400">
-                          {opt.hint}
-                        </span>
+                        <PresetPreview
+                          preset={preset}
+                          primary={sf.themePrimary}
+                          secondary={sf.themeSecondary}
+                        />
+                        <div className="flex items-center justify-between gap-1 px-2 py-1.5">
+                          <span className="truncate text-xs font-bold text-slate-800 dark:text-slate-100">
+                            {preset.emoji} {preset.label}
+                          </span>
+                          <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                            {preset.photoCount} 📷
+                          </span>
+                        </div>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
+              {/* Estilo do banner (ajuste fino — avançado) */}
+              <details
+                open={showAdvancedStyle}
+                onToggle={(e) => setShowAdvancedStyle((e.target as HTMLDetailsElement).open)}
+                className="rounded-xl border border-slate-200 dark:border-slate-700"
+              >
+                <summary className="cursor-pointer select-none px-3 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  ⚙️ Ajuste fino do estilo (avançado)
+                </summary>
+                <div className="px-3 pb-3">
+                  <p className="mb-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    Prefere montar do zero? Escolha o estilo base — as cores e os textos você ajusta
+                    abaixo.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {STYLE_OPTIONS.map((opt) => {
+                      const active = (draft.template ?? "overlay") === opt.v;
+                      return (
+                        <button
+                          key={opt.v}
+                          type="button"
+                          onClick={() => chooseStyle(opt.v)}
+                          className={`rounded-xl border-2 p-2 text-left transition ${
+                            active
+                              ? "border-landing-primary bg-teal-50 dark:bg-teal-900/20"
+                              : "border-slate-200 hover:border-slate-300 dark:border-slate-700"
+                          }`}
+                        >
+                          <StyleThumb tpl={opt.v} />
+                          <span className="mt-1.5 block text-xs font-bold text-slate-800 dark:text-slate-100">
+                            {opt.label}
+                          </span>
+                          <span className="block text-[10px] leading-tight text-slate-500 dark:text-slate-400">
+                            {opt.hint}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </details>
+
               {/* Imagem */}
               <div>
                 <Label>
                   Imagem do banner{" "}
                   <span className="font-normal text-slate-400">
-                    {draft.template === "strips" || draft.template === "duo"
+                    {maxPhotos > 1
                       ? "(foto principal)"
                       : draft.template === "gradient"
                         ? "(opcional)"
@@ -847,19 +1008,25 @@ export default function BannerEditPage() {
                   </div>
                 </div>
 
-                {/* Fotos extras (strips = 3, duo = 2) */}
-                {(draft.template === "strips" || draft.template === "duo") && (
-                  <div className="mt-3 flex flex-wrap gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-800/40">
-                    {Array.from({ length: heroTemplatePhotoCount(draft.template) - 1 }).map((_, k) => (
-                      <ExtraPhotoSlot
-                        key={k}
-                        label={`Foto ${k + 2}`}
-                        url={draft.images?.[k] ?? ""}
-                        disabled={heroUploading}
-                        onPick={() => pickExtraPhoto(k)}
-                        onRemove={() => removeExtraPhoto(k)}
-                      />
-                    ))}
+                {/* Fotos extras — quantas o modelo aproveita (1 a 3) */}
+                {maxPhotos > 1 && (
+                  <div className="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Este modelo fica ótimo com 1, 2{maxPhotos >= 3 ? " ou 3" : ""} fotos — o layout
+                      se adapta automaticamente. Adicione mais se quiser (opcional).
+                    </p>
+                    <div className="flex flex-wrap gap-4">
+                      {Array.from({ length: maxPhotos - 1 }).map((_, k) => (
+                        <ExtraPhotoSlot
+                          key={k}
+                          label={`Foto ${k + 2}`}
+                          url={draft.images?.[k] ?? ""}
+                          disabled={heroUploading}
+                          onPick={() => pickExtraPhoto(k)}
+                          onRemove={() => removeExtraPhoto(k)}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1404,6 +1571,8 @@ export default function BannerEditPage() {
           title="Ajustar foto do banner"
           description="Enquadre a foto no formato do banner."
           confirmLabel="Usar este enquadramento"
+          outputType="image/webp"
+          outputMaxWidth={1920}
           onCancel={() => setHeroCrop(null)}
           onComplete={handleCropDone}
         />
