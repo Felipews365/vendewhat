@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   appendMessage,
+  findCustomerName,
   getRecentHistory,
   type ChatTurn,
   type WhatsAppConfig,
@@ -198,6 +199,8 @@ export async function respondToCustomer(
   if (!combinedUserText) return false; // nada do cliente para responder
   // Primeiro contato = a IA ainda não falou nada nesta conversa.
   const isFirstContact = !full.some((t) => t.role === "assistant");
+  // Nome salvo (cliente que já comprou antes) — a IA saúda pelo primeiro nome.
+  const customerName = await findCustomerName(admin, cfg.storeId, customerPhone);
   // Cliente pediu o catálogo de forma explícita? Serve de gatilho determinístico
   // para o PDF (a IA nem sempre emite o marcador [[ENVIAR_CATALOGO]]).
   const customerWantsCatalog =
@@ -233,6 +236,8 @@ export async function respondToCustomer(
     hasCatalogPdf,
     hasPix: pixEnabled,
     minOrder,
+    saleMode: sf.saleMode,
+    customerName,
   });
 
   const reply = await generateReply(systemPrompt, contextHistory, combinedUserText);
@@ -256,6 +261,17 @@ export async function respondToCustomer(
   if (finalText && baseUrl && (mentionsLink || sendCatalog || customerWantsCatalog) && !hasUrl) {
     finalText = `${finalText}\n\n${storeUrl}`;
   }
+
+  // O catálogo em PDF acompanha o LINK da loja como opção a mais: sempre que esta
+  // resposta manda o link, anexa o PDF também. Trava para não reenviar o PDF a cada
+  // link — se o cliente já recebeu o link antes nesta conversa, não reanexa (a não
+  // ser que ele peça o catálogo explicitamente, tratado por customerWantsCatalog).
+  const linkSentNow = Boolean(baseUrl) && finalText.includes(storeUrl);
+  const linkSentBefore = full.some(
+    (t) => t.role === "assistant" && t.content.includes(storeUrl)
+  );
+  const attachCatalog =
+    sendCatalog || customerWantsCatalog || (linkSentNow && !linkSentBefore);
 
   let sent = false;
   if (finalText) {
@@ -311,7 +327,7 @@ export async function respondToCustomer(
       console.error("[whatsappRespond] sendMedia video", e);
     }
   }
-  if ((sendCatalog || customerWantsCatalog) && hasCatalogPdf) {
+  if (attachCatalog && hasCatalogPdf) {
     try {
       // Gera/reaproveita o PDF do catálogo no bucket e anexa como documento. Import
       // dinâmico p/ não puxar o @react-pdf (pesado) nas demais respostas da IA.

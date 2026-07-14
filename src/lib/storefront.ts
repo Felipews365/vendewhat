@@ -529,6 +529,8 @@ export type StorefrontSettings = {
   pixName: string;
   /** A IA do WhatsApp envia a chave Pix quando o cliente for fechar o pedido (exige `pixKey`). */
   aiSendPixOnCheckout: boolean;
+  /** Modo de venda da loja: varejo, atacado ou ambos — orienta a IA na condução. */
+  saleMode: SaleMode;
   /** ID do Pixel do Facebook/Meta (só números) — carrega o rastreamento na loja pública. */
   facebookPixelId: string;
   /** ID da tag do Google: GA4 "G-…", Google Ads "AW-…" ou Tag Manager "GTM-…". */
@@ -539,6 +541,13 @@ export type StorefrontSettings = {
    */
   contentBlocks: StoreBlock[];
 };
+
+/** Modo de venda: varejo (uso próprio), atacado (revenda/maior quantidade) ou ambos. */
+export type SaleMode = "varejo" | "atacado" | "ambos";
+export const SALE_MODES: SaleMode[] = ["varejo", "atacado", "ambos"];
+export function saleModeFromDb(v: unknown): SaleMode {
+  return SALE_MODES.includes(v as SaleMode) ? (v as SaleMode) : "varejo";
+}
 
 export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroSubtitle: "Bem-vindo à nossa loja",
@@ -598,6 +607,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   pixKey: "",
   pixName: "",
   aiSendPixOnCheckout: false,
+  saleMode: "varejo",
   facebookPixelId: "",
   googleAnalyticsId: "",
   contentBlocks: [],
@@ -1007,6 +1017,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       o.aiSendPixOnCheckout,
       DEFAULT_STOREFRONT.aiSendPixOnCheckout
     ),
+    saleMode: saleModeFromDb(o.saleMode),
     facebookPixelId: sanitizeFacebookPixelId(o.facebookPixelId),
     googleAnalyticsId: sanitizeGoogleTagId(o.googleAnalyticsId),
     contentBlocks: contentBlocksFromDb(o.contentBlocks),
@@ -1069,6 +1080,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     pixKey: s.pixKey.trim(),
     pixName: s.pixName.trim(),
     aiSendPixOnCheckout: s.aiSendPixOnCheckout,
+    saleMode: saleModeFromDb(s.saleMode),
     facebookPixelId: sanitizeFacebookPixelId(s.facebookPixelId),
     googleAnalyticsId: sanitizeGoogleTagId(s.googleAnalyticsId),
     contentBlocks: contentBlocksFromDb(s.contentBlocks).slice(

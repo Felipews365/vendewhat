@@ -782,6 +782,31 @@ uma instância Evolution e uma config de IA por loja.
   ("estou na dúvida", "não sei qual escolher"): em vez de responder passivo, a IA se oferece para
   **comparar** modelos/cores/tamanhos ou pergunta o que ele procura, sempre conduzindo à decisão.
   Fixo para todas as lojas (sem config no painel).
+- **Persona de vendedor(a) (fixo p/ todas as lojas):** o `buildSystemPrompt`
+  ([attendant.ts](src/lib/ai/attendant.ts)) apresenta a IA como **vendedor(a) experiente, confiante
+  e direto(a)** (não mais "atendente virtual") que **conduz** a conversa, qualifica rápido e puxa o
+  próximo passo. Regras fixas: **NUNCA revelar** que é IA/bot/robô/atendimento automático;
+  **espelhar a saudação** do cliente (bom dia/boa tarde/boa noite/oi); **no máximo UMA pergunta por
+  vez** e sempre uma que avance a venda; **frases proibidas** (as 8 clássicas de suporte passivo —
+  "estou à disposição", "é só me avisar", "fico no aguardo" etc.). Como o mesmo `systemPrompt` é
+  reusado, a persona se propaga para follow-up/pós-venda/carrinho abandonado; as instruções inline
+  desses crons que ainda diziam "à disposição" foram trocadas por condução ativa.
+- **Saudar cliente salvo pelo nome:** `findCustomerName`
+  ([whatsappConfig.ts](src/lib/whatsappConfig.ts)) busca o **nome de um pedido anterior** pelo
+  telefone (compara normalizando ambos com `toWhatsAppNumber`, DDI 55). O
+  `respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)) passa esse `customerName`
+  para o `buildSystemPrompt`, que instrui a IA a **tratar pelo primeiro nome** quem já é cliente da
+  casa e a **NÃO inventar** nome quando não há. Sem migration (lê a `orders`).
+- **Modo de venda (`storefront.saleMode`: `"varejo"` (default) / `"atacado"` / `"ambos"`, JSONB — sem
+  migration):** orienta a **condução comercial** da IA. **atacado** → reforça o pedido mínimo e
+  conduz por quantidade/revenda; **ambos** → primeiro descobre se é uso próprio ou revenda e segue a
+  regra certa; **varejo** → sem regra extra. Seletor na **aba Atendente de IA**
+  ([whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx), estado `saleMode`), salvo pela rota
+  [config/route.ts](src/app/api/whatsapp/config/route.ts) que faz **patch no `storefront`**
+  (mesmo padrão do `aiSendPixOnCheckout`). Helpers `SaleMode`/`saleModeFromDb` em
+  [storefront.ts](src/lib/storefront.ts). O `whatsappRespond` passa `sf.saleMode` ao
+  `buildSystemPrompt` (o modo de venda não é aplicado no prompt enxuto dos crons, coerente com o
+  `minOrder`/`pickup`/`pix` que também não vão lá).
 - **Espera + agrupamento de mensagens (debounce por tabela + cron):** para o cliente que manda
   várias mensagens seguidas, a IA espera ele parar de digitar e responde tudo de uma vez. O
   [webhook](src/app/api/whatsapp/webhook/route.ts) **não gera resposta** — ele grava a mensagem e
@@ -976,8 +1001,13 @@ cliente escolher pelo site OU folheando o PDF. **Sem migration** (o PDF mora no 
   máximo uma vez por conversa). `parseReplyDirectives` extrai `sendCatalog`. **Gatilho
   determinístico:** como a IA nem sempre emite o marcador, o `respondToCustomer` também detecta
   quando **o cliente pediu** explicitamente (`customerWantsCatalog` = regex `catálogo`/`lista de
-  produtos`/`pdf` no texto do cliente) e envia o PDF mesmo sem o marcador (`sendCatalog ||
-  customerWantsCatalog`). O
+  produtos`/`pdf` no texto do cliente) e envia o PDF mesmo sem o marcador. **O PDF acompanha o LINK
+  como opção a mais:** além disso, `respondToCustomer` detecta quando **esta resposta está mandando o
+  link da loja** (`linkSentNow` = o texto final contém a `storeUrl`) e anexa o PDF junto — com trava
+  `linkSentBefore` (varre o histórico `assistant` pela `storeUrl`) para **não reenviar** o mesmo PDF a
+  cada link na conversa; só na 1ª vez que o link sai (ou quando o cliente pede o catálogo de novo). A
+  condição final é `attachCatalog = sendCatalog || customerWantsCatalog || (linkSentNow &&
+  !linkSentBefore)`. O
   `respondToCustomer` ([src/lib/whatsappRespond.ts](src/lib/whatsappRespond.ts)) chama
   `ensureCatalogPdfUrl` (import dinâmico p/ não puxar o `@react-pdf` nas demais respostas) e
   envia com `sendMedia` **`mediatype: "document"`** + `fileName: "Catálogo - {Loja}.pdf"` +

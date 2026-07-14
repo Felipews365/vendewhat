@@ -3,6 +3,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { AI_TONES, type AiTone, ensureConfig, saveAiConfig } from "@/lib/whatsappConfig";
 import { isShortMapsLink, parseLatLng, resolveMapsLatLng } from "@/lib/geoLocation";
+import { saleModeFromDb } from "@/lib/storefront";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,8 @@ type Body = {
   aiStoreVideoUrl?: string;
   /** Toggle "A IA envia a chave Pix ao fechar o pedido" — mora no storefront. */
   aiSendPixOnCheckout?: boolean;
+  /** Modo de venda (varejo/atacado/ambos) — mora no storefront. */
+  saleMode?: string;
 };
 
 export async function POST(req: Request) {
@@ -105,19 +108,24 @@ export async function POST(req: Request) {
       typeof body.aiStoreVideoUrl === "string" ? body.aiStoreVideoUrl : "",
   });
 
-  // O toggle "A IA envia a chave Pix ao fechar o pedido" mora no JSONB storefront
-  // (mesmo campo do painel de pagamentos da vitrine). Faz um patch preservando o
-  // resto do storefront; só grava quando o campo veio no corpo.
+  // Campos da IA que moram no JSONB storefront (o toggle "A IA envia a chave Pix"
+  // e o modo de venda). Faz um patch preservando o resto do storefront; só grava
+  // os campos que vieram no corpo.
+  const sfPatch: Record<string, unknown> = {};
   if (typeof body.aiSendPixOnCheckout === "boolean") {
+    sfPatch.aiSendPixOnCheckout = body.aiSendPixOnCheckout;
+  }
+  if (typeof body.saleMode === "string") {
+    sfPatch.saleMode = saleModeFromDb(body.saleMode);
+  }
+  if (Object.keys(sfPatch).length > 0) {
     const current =
       store.storefront && typeof store.storefront === "object"
         ? (store.storefront as Record<string, unknown>)
         : {};
     await admin
       .from("stores")
-      .update({
-        storefront: { ...current, aiSendPixOnCheckout: body.aiSendPixOnCheckout },
-      })
+      .update({ storefront: { ...current, ...sfPatch } })
       .eq("id", store.id as string);
   }
 

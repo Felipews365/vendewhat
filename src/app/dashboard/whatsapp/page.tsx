@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
 import { parseLatLng, isShortMapsLink } from "@/lib/geoLocation";
-import { storefrontFromDb } from "@/lib/storefront";
+import { storefrontFromDb, type SaleMode } from "@/lib/storefront";
 import ConversationsPanel from "@/components/dashboard/ConversationsPanel";
 
 // Constantes locais (client-safe) — não importar de whatsappConfig.ts, que usa `crypto`.
@@ -136,6 +136,7 @@ export default function WhatsAppIaPage() {
   // Toggle "A IA envia a chave Pix ao fechar o pedido" (mora no storefront, editado
   // aqui e no painel de pagamentos da vitrine). hasPixKey = a loja tem chave Pix.
   const [sendPixOnCheckout, setSendPixOnCheckout] = useState(false);
+  const [saleMode, setSaleMode] = useState<SaleMode>("varejo");
   const [hasPixKey, setHasPixKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
@@ -232,6 +233,7 @@ export default function WhatsAppIaPage() {
         const sf0 = storefrontFromDb(store.storefront);
         setPickupAddress(sf0.pickupAddress);
         setSendPixOnCheckout(sf0.aiSendPixOnCheckout);
+        setSaleMode(sf0.saleMode);
         setHasPixKey(Boolean(sf0.pixKey.trim()));
       }
 
@@ -367,6 +369,7 @@ export default function WhatsAppIaPage() {
           aiStorePhotoUrl: storePhotoUrl,
           aiStoreVideoUrl: storeVideoUrl,
           aiSendPixOnCheckout: sendPixOnCheckout,
+          saleMode,
         }),
       });
       const data = await res.json();
@@ -768,6 +771,26 @@ export default function WhatsAppIaPage() {
               ))}
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+            Modo de venda
+          </label>
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+            Como sua loja vende. A IA conduz a conversa pela regra certa (no atacado,
+            reforça o pedido mínimo; em ambos, descobre primeiro se é para uso próprio
+            ou revenda).
+          </p>
+          <select
+            value={saleMode}
+            onChange={(e) => setSaleMode(e.target.value as SaleMode)}
+            className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          >
+            <option value="varejo">Varejo (venda por unidade / uso próprio)</option>
+            <option value="atacado">Atacado (revenda / maior quantidade)</option>
+            <option value="ambos">Ambos (varejo e atacado)</option>
+          </select>
         </div>
 
         <div>

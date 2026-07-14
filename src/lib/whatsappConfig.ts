@@ -4,6 +4,7 @@
  */
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { toWhatsAppNumber } from "@/lib/customerPhone";
 
 export type AiTone = "simpatico" | "formal" | "descontraido";
 export const AI_TONES: AiTone[] = ["simpatico", "formal", "descontraido"];
@@ -622,6 +623,35 @@ export async function listDuePostsaleOrders(
         typeof r.order_number === "number" ? r.order_number : null,
     }))
     .filter((o) => o.customerPhone);
+}
+
+/**
+ * Nome salvo do cliente (de um pedido anterior) para um número de WhatsApp.
+ * O telefone do WhatsApp (com DDI) é comparado com o do pedido normalizando
+ * ambos por `toWhatsAppNumber`. Devolve o nome do pedido mais recente, ou "".
+ * Usado para a IA saudar pelo nome quem já é cliente da casa.
+ */
+export async function findCustomerName(
+  db: SupabaseClient,
+  storeId: string,
+  whatsappPhone: string
+): Promise<string> {
+  const target = toWhatsAppNumber(whatsappPhone);
+  if (!target) return "";
+  const { data } = await db
+    .from("orders")
+    .select("customer_name, customer_phone, created_at")
+    .eq("store_id", storeId)
+    .not("customer_phone", "is", null)
+    .not("customer_name", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const phone = typeof r.customer_phone === "string" ? r.customer_phone : "";
+    const name = typeof r.customer_name === "string" ? r.customer_name.trim() : "";
+    if (name && toWhatsAppNumber(phone) === target) return name;
+  }
+  return "";
 }
 
 /** Marca que o pós-venda do pedido já foi enviado. */
