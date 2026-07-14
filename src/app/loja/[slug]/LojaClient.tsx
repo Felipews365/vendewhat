@@ -1174,6 +1174,8 @@ function ProductDetailModal({
   const [color, setColor] = useState(product.colors[0] ?? "");
   const [size, setSize] = useState(product.sizes[0] ?? "");
   const [qtyDraft, setQtyDraft] = useState(1);
+  // Descrição recolhida no celular (evita a página ficar muito comprida).
+  const [descExpanded, setDescExpanded] = useState(false);
 
   const carouselRef = useRef<HTMLDivElement>(null);
   const lightboxCarouselRef = useRef<HTMLDivElement>(null);
@@ -1238,6 +1240,7 @@ function ProductDetailModal({
 
   useEffect(() => {
     setImgIdx(0);
+    setDescExpanded(false);
     const t = window.setTimeout(() => scrollCarouselToIndex(0, "auto"), 0);
     return () => window.clearTimeout(t);
   }, [product.id, scrollCarouselToIndex]);
@@ -1694,11 +1697,34 @@ function ProductDetailModal({
               )}
             </div>
 
-            {product.description && (
-              <p className="mt-4 text-sm text-stone-600 leading-relaxed whitespace-pre-line">
-                {product.description}
-              </p>
-            )}
+            {product.description &&
+              (product.description.trim().length > 120 ? (
+                // Longa: recolhida no celular (trecho + "Ver descrição"); inteira no desktop.
+                <div className="mt-4">
+                  <p
+                    className={`text-sm text-stone-600 leading-relaxed whitespace-pre-line ${
+                      descExpanded ? "" : "line-clamp-3 md:line-clamp-none"
+                    }`}
+                  >
+                    {product.description}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setDescExpanded((v) => !v)}
+                    className="md:hidden mt-1.5 inline-flex items-center gap-1 text-sm font-semibold text-stone-800"
+                    aria-expanded={descExpanded}
+                  >
+                    {descExpanded ? "Ver menos" : "Ver descrição completa"}
+                    <span aria-hidden className={descExpanded ? "rotate-180" : ""}>
+                      ▾
+                    </span>
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-stone-600 leading-relaxed whitespace-pre-line">
+                  {product.description}
+                </p>
+              ))}
 
             {/* Cores */}
             {product.colors.length > 0 && (
