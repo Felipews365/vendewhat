@@ -928,10 +928,16 @@ uma instância Evolution e uma config de IA por loja.
   e direto(a)** (não mais "atendente virtual") que **conduz** a conversa, qualifica rápido e puxa o
   próximo passo. Regras fixas: **NUNCA revelar** que é IA/bot/robô/atendimento automático;
   **espelhar a saudação** do cliente (bom dia/boa tarde/boa noite/oi); **no máximo UMA pergunta por
-  vez** e sempre uma que avance a venda; **frases proibidas** (as 8 clássicas de suporte passivo —
-  "estou à disposição", "é só me avisar", "fico no aguardo" etc.). Como o mesmo `systemPrompt` é
-  reusado, a persona se propaga para follow-up/pós-venda/carrinho abandonado; as instruções inline
-  desses crons que ainda diziam "à disposição" foram trocadas por condução ativa.
+  MENSAGEM** (nunca duas) e sempre uma que avance a venda; **frases proibidas** — as clássicas de
+  suporte passivo ("estou à disposição", "é só me avisar", "fico no aguardo" etc.) **mais as aberturas
+  de SAC** ("como posso te ajudar?", "como posso te ajudar hoje?", "em que posso ajudar?", "posso te
+  ajudar em algo?"). Há também uma **lista de perguntas de abertura que qualificam a venda** ("procura
+  qual tipo de produto?", "uso próprio, revenda ou loja?", "cor/tamanho/faixa de preço em mente?" etc.)
+  e um **exemplo RUIM × BOM** de saudação curta (o clássico "Boa noite! Como posso te ajudar hoje? Você
+  busca algum produto?" com duas perguntas + tom de SAC é o RUIM), para o gpt-4o-mini não cair no
+  piloto automático de atendimento. Como o mesmo `systemPrompt` é reusado, a persona se propaga para
+  follow-up/pós-venda/carrinho abandonado; as instruções inline desses crons que ainda diziam "à
+  disposição" foram trocadas por condução ativa.
 - **Saudar cliente salvo pelo nome:** `findCustomerName`
   ([whatsappConfig.ts](src/lib/whatsappConfig.ts)) busca o **nome de um pedido anterior** pelo
   telefone (compara normalizando ambos com `toWhatsAppNumber`, DDI 55). O
