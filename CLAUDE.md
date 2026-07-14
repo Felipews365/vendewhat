@@ -683,9 +683,11 @@ abas viraram **Conexão · Configuração IA · Conversas · Pausar** (não há 
 ambas sob `tab === "configuracoes"`, com **um único** botão "Salvar configurações" no rodapé (as duas
 seções mandam o payload completo pelo mesmo `handleSaveConfig`):
 
-1. **"Atendente de IA"** — ativar IA, nome do atendente, tom de voz, **dias/horário de atendimento**
+1. **"Atendente de IA"** — ativar IA, nome do atendente, **dias/horário de atendimento**
    (ver abaixo), toggle "A IA envia a chave Pix", "Minha loja é só online", localização/foto/vídeo da
-   loja, e os tempos de handoff / follow-up / pós-venda / carrinho abandonado.
+   loja, e os tempos de handoff / follow-up / pós-venda / carrinho abandonado. (O antigo seletor **"Tom
+   de voz"** foi removido — a IA usa só a persona fixa de vendedor(a); a coluna `ai_tone` segue no banco,
+   inerte, sem alimentar mais o prompt.)
 2. **"O que a sua loja aceita"** — os campos que também valem no checkout (pagamento, envio, pedido
    mínimo, modo de venda).
 
@@ -720,11 +722,17 @@ segmentado, verde = Sim); `tipoVenda` e `tipoMinimo` usam radio de múltiplas op
   - **Formas de envio** (`aceitaExcursao/Correios/Transportadora/Retirada`) → **campos novos**
     `shipExcursaoEnabled` / `shipCorreiosEnabled` / `shipTransportadoraEnabled` /
     `shipRetiradaEnabled` (default `true` = comportamento antigo, as 4 opções disponíveis).
-  - **Pedido mínimo:** `pedidoMinimoAtivo` → `minOrderEnabled` (**interruptor mestre novo**);
-    `tipoMinimo` → `minOrderType` (`valor`/`quantidade`/`ambos`, **novo**); `valorMinimoPedido` →
-    `minOrderValue`; `quantidadeMinimaPedido` → `minOrderQty`; `mensagemMinimoPedido` →
-    `minOrderMessage` (**novo**, usado pela IA ao explicar o mínimo). Os campos de valor/qtd/mensagem
-    só aparecem quando `minOrderEnabled` (e cada valor conforme o `tipoMinimo`).
+  - **Pedido mínimo (amarrado ao modo de venda):** `minOrderEnabled` **não** tem mais um toggle
+    próprio na aba de IA — ele é **derivado do `saleMode`**: **varejo → sempre `false`** (some o bloco
+    inteiro de mínimo) e **atacado/ambos → `true`** (o bloco aparece logo abaixo do "Modo de venda", na
+    mesma seção). O save manda `minOrderEnabled: saleMode !== "varejo"`. Como exigir mínimo já pressupõe
+    não vender no varejo, os dois viraram **uma decisão só** (o antigo "Exigir pedido mínimo? Sim/Não"
+    foi removido). No atacado/ambos, deixar valor/qtd em **zero** = sem mínimo de fato
+    (`minOrderStatus` só exige com valor/qtd > 0). `tipoMinimo` → `minOrderType`
+    (`valor`/`quantidade`/`ambos`); `valorMinimoPedido` → `minOrderValue`; `quantidadeMinimaPedido` →
+    `minOrderQty`; `mensagemMinimoPedido` → `minOrderMessage` (usado pela IA ao explicar o mínimo). Obs.:
+    o **editor visual** ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx))
+    continua com o toggle `minOrderEnabled` independente — só a aba de IA amarrou ao `saleMode`.
 - **Persistência:** o "Salvar configurações" da aba chama `handleSaveConfig`, que manda tudo para
   [/api/whatsapp/config](src/app/api/whatsapp/config/route.ts). A rota faz um **patch** no `storefront`
   (preserva o resto), gravando só os campos que vieram no corpo (booleanos de pagamento/envio,

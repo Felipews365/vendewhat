@@ -5,7 +5,7 @@
  *   OPENAI_MODEL    -> opcional; default gpt-4o-mini
  */
 import OpenAI, { toFile } from "openai";
-import type { AiTone, ChatTurn } from "@/lib/whatsappConfig";
+import type { ChatTurn } from "@/lib/whatsappConfig";
 
 export type AttendantProduct = {
   name: string;
@@ -31,15 +31,6 @@ function getClient(): OpenAI {
   }
   return client;
 }
-
-const TONE_INSTRUCTION: Record<AiTone, string> = {
-  simpatico:
-    "Use um tom simpático, acolhedor e prestativo. Trate o cliente com gentileza.",
-  formal:
-    "Use um tom formal, educado e profissional. Evite gírias e excesso de emojis.",
-  descontraido:
-    "Use um tom descontraído e leve, com naturalidade e alguns emojis quando fizer sentido.",
-};
 
 function brl(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -79,7 +70,6 @@ export function buildSystemPrompt(args: {
   slug: string;
   faq: string;
   aiName: string;
-  aiTone: AiTone;
   products: AttendantProduct[];
   baseUrl: string;
   isFirstContact: boolean;
@@ -130,7 +120,6 @@ export function buildSystemPrompt(args: {
     slug,
     faq,
     aiName,
-    aiTone,
     products,
     baseUrl,
     isFirstContact,
@@ -169,7 +158,6 @@ export function buildSystemPrompt(args: {
     `Você é ${aiName}, vendedor(a) da loja "${storeName}" no WhatsApp.`,
     "Você é um(a) vendedor(a) experiente, confiante e direto(a). Fale como gente de verdade, com naturalidade e firmeza — nunca como robô de SAC. VOCÊ conduz a conversa: guia o cliente, qualifica o interesse rápido e sempre puxa o próximo passo rumo ao fechamento.",
     "NUNCA diga (nem dê a entender) que é assistente virtual, IA, bot, robô ou atendimento automático. Para o cliente, você é a pessoa que vende na loja.",
-    TONE_INSTRUCTION[aiTone],
     "",
     "Seu objetivo é atender os clientes, tirar todas as dúvidas e conduzir a venda até o fechamento.",
     `O link da loja é o CATÁLOGO ONLINE — é lá que o cliente vê todos os produtos, fotos e preços e finaliza o pedido. O link DESTA loja é: ${storeUrl}`,

@@ -386,6 +386,27 @@ export function StoreVisualEditor({
     setSettingsMenuOpen(false);
     setPanel(p);
   };
+  /**
+   * Deep-link por hash na URL (ex.: outra tela manda o lojista direto para o
+   * cadastro do Pix). `#pix`/`#pagamentos` abrem o painel "Pix, pagamentos e
+   * rodapé"; roda uma vez ao montar.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash.replace("#", "").toLowerCase();
+    const hashToPanel: Record<string, EditorPanel> = {
+      pix: "footer",
+      pagamentos: "footer",
+    };
+    const target = hashToPanel[hash];
+    if (target) {
+      setPanel(target);
+      document
+        .getElementById("passo-configuracoes")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [storeCategoryModal, setStoreCategoryModal] = useState<{
     open: boolean;
     editIndex: number | null;

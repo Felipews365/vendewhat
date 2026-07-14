@@ -241,7 +241,6 @@ export async function respondToCustomer(
     slug: String(store.slug),
     faq: cfg.faq,
     aiName: cfg.aiName,
-    aiTone: cfg.aiTone,
     products,
     baseUrl,
     isFirstContact,

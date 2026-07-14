@@ -14,13 +14,6 @@ import {
 import ConversationsPanel from "@/components/dashboard/ConversationsPanel";
 
 // Constantes locais (client-safe) — não importar de whatsappConfig.ts, que usa `crypto`.
-type AiTone = "simpatico" | "formal" | "descontraido";
-const AI_TONES: AiTone[] = ["simpatico", "formal", "descontraido"];
-const AI_TONE_LABELS: Record<AiTone, string> = {
-  simpatico: "Simpático",
-  formal: "Formal",
-  descontraido: "Descontraído",
-};
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
 function qrSrc(base64: string): string {
@@ -218,7 +211,6 @@ export default function WhatsAppIaPage() {
 
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiName, setAiName] = useState("Atendente");
-  const [aiTone, setAiTone] = useState<AiTone>("simpatico");
   const [faq, setFaq] = useState("");
   const [handoffMinutes, setHandoffMinutes] = useState(30);
   const [followupMinutes, setFollowupMinutes] = useState(0);
@@ -253,7 +245,6 @@ export default function WhatsAppIaPage() {
   const [shipCorreios, setShipCorreios] = useState(true);
   const [shipTransportadora, setShipTransportadora] = useState(true);
   const [shipRetirada, setShipRetirada] = useState(true);
-  const [minOrderEnabled, setMinOrderEnabled] = useState(false);
   const [minOrderType, setMinOrderType] = useState<MinOrderType>("ambos");
   const [minOrderValue, setMinOrderValue] = useState(0);
   const [minOrderQty, setMinOrderQty] = useState(0);
@@ -361,7 +352,6 @@ export default function WhatsAppIaPage() {
         setShipCorreios(sf0.shipCorreiosEnabled);
         setShipTransportadora(sf0.shipTransportadoraEnabled);
         setShipRetirada(sf0.shipRetiradaEnabled);
-        setMinOrderEnabled(sf0.minOrderEnabled);
         setMinOrderType(sf0.minOrderType);
         setMinOrderValue(sf0.minOrderValue);
         setMinOrderQty(sf0.minOrderQty);
@@ -373,7 +363,7 @@ export default function WhatsAppIaPage() {
       const { data: cfg } = await supabase
         .from("store_whatsapp")
         .select(
-          "connection_status, connected_number, ai_enabled, ai_name, ai_tone, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_cart_minutes, ai_online_only, ai_location_address, ai_location_url, ai_store_photo_url, ai_store_video_url"
+          "connection_status, connected_number, ai_enabled, ai_name, faq, ai_handoff_minutes, ai_followup_minutes, ai_followup_message, ai_postsale_days, ai_postsale_message, ai_cart_minutes, ai_online_only, ai_location_address, ai_location_url, ai_store_photo_url, ai_store_video_url"
         )
         .eq("store_id", store.id)
         .maybeSingle();
@@ -384,11 +374,6 @@ export default function WhatsAppIaPage() {
         );
         setAiEnabled(cfg.ai_enabled === true);
         setAiName(typeof cfg.ai_name === "string" ? cfg.ai_name : "Atendente");
-        setAiTone(
-          AI_TONES.includes(cfg.ai_tone as AiTone)
-            ? (cfg.ai_tone as AiTone)
-            : "simpatico"
-        );
         setFaq(typeof cfg.faq === "string" ? cfg.faq : "");
         if (typeof cfg.ai_handoff_minutes === "number") {
           setHandoffMinutes(cfg.ai_handoff_minutes);
@@ -488,7 +473,6 @@ export default function WhatsAppIaPage() {
         body: JSON.stringify({
           aiEnabled,
           aiName,
-          aiTone,
           faq,
           aiHandoffMinutes: handoffMinutes,
           aiFollowupMinutes: followupMinutes,
@@ -509,7 +493,9 @@ export default function WhatsAppIaPage() {
           shipCorreiosEnabled: shipCorreios,
           shipTransportadoraEnabled: shipTransportadora,
           shipRetiradaEnabled: shipRetirada,
-          minOrderEnabled,
+          // Pedido mínimo é amarrado ao modo de venda: varejo nunca exige mínimo;
+          // atacado/ambos ligam a máquina (só enforça de fato se houver valor/qtd).
+          minOrderEnabled: saleMode !== "varejo",
           minOrderType,
           minOrderValue,
           minOrderQty,
@@ -901,22 +887,6 @@ export default function WhatsAppIaPage() {
               placeholder="Ex.: Ana"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
-              Tom de voz
-            </label>
-            <select
-              value={aiTone}
-              onChange={(e) => setAiTone(e.target.value as AiTone)}
-              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-            >
-              {AI_TONES.map((t) => (
-                <option key={t} value={t}>
-                  {AI_TONE_LABELS[t]}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
         {/* Dias e horário de atendimento */}
@@ -988,10 +958,19 @@ export default function WhatsAppIaPage() {
               envia nem inventa uma.
             </span>
             {!hasPixKey && (
-              <span className="mt-1 block text-xs font-medium text-amber-600 dark:text-amber-400">
-                Você ainda não cadastrou uma chave Pix — cadastre em Loja →
-                Configurações → Pix e pagamentos para a IA poder enviar.
-              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  router.push("/dashboard/configuracoes#pix");
+                }}
+                className="mt-1 block text-left text-xs font-medium text-amber-600 underline decoration-dotted underline-offset-2 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+              >
+                Você ainda não cadastrou uma chave Pix — toque aqui para
+                cadastrar em Configurações → Pix e pagamentos e a IA poder
+                enviar.
+              </button>
             )}
           </span>
         </label>
@@ -1393,89 +1372,36 @@ export default function WhatsAppIaPage() {
           </p>
         </div>
 
-        {/* Modo de venda (tipoVenda) */}
-        <ConfigField
-          label="Modo de venda"
-          hint="Como sua loja vende. A IA conduz pela regra certa (no atacado, reforça o pedido mínimo; em ambos, descobre primeiro se é uso próprio ou revenda)."
-        >
-          <SegRadio<SaleMode>
-            value={saleMode}
-            onChange={setSaleMode}
-            options={[
-              { label: "Varejo", val: "varejo" },
-              { label: "Atacado", val: "atacado" },
-              { label: "Ambos", val: "ambos" },
-            ]}
-          />
-        </ConfigField>
-
-        {/* Formas de pagamento */}
+        {/* Modo de venda + pedido mínimo (amarrados: varejo = sem mínimo) */}
         <div className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
-            Formas de pagamento
-          </h3>
           <ConfigField
-            label="Aceita Pix?"
-            hint={
-              hasPixKey
-                ? "Mostra o Pix como opção de pagamento no checkout."
-                : "Você ainda não cadastrou uma chave Pix — cadastre em Loja → Configurações → Pix e pagamentos para o Pix aparecer no checkout."
-            }
+            label="Modo de venda"
+            hint="Como sua loja vende. No varejo não há pedido mínimo. No atacado (ou ambos) você define o mínimo abaixo e a IA conduz por ele (em ambos, descobre primeiro se é uso próprio ou revenda)."
           >
-            <YesNo value={acceptPix} onChange={setAcceptPix} />
-          </ConfigField>
-          <ConfigField
-            label="Aceita cartão?"
-            hint="Mostra 'Cartão na entrega' como opção de pagamento no checkout."
-          >
-            <YesNo value={acceptCard} onChange={setAcceptCard} />
-          </ConfigField>
-        </div>
-
-        {/* Formas de envio */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
-            Formas de envio
-          </h3>
-          <p className="text-xs text-stone-500 dark:text-slate-400">
-            O que estiver como “Não” some do checkout da loja e a IA não oferece.
-          </p>
-          <ConfigField label="Aceita excursão?">
-            <YesNo value={shipExcursao} onChange={setShipExcursao} />
-          </ConfigField>
-          <ConfigField label="Aceita Correios?">
-            <YesNo value={shipCorreios} onChange={setShipCorreios} />
-          </ConfigField>
-          <ConfigField label="Aceita transportadora?">
-            <YesNo
-              value={shipTransportadora}
-              onChange={setShipTransportadora}
+            <SegRadio<SaleMode>
+              value={saleMode}
+              onChange={setSaleMode}
+              options={[
+                { label: "Varejo", val: "varejo" },
+                { label: "Atacado", val: "atacado" },
+                { label: "Ambos", val: "ambos" },
+              ]}
             />
           </ConfigField>
-          <ConfigField
-            label="Aceita retirada no local?"
-            hint="Configure o endereço e as instruções de retirada em Loja → Configurações → Pix e pagamentos."
-          >
-            <YesNo value={shipRetirada} onChange={setShipRetirada} />
-          </ConfigField>
-        </div>
 
-        {/* Pedido mínimo */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
-            Pedido mínimo
-          </h3>
-          <ConfigField
-            label="Exigir pedido mínimo?"
-            hint="Quando ligado, o checkout só libera ao atingir o mínimo e a IA informa o cliente."
-          >
-            <YesNo value={minOrderEnabled} onChange={setMinOrderEnabled} />
-          </ConfigField>
-
-          {minOrderEnabled && (
+          {saleMode !== "varejo" && (
             <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
               <div>
                 <p className="text-sm font-semibold text-stone-800 dark:text-slate-100">
+                  Pedido mínimo
+                </p>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+                  Deixe em zero se não quiser exigir um mínimo. Com valor/quantidade
+                  preenchidos, o checkout só libera ao atingir e a IA informa o cliente.
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-stone-700 dark:text-slate-300">
                   Tipo de mínimo
                 </p>
                 <SegRadio<MinOrderType>
@@ -1550,6 +1476,57 @@ export default function WhatsAppIaPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Formas de pagamento */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
+            Formas de pagamento
+          </h3>
+          <ConfigField
+            label="Aceita Pix?"
+            hint={
+              hasPixKey
+                ? "Mostra o Pix como opção de pagamento no checkout."
+                : "Você ainda não cadastrou uma chave Pix — cadastre em Loja → Configurações → Pix e pagamentos para o Pix aparecer no checkout."
+            }
+          >
+            <YesNo value={acceptPix} onChange={setAcceptPix} />
+          </ConfigField>
+          <ConfigField
+            label="Aceita cartão?"
+            hint="Mostra 'Cartão na entrega' como opção de pagamento no checkout."
+          >
+            <YesNo value={acceptCard} onChange={setAcceptCard} />
+          </ConfigField>
+        </div>
+
+        {/* Formas de envio */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
+            Formas de envio
+          </h3>
+          <p className="text-xs text-stone-500 dark:text-slate-400">
+            O que estiver como “Não” some do checkout da loja e a IA não oferece.
+          </p>
+          <ConfigField label="Aceita excursão?">
+            <YesNo value={shipExcursao} onChange={setShipExcursao} />
+          </ConfigField>
+          <ConfigField label="Aceita Correios?">
+            <YesNo value={shipCorreios} onChange={setShipCorreios} />
+          </ConfigField>
+          <ConfigField label="Aceita transportadora?">
+            <YesNo
+              value={shipTransportadora}
+              onChange={setShipTransportadora}
+            />
+          </ConfigField>
+          <ConfigField
+            label="Aceita retirada no local?"
+            hint="Configure o endereço e as instruções de retirada em Loja → Configurações → Pix e pagamentos."
+          >
+            <YesNo value={shipRetirada} onChange={setShipRetirada} />
+          </ConfigField>
         </div>
 
         <div className="flex items-center gap-3">

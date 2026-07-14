@@ -87,7 +87,6 @@ async function buildStorePrompt(
     slug: String(store.slug),
     faq: cfg.faq,
     aiName: cfg.aiName,
-    aiTone: cfg.aiTone,
     products: mapProducts((productRows ?? []) as AnyObj[]),
     baseUrl: process.env.APP_BASE_URL || "",
     isFirstContact: false,
