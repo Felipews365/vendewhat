@@ -882,6 +882,11 @@ function ProductCatalogCard({
     return () => io.disconnect();
   }, []);
 
+  // Abre o produto no 1.º toque/clique: detecta o "tap" por pointer (down→up sem
+  // arrastar), evitando o duplo-toque do "hover fantasma" no celular (o group-hover
+  // do botão/vídeo fazia o 1.º toque só ativar o hover e o 2.º abrir).
+  const tapStartRef = useRef<{ x: number; y: number } | null>(null);
+
   // Prévia do vídeo no card: toca ao passar o mouse (desktop) ou o dedo (celular).
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoPlaying, setVideoPlaying] = useState(false);
@@ -948,7 +953,21 @@ function ProductCatalogCard({
         shown ? "vw-blur-fade" : "opacity-0"
       }`}
       style={{ animationDelay: `${revealDelayMs}ms` }}
-      onClick={() => onOpen(product)}
+      onPointerDown={(e) => {
+        tapStartRef.current = { x: e.clientX, y: e.clientY };
+      }}
+      onPointerUp={(e) => {
+        const start = tapStartRef.current;
+        tapStartRef.current = null;
+        if (!start) return;
+        // ignora arrasto/rolagem: só abre num toque "parado"
+        const dx = Math.abs(e.clientX - start.x);
+        const dy = Math.abs(e.clientY - start.y);
+        if (dx < 12 && dy < 12) onOpen(product);
+      }}
+      onPointerCancel={() => {
+        tapStartRef.current = null;
+      }}
       onMouseEnter={product.videoUrl ? playPreview : undefined}
       onMouseLeave={product.videoUrl ? stopPreview : undefined}
       onTouchStart={product.videoUrl ? playPreview : undefined}
