@@ -302,6 +302,24 @@ imagens ao bucket `product-images` e guarda a ordem em `products.images` + o foc
     arrastar na **horizontal** troca a foto (carrossel); arrastar na **vertical** rola o modal/página,
     então dá para rolar pra ver cores/tamanho **começando o gesto em cima da foto**. (O carrossel do
     lightbox segue `touch-pan-x` — é tela cheia, sem rolagem vertical.)
+  - **Tela cheia no celular + rolagem unificada (imagem e dados sobem juntos):** no celular o
+    `ProductDetailModal` ocupa a tela inteira; o **container externo** (`sheetScrollRef`) é o único que
+    rola no celular — a coluna de dados **não** tem scroll próprio (`md:overflow-y-auto`, só no desktop),
+    então **foto e dados rolam juntos** (a foto sobe ao rolar, revelando cores/tamanho/quantidade). O
+    wrapper (`sheetScrollRef`) usa **`items-start`** + card `min-h-full` para o card **crescer com o
+    conteúdo** e gerar rolagem (era `items-stretch`, que esticava o card à altura da tela e **cortava** o
+    excesso, sem rolar — corrigido em `aaf443d`); no desktop o card centra com `md:my-auto` + `md:min-h-0`.
+  - **Arrastar para baixo fecha (gesto de "folha", só celular):** com a galeria no topo
+    (`scroller.scrollTop <= 0`), **puxar o dedo para baixo** faz o card acompanhar o dedo
+    (`translateY`, cantos arredondando) e, passado o limite (**`curY > 110`px**), ele desliza para fora
+    e volta ao catálogo (`onClose`). Subir o dedo, ou já ter rolado, segue como **scroll normal** (o
+    handler só captura arrasto claramente **vertical para baixo** e larga o card se `scrollTop > 0`).
+    Feito num `useEffect` com listeners `touchstart/move/end` no `sheetScrollRef` (`cardRef` para o
+    transform); `touchmove` é `passive:false` para poder `preventDefault` no arrasto.
+  - **Descrição longa recolhida no celular (`descExpanded`):** descrição com **>120 chars** aparece em
+    **3 linhas** (`line-clamp-3 md:line-clamp-none`) com botão **"Ver descrição completa" / "Ver menos"**,
+    evitando página muito comprida no celular; no **desktop** mostra inteira. Reseta ao trocar de produto
+    (junto do `setImgIdx(0)` no `useEffect` por `product.id`).
   - **Prévia no card da loja (hover/toque):** o `ProductCatalogCard` toca o vídeo **por cima da foto de
     capa** ao passar o **mouse** (`onMouseEnter`/`onMouseLeave`, desktop) ou o **dedo**
     (`onTouchStart`, celular — sem precisar clicar para abrir). Um `IntersectionObserver` **pausa** a
@@ -428,7 +446,11 @@ visual de e-commerce moderno (inspirado no site de referência): card branco com
 **selo de desconto** vermelho (`-X%`) ou **"Novo"** azul (produto recente, `isRecent`), **selo "Frete
 grátis"** azul, **categoria** (eyebrow), nome, **preço em laranja** + `de` riscado + **selo `-X%`
 laranja** ao lado, **parcelamento estimado**, **5 estrelas douradas (4.9)** e botão **"Adicionar à
-sacola"** que aparece **no hover** (o card inteiro abre o detalhe). Tem **animação de entrada**
+sacola"** que aparece **no hover** (o card inteiro abre o detalhe). **Abre no 1º toque no celular:** o
+card usa **pointer events** (`onPointerDown`/`onPointerUp`, `tapStartRef`) em vez de `onClick` — um toque
+"parado" (down→up com `dx<12 && dy<12`) chama `onOpen` já no **primeiro** toque, ignorando rolagem/arrasto.
+Antes, com `onClick` + estados `group-hover` (botão/vídeo), o 1º toque no celular só ativava o "hover
+fantasma" e o 2º abria (corrigido em `7b5a75c`). Tem **animação de entrada**
 (blur-fade ao aparecer na tela via `IntersectionObserver` + `.vw-blur-fade`, escalonada por card —
 substitui o `BlurFade`/framer-motion da referência) e **zoom da foto no hover**. A **paleta é fixa**
 (constante `EC` no arquivo: azul `#0062B8`, laranja `#FF6B00`, vermelho `#E63946`, dourado, borda
