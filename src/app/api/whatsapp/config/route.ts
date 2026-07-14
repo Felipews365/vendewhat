@@ -31,6 +31,9 @@ type Body = {
   aiStoreVideoUrl?: string;
   /** Toggle "A IA envia a chave Pix ao fechar o pedido" — mora no storefront. */
   aiSendPixOnCheckout?: boolean;
+  /** Chave Pix + titular (moram no storefront). */
+  pixKey?: string;
+  pixName?: string;
   /** Modo de venda (varejo/atacado/ambos) — mora no storefront. */
   saleMode?: string;
   /** Dias da semana em que a loja atende — mora no storefront. */
@@ -134,6 +137,12 @@ export async function POST(req: Request) {
   const sfPatch: Record<string, unknown> = {};
   if (typeof body.aiSendPixOnCheckout === "boolean") {
     sfPatch.aiSendPixOnCheckout = body.aiSendPixOnCheckout;
+  }
+  if (typeof body.pixKey === "string") {
+    sfPatch.pixKey = body.pixKey.trim().slice(0, 200);
+  }
+  if (typeof body.pixName === "string") {
+    sfPatch.pixName = body.pixName.trim().slice(0, 200);
   }
   if (typeof body.saleMode === "string") {
     sfPatch.saleMode = saleModeFromDb(body.saleMode);

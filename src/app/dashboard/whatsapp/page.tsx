@@ -233,7 +233,11 @@ export default function WhatsAppIaPage() {
   // aqui e no painel de pagamentos da vitrine). hasPixKey = a loja tem chave Pix.
   const [sendPixOnCheckout, setSendPixOnCheckout] = useState(false);
   const [saleMode, setSaleMode] = useState<SaleMode>("varejo");
-  const [hasPixKey, setHasPixKey] = useState(false);
+  // Chave Pix + titular (moram no storefront), editáveis direto aqui ao ligar o
+  // toggle "A IA envia a chave Pix".
+  const [pixKey, setPixKey] = useState("");
+  const [pixName, setPixName] = useState("");
+  const hasPixKey = Boolean(pixKey.trim());
   // Dias e horário de atendimento (mora no storefront).
   const [attendanceDays, setAttendanceDays] = useState<string[]>([]);
   const [attendanceHours, setAttendanceHours] = useState("");
@@ -359,7 +363,8 @@ export default function WhatsAppIaPage() {
         setPickupAddress(sf0.pickupAddress);
         setSendPixOnCheckout(sf0.aiSendPixOnCheckout);
         setSaleMode(sf0.saleMode);
-        setHasPixKey(Boolean(sf0.pixKey.trim()));
+        setPixKey(sf0.pixKey);
+        setPixName(sf0.pixName);
         setAcceptPix(sf0.checkoutPixEnabled);
         setAcceptCard(sf0.checkoutCardEnabled);
         setShipExcursao(sf0.shipExcursaoEnabled);
@@ -500,6 +505,8 @@ export default function WhatsAppIaPage() {
           aiStorePhotoUrl: storePhotoUrl,
           aiStoreVideoUrl: storeVideoUrl,
           aiSendPixOnCheckout: sendPixOnCheckout,
+          pixKey,
+          pixName,
           saleMode,
           checkoutPixEnabled: acceptPix,
           checkoutCardEnabled: acceptCard,
@@ -955,39 +962,61 @@ export default function WhatsAppIaPage() {
         </div>
 
         {/* A IA envia a chave Pix ao fechar o pedido (mesmo toggle do painel de pagamentos) */}
-        <label className="flex items-start gap-3 rounded-xl border border-stone-200 dark:border-slate-700 p-4 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={sendPixOnCheckout}
-            onChange={(e) => setSendPixOnCheckout(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-stone-300 text-violet-700 focus:ring-violet-600 dark:border-slate-600 dark:bg-slate-800"
-          />
-          <span>
-            <span className="block text-sm font-medium text-stone-800 dark:text-slate-100">
-              A IA envia a chave Pix ao fechar o pedido
+        <div className="rounded-xl border border-stone-200 dark:border-slate-700 p-4">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sendPixOnCheckout}
+              onChange={(e) => setSendPixOnCheckout(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-stone-300 text-violet-700 focus:ring-violet-600 dark:border-slate-600 dark:bg-slate-800"
+            />
+            <span>
+              <span className="block text-sm font-medium text-stone-800 dark:text-slate-100">
+                A IA envia a chave Pix ao fechar o pedido
+              </span>
+              <span className="mt-0.5 block text-xs text-stone-500 dark:text-slate-400">
+                Quando o cliente for finalizar a compra pela conversa, a IA manda a
+                chave Pix da loja para ele pagar. Sem chave Pix cadastrada, ela nunca
+                envia nem inventa uma.
+              </span>
             </span>
-            <span className="mt-0.5 block text-xs text-stone-500 dark:text-slate-400">
-              Quando o cliente for finalizar a compra pela conversa, a IA manda a
-              chave Pix da loja para ele pagar. Sem chave Pix cadastrada, ela nunca
-              envia nem inventa uma.
-            </span>
-            {!hasPixKey && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  router.push("/dashboard/configuracoes#pix");
-                }}
-                className="mt-1 block text-left text-xs font-medium text-amber-600 underline decoration-dotted underline-offset-2 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
-              >
-                Você ainda não cadastrou uma chave Pix — toque aqui para
-                cadastrar em Configurações → Pix e pagamentos e a IA poder
-                enviar.
-              </button>
-            )}
-          </span>
-        </label>
+          </label>
+
+          {/* Ao ligar o toggle, o lojista já cadastra a chave Pix aqui mesmo. */}
+          {sendPixOnCheckout && (
+            <div className="mt-3 space-y-2 border-t border-stone-200 dark:border-slate-700 pt-3">
+              <div>
+                <label className="block text-xs font-medium text-stone-700 dark:text-slate-300">
+                  Chave Pix
+                </label>
+                <input
+                  type="text"
+                  value={pixKey}
+                  onChange={(e) => setPixKey(e.target.value)}
+                  placeholder="CPF, celular, e-mail ou chave aleatória"
+                  className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-stone-400 focus:border-violet-500 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-700 dark:text-slate-300">
+                  Nome do titular (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={pixName}
+                  onChange={(e) => setPixName(e.target.value)}
+                  placeholder="Quem recebe o Pix"
+                  className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-stone-400 focus:border-violet-500 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                />
+              </div>
+              {!pixKey.trim() && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Preencha a chave Pix para a IA poder enviá-la ao cliente.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Loja só online (sem ponto físico) */}
         <label className="flex items-start gap-3 rounded-xl border border-stone-200 dark:border-slate-700 p-4 cursor-pointer">
