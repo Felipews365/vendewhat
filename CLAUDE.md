@@ -254,9 +254,23 @@ Orientações para o Claude Code trabalhar neste repositório.
   no banco). **Ponto de entrada único:** o item "🎨 Aparência da loja" do menu "Configurações da
   loja" ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)) navega para essa
   página — **substituiu** o antigo "Cores da loja" (painel `colors` de hex manual, que ficou
-  legado/sem link para não poluir nem deixar o lojista estragar o visual). Os **cards de produto**
-  seguem na paleta fixa `EC` de propósito (o tema não os recolore). Para **adicionar um tema novo**
-  basta acrescentar um objeto em `STORE_THEMES`.
+  legado/sem link para não poluir nem deixar o lojista estragar o visual). Para **adicionar um tema
+  novo** basta acrescentar um objeto em `STORE_THEMES`.
+  - **O tema pinta TODA a vitrine (inclusive os cards):** quando `storefront.themeId` está
+    preenchido (o lojista escolheu um tema), os elementos que antes eram fixos na paleta `EC`
+    (laranja/azul de e-commerce) passam a seguir o tema — em
+    [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) há `themedAccent` (= `themePrimary`) e
+    `themedDeep` (= `themeSecondary`) que alimentam: **botão "Buscar"** do topo, **selos do
+    carrinho** (mobile + `HeaderAction` "Sacola"), **cards de produto** (props `accent`/`accentDeep`
+    do `ProductCatalogCard`: preço + selo `-X%` do preço = `accent`; selos "Novo"/"Frete grátis" +
+    botão **"Adicionar ao carrinho"** + `BorderBeam` = `accentDeep`), **títulos** "⚡ Ofertas
+    Relâmpago"/"Mais Produtos" e o **contador** `FlashSaleCountdown` (prop `accent`), além do
+    **gradiente dos cards promo** (que usa `themedDeep`→`themedAccent`). **Sem tema** (`themeId`
+    vazio / loja "personalizado"), tudo cai de volta na paleta fixa `EC` (default das props), então
+    lojas antigas não mudam. Exceções mantidas de propósito: o **selo vermelho de desconto**
+    (`EC.sale`, convenção universal de promoção), as **estrelas douradas** e os cinzas neutros
+    (`EC.muted`/`border`/`imgBg`). O **detalhe do produto** (modal) já usava as CSS vars
+    `--store-primary`/`--store-secondary`, então sempre acompanhou o tema.
 
 - **Pendente:** os widgets internos compartilhados ainda estão só no tema claro — editor visual
   da loja ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), cuja

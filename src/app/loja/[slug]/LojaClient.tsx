@@ -290,12 +290,15 @@ function HeaderAction({
   dark,
   onClick,
   badge,
+  accent = EC.accent,
 }: {
   icon: React.ReactNode;
   label: string;
   dark: boolean;
   onClick?: () => void;
   badge?: number;
+  /** Cor do selo de contagem (segue o tema da loja quando há um selecionado). */
+  accent?: string;
 }) {
   return (
     <button
@@ -311,7 +314,7 @@ function HeaderAction({
         {badge != null && badge > 0 && (
           <span
             className="absolute -top-1.5 -right-2.5 text-white text-[10px] font-bold min-w-[1.05rem] h-4 px-1 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: EC.accent }}
+            style={{ backgroundColor: accent }}
           >
             {badge > 99 ? "99+" : badge}
           </span>
@@ -791,7 +794,14 @@ function StarRating() {
  * referência). Só renderiza quando a data-fim está no futuro; some quando
  * expira. Monta só no cliente para evitar divergência de hidratação.
  */
-function FlashSaleCountdown({ endsAt }: { endsAt: string }) {
+function FlashSaleCountdown({
+  endsAt,
+  accent = EC.primaryDark,
+}: {
+  endsAt: string;
+  /** Cor de fundo da pílula (segue o tema da loja quando há um selecionado). */
+  accent?: string;
+}) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(Date.now());
@@ -812,7 +822,7 @@ function FlashSaleCountdown({ endsAt }: { endsAt: string }) {
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white"
-      style={{ backgroundColor: EC.primaryDark }}
+      style={{ backgroundColor: accent }}
     >
       <span aria-hidden>⏱</span>
       Termina em:&nbsp;
@@ -839,6 +849,8 @@ function ProductCatalogCard({
   showRatings,
   revealDelayMs = 0,
   featured = false,
+  accent = EC.accent,
+  accentDeep = EC.primary,
   onOpen,
 }: {
   product: CatalogProduct;
@@ -854,6 +866,10 @@ function ProductCatalogCard({
   revealDelayMs?: number;
   /** Card em destaque: ganha o feixe de luz na borda (BorderBeam). */
   featured?: boolean;
+  /** Cor de destaque (preço, selo -X%) — segue o tema da loja quando há um. */
+  accent?: string;
+  /** Cor escura de apoio (selos "Novo"/"Frete grátis", botão) — segue o tema. */
+  accentDeep?: string;
   onOpen: (product: CatalogProduct) => void;
 }) {
   const imgSrc = product.images[0] ?? product.image;
@@ -980,8 +996,8 @@ function ProductCatalogCard({
           <BorderBeam
             size={150}
             duration={12}
-            colorFrom={EC.primary}
-            colorTo={EC.accent}
+            colorFrom={accentDeep}
+            colorTo={accent}
           />
         )}
         {/* Foto */}
@@ -1049,17 +1065,17 @@ function ProductCatalogCard({
           ) : isNew ? (
             <span
               className="absolute left-3 top-3 z-10 rounded px-2 py-0.5 text-xs font-bold text-white"
-              style={{ backgroundColor: EC.primary }}
+              style={{ backgroundColor: accentDeep }}
             >
               Novo
             </span>
           ) : null}
 
-          {/* Selo frete grátis (azul), canto superior direito */}
+          {/* Selo frete grátis (cor de apoio do tema), canto superior direito */}
           {showFrete && (
             <span
               className="absolute right-3 top-3 z-10 rounded px-2 py-0.5 text-[0.6rem] font-bold text-white"
-              style={{ backgroundColor: EC.primary }}
+              style={{ backgroundColor: accentDeep }}
             >
               Frete grátis
             </span>
@@ -1098,7 +1114,7 @@ function ProductCatalogCard({
 
           {/* Preço: atual (laranja) + "de" riscado + selo -X% */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-base font-bold" style={{ color: EC.accent }}>
+            <span className="text-base font-bold" style={{ color: accent }}>
               R${formatPrice(shownPrice)}
             </span>
             {hasCompare && (
@@ -1109,7 +1125,7 @@ function ProductCatalogCard({
             {discount != null && (
               <span
                 className="rounded-full px-1.5 py-0.5 text-[0.6rem] font-bold text-white"
-                style={{ backgroundColor: EC.accent }}
+                style={{ backgroundColor: accent }}
               >
                 -{discount}%
               </span>
@@ -1145,9 +1161,9 @@ function ProductCatalogCard({
               onOpen(product);
             }}
             className="mt-auto flex translate-y-1 items-center justify-center gap-1.5 rounded-full py-2 text-xs font-bold text-white opacity-0 transition-all duration-200 hover:opacity-100 group-hover:translate-y-0 group-hover:opacity-100"
-            style={{ backgroundColor: EC.primary }}
+            style={{ backgroundColor: accentDeep }}
           >
-            🛍️ {soldOut ? "Ver produto" : "Adicionar à sacola"}
+            🛍️ {soldOut ? "Ver produto" : "Adicionar ao carrinho"}
           </button>
         </div>
       </div>
@@ -2857,6 +2873,13 @@ export function LojaClient({
     backgroundColor: storefront.pageBackground,
   } as React.CSSProperties;
 
+  // Cores de destaque da vitrine: quando o lojista escolheu um tema
+  // ("Aparência da loja"), o botão "Buscar", os selos do carrinho e os cards de
+  // produto seguem a cor do tema; sem tema selecionado, mantêm a paleta fixa de
+  // e-commerce (laranja/azul), como antes.
+  const themedAccent = storefront.themeId ? storefront.themePrimary : EC.accent;
+  const themedDeep = storefront.themeId ? storefront.themeSecondary : EC.primary;
+
   // Barra de categorias = cor do topo, porém MAIS CLARA (ex.: topo escuro →
   // barra um tom acima). Texto claro/escuro conforme o brilho do fundo.
   const headerRgb = parseHexRgb(storefront.headerBackground);
@@ -2966,7 +2989,7 @@ export function LojaClient({
                   {totalItems > 0 && (
                     <span
                       className="absolute -top-0.5 -right-0.5 text-white text-[10px] font-bold min-w-[1.05rem] h-4 px-1 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: EC.accent }}
+                      style={{ backgroundColor: themedAccent }}
                     >
                       {totalItems > 99 ? "99+" : totalItems}
                     </span>
@@ -3007,7 +3030,7 @@ export function LojaClient({
                 <button
                   type="submit"
                   className="flex items-center gap-1.5 px-4 sm:px-5 text-white text-sm font-semibold hover:brightness-95 transition"
-                  style={{ backgroundColor: EC.accent }}
+                  style={{ backgroundColor: themedAccent }}
                 >
                   <IconSearch className="w-4 h-4" />
                   <span className="hidden sm:inline">Buscar</span>
@@ -3036,6 +3059,7 @@ export function LojaClient({
                 dark={headerDark}
                 onClick={() => setCartOpen(true)}
                 badge={totalItems}
+                accent={themedAccent}
               />
               {storefront.instagramUrl && (
                 <a
@@ -3138,7 +3162,11 @@ export function LojaClient({
                 onClick={(e) => handleHeroCta(e, c.href || "#catalogo")}
                 className="group relative flex h-full flex-col justify-end p-3 sm:p-5 rounded-2xl overflow-hidden min-h-[90px] sm:min-h-[110px] transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
                 style={{
-                  backgroundImage: `linear-gradient(135deg, ${c.from}, ${c.to})`,
+                  // Com um tema escolhido, o cartão segue as cores da loja
+                  // (escura → destaque); sem tema, usa as cores do próprio cartão.
+                  backgroundImage: storefront.themeId
+                    ? `linear-gradient(135deg, ${themedDeep}, ${themedAccent})`
+                    : `linear-gradient(135deg, ${c.from}, ${c.to})`,
                 }}
               >
                 <BorderBeam
@@ -3244,20 +3272,23 @@ export function LojaClient({
                     className="flex items-center gap-2 text-xl font-bold tracking-tight"
                     style={{ color: EC.foreground }}
                   >
-                    <span aria-hidden style={{ color: EC.accent }}>
+                    <span aria-hidden style={{ color: themedAccent }}>
                       ⚡
                     </span>{" "}
                     <AnimatedGradientText
-                      colorFrom={EC.accent}
-                      colorMid={EC.primary}
-                      colorTo={EC.accent}
+                      colorFrom={themedAccent}
+                      colorMid={themedDeep}
+                      colorTo={themedAccent}
                       speed={5}
                     >
                       Ofertas Relâmpago
                     </AnimatedGradientText>
                   </h3>
                   {storefront.flashSaleEndsAt && (
-                    <FlashSaleCountdown endsAt={storefront.flashSaleEndsAt} />
+                    <FlashSaleCountdown
+                      endsAt={storefront.flashSaleEndsAt}
+                      accent={themedDeep}
+                    />
                   )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -3271,6 +3302,8 @@ export function LojaClient({
                       showRatings={storefront.cardShowRatings}
                       revealDelayMs={Math.min(i, 8) * 50}
                       featured={i === 0}
+                      accent={themedAccent}
+                      accentDeep={themedDeep}
                       onOpen={setSelectedProduct}
                     />
                   ))}
@@ -3293,7 +3326,7 @@ export function LojaClient({
                   >
                     <AnimatedGradientText
                       colorFrom={EC.foreground}
-                      colorMid={EC.primary}
+                      colorMid={themedDeep}
                       colorTo={EC.foreground}
                       speed={6}
                     >
@@ -3328,6 +3361,8 @@ export function LojaClient({
                       freeShippingLabel={storefront.cardFreeShipping}
                       showRatings={storefront.cardShowRatings}
                       revealDelayMs={Math.min(i % 5, 4) * 50}
+                      accent={themedAccent}
+                      accentDeep={themedDeep}
                       onOpen={setSelectedProduct}
                     />
                   ))}
