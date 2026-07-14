@@ -1400,7 +1400,7 @@ function ProductDetailModal({
   return (
     <div
       ref={sheetScrollRef}
-      className="fixed inset-0 z-50 flex items-stretch justify-center overflow-y-auto overscroll-y-contain bg-black/40 md:items-start md:px-10 md:py-20"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-y-contain bg-black/40 md:px-10 md:py-20"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
