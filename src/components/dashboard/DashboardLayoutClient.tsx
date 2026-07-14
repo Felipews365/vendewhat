@@ -78,18 +78,46 @@ function LogoutIcon() {
   );
 }
 
+function MenuIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-6 w-6"
+      aria-hidden
+    >
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden
+    >
+      <path d="M18 6 6 18" />
+      <path d="M6 6l12 12" />
+    </svg>
+  );
+}
+
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard";
   return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-/**
- * Telas "imersivas" de edição de produto (novo/[id]) têm a própria barra de
- * ações fixa no rodapé — esconder a navegação inferior evita sobreposição no
- * celular.
- */
-function isImmersiveRoute(pathname: string) {
-  return pathname.startsWith("/dashboard/produtos/");
 }
 
 /** Navegação vertical — desktop (lateral fixa). */
@@ -137,57 +165,104 @@ function SideNav({
   );
 }
 
-/** Navegação inferior fixa — celular. */
-function BottomNav({ pathname }: { pathname: string }) {
+/** Gaveta de navegação — celular (menu hambúrguer). */
+function MobileMenu({
+  pathname,
+  open,
+  onClose,
+  userName,
+  onLogout,
+}: {
+  pathname: string;
+  open: boolean;
+  onClose: () => void;
+  userName: string;
+  onLogout: () => void;
+}) {
+  if (!open) return null;
   return (
-    <nav
-      className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-slate-200/90 bg-white/95 backdrop-blur-md shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.25)] dark:border-slate-800 dark:bg-slate-900/95"
-      aria-label="Áreas do painel"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      <div className="mx-auto grid max-w-lg grid-cols-6">
-        {DASH_NAV.map(({ href, short, label, icon }) => {
-          const active = isActive(pathname, href);
-          const Icon = DASH_NAV_ICONS[icon];
-          return (
-            <Link
-              key={href}
-              href={href}
-              title={label}
-              aria-label={label}
-              aria-current={active ? "page" : undefined}
-              className="group relative flex flex-col items-center gap-1 px-1 pt-2.5 pb-1.5"
-            >
-              <span
+    <div className="lg:hidden fixed inset-0 z-50">
+      {/* Fundo escuro */}
+      <button
+        type="button"
+        aria-label="Fechar menu"
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+      />
+
+      {/* Painel lateral */}
+      <div className="vw-fade-in-up absolute left-0 top-0 flex h-full w-72 max-w-[82%] flex-col border-r border-slate-200/90 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex shrink-0 items-center justify-between px-5 py-4">
+          <span className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100">
+            Vende<span className="text-violet-600 dark:text-violet-400">What</span>
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar menu"
+            className="grid h-9 w-9 place-items-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+
+        <nav
+          className="flex-1 space-y-1 overflow-y-auto px-3 py-2"
+          aria-label="Áreas do painel"
+        >
+          {DASH_NAV.map(({ href, short, label, icon }) => {
+            const active = isActive(pathname, href);
+            const Icon = DASH_NAV_ICONS[icon];
+            return (
+              <Link
+                key={href}
+                href={href}
+                title={label}
+                aria-label={label}
+                aria-current={active ? "page" : undefined}
+                onClick={onClose}
                 className={[
-                  "absolute top-0 h-0.5 rounded-full bg-violet-600 transition-all duration-300",
-                  active ? "w-7 opacity-100" : "w-0 opacity-0",
-                ].join(" ")}
-                aria-hidden
-              />
-              <Icon
-                className={[
-                  "h-[22px] w-[22px] transition-all duration-200 group-active:scale-90",
+                  "group relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors",
                   active
-                    ? "text-violet-600 dark:text-violet-300"
-                    : "text-slate-400 dark:text-slate-500",
-                ].join(" ")}
-              />
-              <span
-                className={[
-                  "text-[10px] font-semibold leading-none transition-colors",
-                  active
-                    ? "text-violet-600 dark:text-violet-300"
-                    : "text-slate-400 dark:text-slate-500",
+                    ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+                    : "text-slate-600 hover:bg-violet-50 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-violet-300",
                 ].join(" ")}
               >
-                {short}
-              </span>
-            </Link>
-          );
-        })}
+                <Icon
+                  className={[
+                    "h-5 w-5 shrink-0",
+                    active ? "text-white" : "",
+                  ].join(" ")}
+                />
+                <span className="truncate">{short}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="shrink-0 border-t border-slate-200/90 px-3 py-3 dark:border-slate-800">
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate px-2 text-sm text-slate-600 dark:text-slate-300">
+              Olá,{" "}
+              <strong className="text-slate-800 dark:text-slate-100">
+                {userName.split(" ")[0]}
+              </strong>
+            </span>
+            <ThemeToggle />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onLogout();
+            }}
+            className="mt-2 w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+          >
+            Sair
+          </button>
+        </div>
       </div>
-    </nav>
+    </div>
   );
 }
 
@@ -201,6 +276,12 @@ export function DashboardLayoutClient({
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("");
   const [collapsed, setCollapsed] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Fecha a gaveta ao navegar (troca de rota)
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   // Restaura a preferência de lateral recolhida (só desktop)
   useEffect(() => {
@@ -253,8 +334,6 @@ export function DashboardLayoutClient({
       </div>
     );
   }
-
-  const immersive = isImmersiveRoute(pathname);
 
   return (
     <div className="relative min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -356,12 +435,23 @@ export function DashboardLayoutClient({
           {/* Header enxuto — só no celular (a lateral cobre o desktop) */}
           <header className="lg:hidden sticky top-0 z-30 border-b border-slate-200/90 bg-white/85 backdrop-blur-md shadow-sm shadow-slate-200/40 dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-black/20">
             <div className="flex flex-nowrap items-center justify-between gap-4 px-4 py-3">
-              <Link
-                href="/dashboard"
-                className="shrink-0 truncate text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100"
-              >
-                Vende<span className="text-violet-600 dark:text-violet-400">What</span>
-              </Link>
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen(true)}
+                  aria-label="Abrir menu"
+                  aria-expanded={menuOpen}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                >
+                  <MenuIcon />
+                </button>
+                <Link
+                  href="/dashboard"
+                  className="shrink-0 truncate text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100"
+                >
+                  Vende<span className="text-violet-600 dark:text-violet-400">What</span>
+                </Link>
+              </div>
               <div className="flex flex-none items-center gap-1.5 sm:gap-2.5">
                 <ThemeToggle />
                 <button
@@ -378,14 +468,20 @@ export function DashboardLayoutClient({
           {/* pb extra no celular para não ficar atrás da barra inferior */}
           <div
             key={pathname}
-            className={`vw-fade-in-up flex-1 ${immersive ? "" : "pb-24 lg:pb-0"}`}
+            className="vw-fade-in-up flex-1"
           >
             {children}
           </div>
         </div>
       </div>
 
-      {!immersive && <BottomNav pathname={pathname} />}
+      <MobileMenu
+        pathname={pathname}
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        userName={userName}
+        onLogout={handleLogout}
+      />
     </div>
   );
 }

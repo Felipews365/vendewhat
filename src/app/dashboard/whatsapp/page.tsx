@@ -705,14 +705,6 @@ export default function WhatsAppIaPage() {
         tab === "conversas" ? "max-w-7xl" : "max-w-2xl"
       }`}
     >
-      <header>
-        <h1 className="text-xl font-bold text-stone-800 dark:text-slate-100">WhatsApp & IA</h1>
-        <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">
-          Conecte o WhatsApp da sua loja e deixe a IA atender seus clientes, tirar
-          dúvidas e enviar o link da loja para a compra.
-        </p>
-      </header>
-
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
           {error}
@@ -723,27 +715,37 @@ export default function WhatsAppIaPage() {
       <div className="flex gap-1 rounded-xl border border-stone-200 bg-stone-100 p-1 dark:border-slate-800 dark:bg-slate-900/60">
         {(
           [
-            ["conexao", "Conexão"],
-            ["configuracoes", "Configuração IA"],
-            ["conversas", "Conversas"],
+            ["conexao", "Conexão", "Conexão"],
+            ["configuracoes", "Configuração IA", "Config. IA"],
+            ["conversas", "Conversas", "Conversas"],
           ] as const
-        ).map(([key, label]) => (
+        ).map(([key, label, shortLabel]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex-1 rounded-lg px-2 py-2 text-xs font-medium transition sm:px-3 sm:text-sm ${
+            className={`flex-1 whitespace-nowrap rounded-lg px-2 py-2 text-xs font-medium transition sm:px-3 sm:text-sm ${
               tab === key
                 ? "bg-white text-violet-700 shadow-sm dark:bg-slate-800 dark:text-violet-300"
                 : "text-stone-600 hover:text-stone-800 dark:text-slate-400 dark:hover:text-slate-200"
             }`}
           >
-            {label}
+            <span className="sm:hidden">{shortLabel}</span>
+            <span className="hidden sm:inline">{label}</span>
           </button>
         ))}
       </div>
 
       {/* Conexão */}
       {tab === "conexao" && (
+      <>
+      <header>
+        <h1 className="text-xl font-bold text-stone-800 dark:text-slate-100">WhatsApp & IA</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">
+          Conecte o WhatsApp da sua loja e deixe a IA atender seus clientes, tirar
+          dúvidas e enviar o link da loja para a compra.
+        </p>
+      </header>
+
       <section className="rounded-2xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-semibold text-stone-800 dark:text-slate-100">Conexão do WhatsApp</h2>
@@ -803,6 +805,7 @@ export default function WhatsAppIaPage() {
           </div>
         )}
       </section>
+      </>
       )}
 
       {/* Atendente de IA — primeira parte da aba "Configuração IA" */}

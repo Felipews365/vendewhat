@@ -38,10 +38,18 @@ Orientações para o Claude Code trabalhar neste repositório.
 
 - **Layout do dashboard:** [src/components/dashboard/DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx)
   (usado por [src/app/dashboard/layout.tsx](src/app/dashboard/layout.tsx)). Navegação numa
-  **sidebar vertical à esquerda** (desktop, `lg+` — `SideNav`) e numa **barra inferior fixa**
-  (celular, `BottomNav`). Editar `DASH_NAV` lá muda os itens dos dois. Rotas "imersivas"
-  (`/dashboard/produtos/novo` e `/dashboard/produtos/[id]`) têm barra de ações própria no rodapé,
-  então a navegação inferior é escondida nelas (`isImmersiveRoute`).
+  **sidebar vertical à esquerda** (desktop, `lg+` — `SideNav`) e num **menu hambúrguer** no celular
+  (`MobileMenu`). Editar `DASH_NAV` lá muda os itens dos dois. **No celular** o `<header>` sticky tem
+  um botão **☰ (`MenuIcon`)** que abre uma **gaveta lateral** (`MobileMenu` — overlay `fixed inset-0`,
+  `lg:hidden`, `z-50`) deslizando da esquerda com **todos** os itens do `DASH_NAV` + saudação, tema e
+  Sair; fecha ao tocar fora (backdrop), no ✕ (`CloseIcon`) ou ao navegar (um `useEffect` em `pathname`
+  zera `menuOpen`). Substituiu a antiga **barra inferior fixa** (`BottomNav`), que ficava apertada
+  porque os 7 itens do `DASH_NAV` estouravam o grid de 6 colunas. A gaveta é um overlay (sem
+  sobreposição com barras de ação), então funciona **inclusive** nas rotas imersivas de produto
+  (`/dashboard/produtos/novo` e `/dashboard/produtos/[id]`) — o antigo `isImmersiveRoute`/`pb-24` foi
+  removido junto com o `BottomNav`. A barra inferior da **loja pública** (LojaClient, Início ·
+  WhatsApp · Carrinho · Menu) é outra coisa e **continua** — Carrinho/WhatsApp visíveis ajudam a
+  vender.
   - **Sidebar recolhível (`collapsed`):** a lateral encolhe de `w-60` (ícone + texto) para `w-[76px]`
     (só ícones, marca vira "VW", rodapé com tema/sair como ícones) por um **botão flutuante redondo
     centralizado na borda direita** (`‹`/`›`, `ChevronIcon`). A preferência **persiste** em
