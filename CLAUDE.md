@@ -37,11 +37,17 @@ Orientações para o Claude Code trabalhar neste repositório.
 ## UI do painel (layout, tema, animações)
 
 - **Layout do dashboard:** [src/components/dashboard/DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx)
-  (usado por [src/app/dashboard/layout.tsx](src/app/dashboard/layout.tsx)). Navegação por
-  ícones **no topo** (desktop, `lg+`) e numa **barra inferior fixa** (celular). Editar
-  `DASH_NAV` lá muda os itens do menu. Rotas "imersivas" (`/dashboard/produtos/novo` e
-  `/dashboard/produtos/[id]`) têm barra de ações própria no rodapé, então a navegação
-  inferior é escondida nelas (`isImmersiveRoute`).
+  (usado por [src/app/dashboard/layout.tsx](src/app/dashboard/layout.tsx)). Navegação numa
+  **sidebar vertical à esquerda** (desktop, `lg+` — `SideNav`) e numa **barra inferior fixa**
+  (celular, `BottomNav`). Editar `DASH_NAV` lá muda os itens dos dois. Rotas "imersivas"
+  (`/dashboard/produtos/novo` e `/dashboard/produtos/[id]`) têm barra de ações própria no rodapé,
+  então a navegação inferior é escondida nelas (`isImmersiveRoute`).
+  - **Sidebar recolhível (`collapsed`):** a lateral encolhe de `w-60` (ícone + texto) para `w-[76px]`
+    (só ícones, marca vira "VW", rodapé com tema/sair como ícones) por um **botão flutuante redondo
+    centralizado na borda direita** (`‹`/`›`, `ChevronIcon`). A preferência **persiste** em
+    `localStorage` (`vw-sidebar-collapsed`), restaurada num `useEffect` no mount (evita mismatch de
+    hidratação). No desktop **não há** mais cabeçalho no topo (a sidebar cobre marca + controles); o
+    `<header>` sticky com marca + tema + Sair é **`lg:hidden`**, só no celular.
 - **Tema claro/escuro:** Tailwind com `darkMode: "class"` ([tailwind.config.ts](tailwind.config.ts)).
   Botão [src/components/ThemeToggle.tsx](src/components/ThemeToggle.tsx) alterna a classe `dark`
   no `<html>` e salva em `localStorage` (`vw-theme`). Um script anti-flash em
@@ -1203,8 +1209,9 @@ contato → thread em tela cheia com seta de voltar). **Balões estilo WhatsApp:
 (`role === "user"`, fundo **laranja suave**), loja/IA à direita (`role === "assistant"`, **verde
 WhatsApp** `#d9fdd3`), ambos dark-aware. Acentos (enviar, item ativo, botões) em **emerald**.
 **Sem scroll externo:** a aba é uma coluna de altura travada na viewport
-(`h-[calc(100dvh-17rem)]`) — a faixa de pausa geral fica fixa em cima e o painel (`h-full`) ocupa o
-resto; **só a lista e a thread rolam por dentro**. Sem migration para o básico — usa
+(`h-[calc(100dvh-17rem)]` no celular; **`lg:h-[calc(100dvh-11rem)]`** no desktop, mais alta porque a
+sidebar substituiu o cabeçalho do topo e sobrou espaço vertical) — a faixa de pausa geral fica fixa em
+cima e o painel (`h-full`) ocupa o resto; **só a lista e a thread rolam por dentro**. Sem migration para o básico — usa
 `whatsapp_messages`, `whatsapp_pauses` e `store_whatsapp` que já existem (a **renomeação** tem tabela
 própria, ver abaixo).
 

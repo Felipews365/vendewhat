@@ -1517,7 +1517,7 @@ export default function WhatsAppIaPage() {
 
       {/* Conversas + pausa geral do atendimento */}
       {tab === "conversas" && (
-        <div className="flex h-[calc(100dvh-17rem)] min-h-[26rem] flex-col gap-4">
+        <div className="flex h-[calc(100dvh-17rem)] min-h-[26rem] flex-col gap-4 lg:h-[calc(100dvh-11rem)]">
           {/* Pausa geral: pausa a IA para TODOS os clientes de uma vez */}
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="min-w-0">
