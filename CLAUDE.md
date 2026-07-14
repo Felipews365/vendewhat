@@ -634,6 +634,54 @@ pagamento moram no JSONB `stores.storefront`; os dados do cliente (`customerAddr
 `carrierName`, `paymentMethod`) no `orders.payload` (ver
 [src/app/api/orders/route.ts](src/app/api/orders/route.ts)).
 
+### Configurações da IA (aba "Config." em Atendimento)
+
+Painel simples e rápido para o lojista leigo marcar **o que a loja aceita** — usado tanto pela IA
+(nas respostas ao cliente) quanto pelo **checkout da loja pública** (fonte única, sem divergência).
+Fica numa aba **"Config."** na página [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx)
+(`tab === "configuracoes"`, ao lado de Conexão/IA/Conversas/Pausar). Todos os campos booleanos usam
+um **radio "Sim / Não" sempre visível** (componente `YesNo`, segmentado, verde = Sim); `tipoVenda` e
+`tipoMinimo` usam radio de múltiplas opções (`SegRadio`) — **uma seleção por campo**. Os controles são
+embrulhados por `ConfigField` (rótulo + dica + controle).
+
+- **Sem migration** — tudo mora no JSONB `stores.storefront` e **reaproveita os campos que já
+  existiam** (uma fonte de verdade; ver [storefront.ts](src/lib/storefront.ts)):
+  - **Modo de venda** (`tipoVenda`) → `saleMode` (`varejo`/`atacado`/`ambos`). Foi **movido** da aba
+    IA para cá (não duplica).
+  - **Aceita Pix / cartão** → `checkoutPixEnabled` / `checkoutCardEnabled` (os mesmos toggles do
+    checkout; Pix só aparece de fato com `pixKey` preenchida).
+  - **Formas de envio** (`aceitaExcursao/Correios/Transportadora/Retirada`) → **campos novos**
+    `shipExcursaoEnabled` / `shipCorreiosEnabled` / `shipTransportadoraEnabled` /
+    `shipRetiradaEnabled` (default `true` = comportamento antigo, as 4 opções disponíveis).
+  - **Pedido mínimo:** `pedidoMinimoAtivo` → `minOrderEnabled` (**interruptor mestre novo**);
+    `tipoMinimo` → `minOrderType` (`valor`/`quantidade`/`ambos`, **novo**); `valorMinimoPedido` →
+    `minOrderValue`; `quantidadeMinimaPedido` → `minOrderQty`; `mensagemMinimoPedido` →
+    `minOrderMessage` (**novo**, usado pela IA ao explicar o mínimo). Os campos de valor/qtd/mensagem
+    só aparecem quando `minOrderEnabled` (e cada valor conforme o `tipoMinimo`).
+- **Persistência:** o "Salvar configurações" da aba chama o mesmo `handleSaveConfig` da aba IA, que
+  manda tudo para [/api/whatsapp/config](src/app/api/whatsapp/config/route.ts). A rota faz um **patch**
+  no `storefront` (preserva o resto), gravando só os campos que vieram no corpo (booleanos de
+  pagamento/envio, `minOrderEnabled/Type/Value/Qty/Message`, `saleMode`).
+- **Retrocompat do pedido mínimo:** `minOrderEnabled` **não** existia; em `storefrontFromDb` o default
+  deriva de `minOrderValue > 0 || minOrderQty > 0`, então lojas antigas continuam exigindo o mínimo. O
+  cálculo efetivo respeita o interruptor + o tipo via `effectiveMinOrder(sf)` (desligado → `{0,0}`;
+  `valor` zera a qtd; `quantidade` zera o valor); `minOrderStatus`/`describeMinOrder` consomem esse
+  efetivo. O bloco "Pedido mínimo" do editor visual
+  ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)) também **liga/desliga
+  `minOrderEnabled`** ao mexer nos valores, mantendo os dois editores em sincronia.
+- **Checkout gateado (envios):** em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) o seletor de
+  "Forma de envio" só mostra as formas habilitadas (`enabledShippingModeIds(sf)` filtrando
+  `SHIPPING_MODES`); se **nenhuma** estiver ligada, exibe um aviso para combinar pelo WhatsApp.
+- **A IA sabe:** [whatsappRespond.ts](src/lib/whatsappRespond.ts) monta as listas de formas de envio
+  (`shippingModeLabel`) e de pagamento aceitas e a `minOrderMessage`, e passa por
+  `buildSystemPrompt({ shippingModes, paymentMethods, minOrderMessage })`
+  ([attendant.ts](src/lib/ai/attendant.ts)) — a IA **só oferece** o que está habilitado e usa as
+  palavras do lojista ao explicar o mínimo. A **retirada** só é oferecida pela IA se
+  `shipRetiradaEnabled` (senão `pickupAddress`/`pickupInstructions` são zerados no prompt).
+- **Nav:** o item do menu do painel que apontava para essa página foi renomeado de **"WhatsApp"** para
+  **"Atendimento"** (o ícone do WhatsApp continua) em
+  [DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx) (`DASH_NAV`).
+
 ### Impressão de pedidos
 
 A página de pedidos tem **Imprimir** (por pedido), **Imprimir todos** (no topo) e um botão

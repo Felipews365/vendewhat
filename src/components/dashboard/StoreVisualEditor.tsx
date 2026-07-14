@@ -2606,9 +2606,13 @@ export function StoreVisualEditor({
                 placeholder="0,00"
                 onChange={(e) => {
                   const n = Number(e.target.value.replace(",", "."));
+                  const nextValue = Number.isFinite(n) && n > 0 ? n : 0;
                   const nextSf: StorefrontSettings = {
                     ...sf,
-                    minOrderValue: Number.isFinite(n) && n > 0 ? n : 0,
+                    minOrderValue: nextValue,
+                    // Mantém o interruptor mestre (Atendimento → Configurações da IA)
+                    // em sincronia: ter algum mínimo > 0 = exigir pedido mínimo.
+                    minOrderEnabled: nextValue > 0 || sf.minOrderQty > 0,
                   };
                   setSf(nextSf);
                   onAutoSaveStorefront?.(nextSf);
@@ -2629,9 +2633,11 @@ export function StoreVisualEditor({
                 placeholder="0"
                 onChange={(e) => {
                   const n = Math.floor(Number(e.target.value));
+                  const nextQty = Number.isFinite(n) && n > 0 ? n : 0;
                   const nextSf: StorefrontSettings = {
                     ...sf,
-                    minOrderQty: Number.isFinite(n) && n > 0 ? n : 0,
+                    minOrderQty: nextQty,
+                    minOrderEnabled: sf.minOrderValue > 0 || nextQty > 0,
                   };
                   setSf(nextSf);
                   onAutoSaveStorefront?.(nextSf);

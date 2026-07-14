@@ -29,8 +29,8 @@ const DASH_NAV: readonly {
   { href: "/dashboard/pedidos", short: "Pedidos", label: "Pedidos", icon: "pedidos" },
   {
     href: "/dashboard/whatsapp",
-    short: "WhatsApp",
-    label: "WhatsApp & IA",
+    short: "Atendimento",
+    label: "Atendimento (WhatsApp & IA)",
     icon: "whatsapp",
   },
   {

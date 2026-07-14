@@ -108,6 +108,15 @@ export function buildSystemPrompt(args: {
   minOrder?: string;
   /** Modo de venda da loja (orienta a condução: atacado/varejo/ambos). */
   saleMode?: "varejo" | "atacado" | "ambos";
+  /**
+   * Mensagem personalizada do pedido mínimo (o lojista escreveu). Vazio = a IA
+   * usa a frase automática montada a partir de `minOrder`.
+   */
+  minOrderMessage?: string;
+  /** Formas de envio/retirada que a loja aceita (rótulos). Vazio = não informado. */
+  shippingModes?: string[];
+  /** Formas de pagamento que a loja aceita (rótulos). Vazio = não informado. */
+  paymentMethods?: string[];
   /** Nome salvo do cliente (já comprou antes) — a IA saúda pelo primeiro nome. */
   customerName?: string;
 }): string {
@@ -131,9 +140,15 @@ export function buildSystemPrompt(args: {
     hasPix,
     minOrder,
     saleMode,
+    minOrderMessage,
+    shippingModes,
+    paymentMethods,
     customerName,
   } = args;
   const minOrderText = (minOrder ?? "").trim();
+  const minOrderMsg = (minOrderMessage ?? "").trim();
+  const shippingList = (shippingModes ?? []).filter(Boolean);
+  const paymentList = (paymentMethods ?? []).filter(Boolean);
   const custName = (customerName ?? "").trim();
   const custFirst = custName ? custName.split(/\s+/)[0] : "";
   const storeUrl = `${baseUrl.replace(/\/+$/, "")}/loja/${slug}`;
@@ -215,7 +230,17 @@ export function buildSystemPrompt(args: {
       ? "- MODO DE VENDA (VAREJO E ATACADO): esta loja atende tanto varejo (uso próprio) quanto atacado (revenda / maior quantidade). Logo no começo, descubra de forma natural se a compra é para uso próprio ou em maior quantidade e conduza pela regra certa (no atacado vale o pedido mínimo)."
       : "",
     minOrderText
-      ? `- PEDIDO MÍNIMO: esta loja exige um pedido mínimo de ${minOrderText}. Se o cliente perguntar se tem pedido mínimo, qual o valor/quantidade mínima, ou quiser fechar um pedido abaixo disso, informe o mínimo com clareza (${minOrderText}) e incentive-o a completar o carrinho para atingir o mínimo e conseguir finalizar. No catálogo online, o botão de finalizar só libera quando o pedido atinge esse mínimo. NÃO invente um valor diferente deste.`
+      ? `- PEDIDO MÍNIMO: esta loja exige um pedido mínimo de ${minOrderText}. Se o cliente perguntar se tem pedido mínimo, qual o valor/quantidade mínima, ou quiser fechar um pedido abaixo disso, informe o mínimo com clareza (${minOrderText}) e incentive-o a completar o carrinho para atingir o mínimo e conseguir finalizar. No catálogo online, o botão de finalizar só libera quando o pedido atinge esse mínimo. NÃO invente um valor diferente deste.${
+          minOrderMsg
+            ? ` A loja escreveu esta observação sobre o pedido mínimo — use as palavras dela ao explicar: "${minOrderMsg}".`
+            : ""
+        }`
+      : "",
+    shippingList.length
+      ? `- FORMAS DE ENVIO: esta loja entrega/atende por: ${shippingList.join(", ")}. Ofereça SOMENTE essas opções quando o cliente perguntar como recebe o pedido; NÃO ofereça formas de envio que não estejam nesta lista.`
+      : "",
+    paymentList.length
+      ? `- FORMAS DE PAGAMENTO: esta loja aceita: ${paymentList.join(", ")}. Se o cliente perguntar como pode pagar, informe SOMENTE essas opções; NÃO invente nem prometa formas de pagamento fora desta lista.`
       : "",
     "",
     onlineOnly

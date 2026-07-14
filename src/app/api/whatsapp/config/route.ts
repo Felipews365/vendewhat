@@ -3,7 +3,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { AI_TONES, type AiTone, ensureConfig, saveAiConfig } from "@/lib/whatsappConfig";
 import { isShortMapsLink, parseLatLng, resolveMapsLatLng } from "@/lib/geoLocation";
-import { saleModeFromDb } from "@/lib/storefront";
+import { saleModeFromDb, minOrderTypeFromDb } from "@/lib/storefront";
 
 export const runtime = "nodejs";
 
@@ -29,6 +29,18 @@ type Body = {
   aiSendPixOnCheckout?: boolean;
   /** Modo de venda (varejo/atacado/ambos) — mora no storefront. */
   saleMode?: string;
+  // Configurações da IA que reaproveitam campos reais do storefront (checkout).
+  checkoutPixEnabled?: boolean;
+  checkoutCardEnabled?: boolean;
+  shipExcursaoEnabled?: boolean;
+  shipCorreiosEnabled?: boolean;
+  shipTransportadoraEnabled?: boolean;
+  shipRetiradaEnabled?: boolean;
+  minOrderEnabled?: boolean;
+  minOrderType?: string;
+  minOrderValue?: number;
+  minOrderQty?: number;
+  minOrderMessage?: string;
 };
 
 export async function POST(req: Request) {
@@ -117,6 +129,32 @@ export async function POST(req: Request) {
   }
   if (typeof body.saleMode === "string") {
     sfPatch.saleMode = saleModeFromDb(body.saleMode);
+  }
+  // Formas de pagamento (aceitaPix/aceitaCartao) e de envio — booleanos diretos.
+  const boolKeys = [
+    "checkoutPixEnabled",
+    "checkoutCardEnabled",
+    "shipExcursaoEnabled",
+    "shipCorreiosEnabled",
+    "shipTransportadoraEnabled",
+    "shipRetiradaEnabled",
+    "minOrderEnabled",
+  ] as const;
+  for (const k of boolKeys) {
+    if (typeof body[k] === "boolean") sfPatch[k] = body[k];
+  }
+  // Pedido mínimo: tipo, valores e mensagem.
+  if (typeof body.minOrderType === "string") {
+    sfPatch.minOrderType = minOrderTypeFromDb(body.minOrderType);
+  }
+  if (typeof body.minOrderValue === "number" && Number.isFinite(body.minOrderValue)) {
+    sfPatch.minOrderValue = Math.max(0, body.minOrderValue);
+  }
+  if (typeof body.minOrderQty === "number" && Number.isFinite(body.minOrderQty)) {
+    sfPatch.minOrderQty = Math.max(0, Math.floor(body.minOrderQty));
+  }
+  if (typeof body.minOrderMessage === "string") {
+    sfPatch.minOrderMessage = body.minOrderMessage.slice(0, 500);
   }
   if (Object.keys(sfPatch).length > 0) {
     const current =

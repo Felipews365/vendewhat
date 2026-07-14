@@ -12,7 +12,12 @@ import {
   type WhatsAppConfig,
 } from "@/lib/whatsappConfig";
 import { sendLocation, sendMedia, sendText } from "@/lib/evolution";
-import { storefrontFromDb, describeMinOrder } from "@/lib/storefront";
+import {
+  storefrontFromDb,
+  describeMinOrder,
+  enabledShippingModeIds,
+} from "@/lib/storefront";
+import { shippingModeLabel } from "@/lib/shippingModes";
 import {
   type AttendantProduct,
   buildSystemPrompt,
@@ -141,8 +146,21 @@ export async function respondToCustomer(
 
   const storeName = typeof store.name === "string" ? store.name : "Loja";
   const sf = storefrontFromDb(store.storefront);
-  const pickupAddress = sf.pickupAddress;
-  const pickupInstructions = sf.pickupInstructions;
+  // Retirada só é oferecida pela IA se a loja habilitou essa forma de envio.
+  const pickupAddress = sf.shipRetiradaEnabled ? sf.pickupAddress : "";
+  const pickupInstructions = sf.shipRetiradaEnabled ? sf.pickupInstructions : "";
+
+  // Formas de envio/retirada e de pagamento que a loja aceita (para a IA só
+  // oferecer o que o lojista habilitou em Atendimento → Configurações da IA).
+  const shippingModes = enabledShippingModeIds(sf)
+    .map((id) => shippingModeLabel(id))
+    .filter((l): l is string => Boolean(l));
+  const paymentModes: string[] = [];
+  if (sf.checkoutPixEnabled) paymentModes.push("Pix");
+  if (sf.checkoutCashEnabled) paymentModes.push("Dinheiro na entrega");
+  if (sf.checkoutCardEnabled) paymentModes.push("Cartão na entrega");
+  if (sf.checkoutMercadoPagoEnabled)
+    paymentModes.push("Mercado Pago (pagamento online)");
   // Loja só online: sem endereço/pino/foto/vídeo (a IA avisa que é só online).
   const onlineOnly = cfg.aiOnlineOnly;
   const storeAddress = onlineOnly ? "" : cfg.aiLocationAddress.trim() || pickupAddress;
@@ -236,7 +254,10 @@ export async function respondToCustomer(
     hasCatalogPdf,
     hasPix: pixEnabled,
     minOrder,
+    minOrderMessage: sf.minOrderMessage,
     saleMode: sf.saleMode,
+    shippingModes,
+    paymentMethods: paymentModes,
     customerName,
   });
 

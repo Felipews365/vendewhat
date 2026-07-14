@@ -6,6 +6,7 @@ import {
   type StoreBlockType,
   STORE_BLOCK_TYPES,
 } from "@/components/storefront/blocks/types";
+import type { ShippingModeId } from "@/lib/shippingModes";
 
 /**
  * O banner é um único carrossel: as fotos passam uma atrás da outra (1→2→…).
@@ -465,6 +466,32 @@ export type StorefrontSettings = {
    * Se valor E quantidade forem definidos, ambos precisam ser atingidos.
    */
   minOrderQty: number;
+  /**
+   * Interruptor mestre do pedido mínimo. `true` = a loja exige um mínimo (valor
+   * e/ou quantidade, conforme `minOrderType`). `false` = sem exigência (mesmo que
+   * `minOrderValue`/`minOrderQty` tenham valores guardados). Para lojas antigas,
+   * o default deriva de haver algum mínimo > 0.
+   */
+  minOrderEnabled: boolean;
+  /**
+   * Como o mínimo é cobrado: só `valor`, só `quantidade` ou `ambos`. Filtra quais
+   * dos dois campos (`minOrderValue`/`minOrderQty`) realmente valem.
+   */
+  minOrderType: MinOrderType;
+  /**
+   * Mensagem que a IA usa (e que aparece no aviso do carrinho) quando o cliente
+   * pergunta / ainda não atingiu o pedido mínimo. Vazio = mensagem automática.
+   */
+  minOrderMessage: string;
+  /**
+   * Formas de envio/retirada que a loja aceita. Cada toggle controla se a opção
+   * aparece no checkout da loja pública **e** se a IA a oferece. Default `true`
+   * (comportamento antigo: todas as 4 opções disponíveis).
+   */
+  shipExcursaoEnabled: boolean;
+  shipCorreiosEnabled: boolean;
+  shipTransportadoraEnabled: boolean;
+  shipRetiradaEnabled: boolean;
   /** Frases curtas abaixo do logo (ex.: pedido mínimo) */
   infoBullets: string[];
   /** Cor de destaque (botões catálogo, detalhes) — ex. rosa pó */
@@ -549,6 +576,15 @@ export function saleModeFromDb(v: unknown): SaleMode {
   return SALE_MODES.includes(v as SaleMode) ? (v as SaleMode) : "varejo";
 }
 
+/** Como o pedido mínimo é exigido: por valor, por quantidade de itens ou ambos. */
+export type MinOrderType = "valor" | "quantidade" | "ambos";
+export const MIN_ORDER_TYPES: MinOrderType[] = ["valor", "quantidade", "ambos"];
+export function minOrderTypeFromDb(v: unknown): MinOrderType {
+  return MIN_ORDER_TYPES.includes(v as MinOrderType)
+    ? (v as MinOrderType)
+    : "ambos";
+}
+
 export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroSubtitle: "Bem-vindo à nossa loja",
   heroTitle: "",
@@ -568,6 +604,13 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   stockControlEnabled: true,
   minOrderValue: 0,
   minOrderQty: 0,
+  minOrderEnabled: false,
+  minOrderType: "ambos",
+  minOrderMessage: "",
+  shipExcursaoEnabled: true,
+  shipCorreiosEnabled: true,
+  shipTransportadoraEnabled: true,
+  shipRetiradaEnabled: true,
   infoBullets: [],
   themePrimary: "#c9a8ac",
   themeSecondary: "#5c2e36",
@@ -651,13 +694,37 @@ export function formatBRL(value: number): string {
   return `R$ ${value.toFixed(2).replace(".", ",")}`;
 }
 
+/** Campos que definem o pedido mínimo efetivo da loja. */
+type MinOrderFields = Pick<
+  StorefrontSettings,
+  "minOrderEnabled" | "minOrderType" | "minOrderValue" | "minOrderQty"
+>;
+
+/**
+ * Valor/quantidade mínimos que REALMENTE valem, respeitando o interruptor mestre
+ * (`minOrderEnabled`) e o tipo (`minOrderType`). Desligado → `{ value: 0, qty: 0 }`;
+ * tipo `valor` zera a quantidade; tipo `quantidade` zera o valor.
+ */
+export function effectiveMinOrder(sf: MinOrderFields): {
+  value: number;
+  qty: number;
+} {
+  if (!sf.minOrderEnabled) return { value: 0, qty: 0 };
+  const value = minOrderValueFromDb(sf.minOrderValue);
+  const qty = minOrderQtyFromDb(sf.minOrderQty);
+  const type = minOrderTypeFromDb(sf.minOrderType);
+  if (type === "valor") return { value, qty: 0 };
+  if (type === "quantidade") return { value: 0, qty };
+  return { value, qty };
+}
+
 /**
  * Estado do pedido mínimo para um carrinho (subtotal + quantidade de itens).
  * `required` = a loja definiu algum mínimo; `met` = o carrinho satisfaz TODOS
  * os mínimos configurados (valor E quantidade, quando ambos > 0).
  */
 export function minOrderStatus(
-  sf: Pick<StorefrontSettings, "minOrderValue" | "minOrderQty">,
+  sf: MinOrderFields,
   subtotal: number,
   totalItems: number
 ): {
@@ -670,8 +737,7 @@ export function minOrderStatus(
   missingValue: number;
   missingQty: number;
 } {
-  const minValue = minOrderValueFromDb(sf.minOrderValue);
-  const minQty = minOrderQtyFromDb(sf.minOrderQty);
+  const { value: minValue, qty: minQty } = effectiveMinOrder(sf);
   const valueMet = minValue <= 0 || subtotal >= minValue - 0.001;
   const qtyMet = minQty <= 0 || totalItems >= minQty;
   return {
@@ -690,16 +756,31 @@ export function minOrderStatus(
  * Frase curta descrevendo o pedido mínimo da loja (ex.: "R$ 100,00 em produtos
  * e pelo menos 3 itens"). Vazio quando não há mínimo. Usado na IA do WhatsApp.
  */
-export function describeMinOrder(
-  sf: Pick<StorefrontSettings, "minOrderValue" | "minOrderQty">
-): string {
-  const minValue = minOrderValueFromDb(sf.minOrderValue);
-  const minQty = minOrderQtyFromDb(sf.minOrderQty);
+export function describeMinOrder(sf: MinOrderFields): string {
+  const { value: minValue, qty: minQty } = effectiveMinOrder(sf);
   const parts: string[] = [];
   if (minValue > 0) parts.push(`${formatBRL(minValue)} em produtos`);
   if (minQty > 0)
     parts.push(`pelo menos ${minQty} ${minQty === 1 ? "item" : "itens"}`);
   return parts.join(" e ");
+}
+
+/** Formas de envio/retirada que a loja aceita, na ordem canônica de `SHIPPING_MODES`. */
+export function enabledShippingModeIds(
+  sf: Pick<
+    StorefrontSettings,
+    | "shipExcursaoEnabled"
+    | "shipCorreiosEnabled"
+    | "shipTransportadoraEnabled"
+    | "shipRetiradaEnabled"
+  >
+): ShippingModeId[] {
+  const out: ShippingModeId[] = [];
+  if (sf.shipExcursaoEnabled) out.push("excursao");
+  if (sf.shipCorreiosEnabled) out.push("correios");
+  if (sf.shipTransportadoraEnabled) out.push("transportadora");
+  if (sf.shipRetiradaEnabled) out.push("retirada");
+  return out;
 }
 
 /** Valor mínimo do pedido (R$). Negativo/NaN vira 0 (sem mínimo); 2 casas. */
@@ -953,6 +1034,30 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     ),
     minOrderValue: minOrderValueFromDb(o.minOrderValue),
     minOrderQty: minOrderQtyFromDb(o.minOrderQty),
+    // Lojas antigas não têm o interruptor: liga se já havia algum mínimo > 0.
+    minOrderEnabled: boolFromDb(
+      o.minOrderEnabled,
+      minOrderValueFromDb(o.minOrderValue) > 0 ||
+        minOrderQtyFromDb(o.minOrderQty) > 0
+    ),
+    minOrderType: minOrderTypeFromDb(o.minOrderType),
+    minOrderMessage: strOrEmpty(o.minOrderMessage).slice(0, 500),
+    shipExcursaoEnabled: boolFromDb(
+      o.shipExcursaoEnabled,
+      DEFAULT_STOREFRONT.shipExcursaoEnabled
+    ),
+    shipCorreiosEnabled: boolFromDb(
+      o.shipCorreiosEnabled,
+      DEFAULT_STOREFRONT.shipCorreiosEnabled
+    ),
+    shipTransportadoraEnabled: boolFromDb(
+      o.shipTransportadoraEnabled,
+      DEFAULT_STOREFRONT.shipTransportadoraEnabled
+    ),
+    shipRetiradaEnabled: boolFromDb(
+      o.shipRetiradaEnabled,
+      DEFAULT_STOREFRONT.shipRetiradaEnabled
+    ),
     infoBullets: bulletsFromDb(o.infoBullets),
     themePrimary: str(o.themePrimary, DEFAULT_STOREFRONT.themePrimary),
     themeSecondary: str(o.themeSecondary, DEFAULT_STOREFRONT.themeSecondary),
@@ -1044,6 +1149,13 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     stockControlEnabled: s.stockControlEnabled,
     minOrderValue: minOrderValueFromDb(s.minOrderValue),
     minOrderQty: minOrderQtyFromDb(s.minOrderQty),
+    minOrderEnabled: s.minOrderEnabled,
+    minOrderType: minOrderTypeFromDb(s.minOrderType),
+    minOrderMessage: s.minOrderMessage.trim().slice(0, 500),
+    shipExcursaoEnabled: s.shipExcursaoEnabled,
+    shipCorreiosEnabled: s.shipCorreiosEnabled,
+    shipTransportadoraEnabled: s.shipTransportadoraEnabled,
+    shipRetiradaEnabled: s.shipRetiradaEnabled,
     infoBullets: s.infoBullets.map((b) => b.trim()).filter(Boolean),
     themePrimary: s.themePrimary.trim(),
     themeSecondary: s.themeSecondary.trim(),

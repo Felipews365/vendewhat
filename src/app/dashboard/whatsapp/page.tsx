@@ -1,11 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
 import { parseLatLng, isShortMapsLink } from "@/lib/geoLocation";
-import { storefrontFromDb, type SaleMode } from "@/lib/storefront";
+import {
+  storefrontFromDb,
+  type SaleMode,
+  type MinOrderType,
+} from "@/lib/storefront";
 import ConversationsPanel from "@/components/dashboard/ConversationsPanel";
 
 // Constantes locais (client-safe) — não importar de whatsappConfig.ts, que usa `crypto`.
@@ -99,6 +103,105 @@ function formatUntil(until: string | null): string {
   })}`;
 }
 
+/** Radio "Sim / Não" (as duas opções sempre visíveis), estilo segmentado. */
+function YesNo({
+  value,
+  onChange,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  const opts: { label: string; val: boolean }[] = [
+    { label: "Sim", val: true },
+    { label: "Não", val: false },
+  ];
+  return (
+    <div className="mt-2 flex gap-2" role="radiogroup">
+      {opts.map((o) => {
+        const sel = value === o.val;
+        const on = sel && o.val;
+        const off = sel && !o.val;
+        return (
+          <button
+            key={o.label}
+            type="button"
+            role="radio"
+            aria-checked={sel}
+            onClick={() => onChange(o.val)}
+            className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+              on
+                ? "border-green-600 bg-green-600 text-white"
+                : off
+                ? "border-stone-500 bg-stone-600 text-white dark:border-slate-500 dark:bg-slate-600"
+                : "border-stone-300 text-stone-600 hover:bg-stone-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Radio segmentado genérico (várias opções sempre visíveis). */
+function SegRadio<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { label: string; val: T }[];
+}) {
+  return (
+    <div className="mt-2 flex flex-wrap gap-2" role="radiogroup">
+      {options.map((o) => {
+        const sel = value === o.val;
+        return (
+          <button
+            key={o.val}
+            type="button"
+            role="radio"
+            aria-checked={sel}
+            onClick={() => onChange(o.val)}
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+              sel
+                ? "border-violet-600 bg-violet-600 text-white"
+                : "border-stone-300 text-stone-600 hover:bg-stone-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Linha de configuração: rótulo, dica e o controle. */
+function ConfigField({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-stone-200 p-4 dark:border-slate-700">
+      <p className="text-sm font-semibold text-stone-800 dark:text-slate-100">
+        {label}
+      </p>
+      {hint && (
+        <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">{hint}</p>
+      )}
+      {children}
+    </div>
+  );
+}
+
 export default function WhatsAppIaPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -138,6 +241,19 @@ export default function WhatsAppIaPage() {
   const [sendPixOnCheckout, setSendPixOnCheckout] = useState(false);
   const [saleMode, setSaleMode] = useState<SaleMode>("varejo");
   const [hasPixKey, setHasPixKey] = useState(false);
+
+  // Configurações da IA (reaproveitam campos reais do checkout/storefront).
+  const [acceptPix, setAcceptPix] = useState(true);
+  const [acceptCard, setAcceptCard] = useState(false);
+  const [shipExcursao, setShipExcursao] = useState(true);
+  const [shipCorreios, setShipCorreios] = useState(true);
+  const [shipTransportadora, setShipTransportadora] = useState(true);
+  const [shipRetirada, setShipRetirada] = useState(true);
+  const [minOrderEnabled, setMinOrderEnabled] = useState(false);
+  const [minOrderType, setMinOrderType] = useState<MinOrderType>("ambos");
+  const [minOrderValue, setMinOrderValue] = useState(0);
+  const [minOrderQty, setMinOrderQty] = useState(0);
+  const [minOrderMessage, setMinOrderMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
 
@@ -157,9 +273,9 @@ export default function WhatsAppIaPage() {
     {}
   );
 
-  const [tab, setTab] = useState<"conexao" | "ia" | "conversas" | "pausar">(
-    "conexao"
-  );
+  const [tab, setTab] = useState<
+    "conexao" | "ia" | "configuracoes" | "conversas" | "pausar"
+  >("conexao");
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -235,6 +351,17 @@ export default function WhatsAppIaPage() {
         setSendPixOnCheckout(sf0.aiSendPixOnCheckout);
         setSaleMode(sf0.saleMode);
         setHasPixKey(Boolean(sf0.pixKey.trim()));
+        setAcceptPix(sf0.checkoutPixEnabled);
+        setAcceptCard(sf0.checkoutCardEnabled);
+        setShipExcursao(sf0.shipExcursaoEnabled);
+        setShipCorreios(sf0.shipCorreiosEnabled);
+        setShipTransportadora(sf0.shipTransportadoraEnabled);
+        setShipRetirada(sf0.shipRetiradaEnabled);
+        setMinOrderEnabled(sf0.minOrderEnabled);
+        setMinOrderType(sf0.minOrderType);
+        setMinOrderValue(sf0.minOrderValue);
+        setMinOrderQty(sf0.minOrderQty);
+        setMinOrderMessage(sf0.minOrderMessage);
       }
 
       const { data: cfg } = await supabase
@@ -370,6 +497,17 @@ export default function WhatsAppIaPage() {
           aiStoreVideoUrl: storeVideoUrl,
           aiSendPixOnCheckout: sendPixOnCheckout,
           saleMode,
+          checkoutPixEnabled: acceptPix,
+          checkoutCardEnabled: acceptCard,
+          shipExcursaoEnabled: shipExcursao,
+          shipCorreiosEnabled: shipCorreios,
+          shipTransportadoraEnabled: shipTransportadora,
+          shipRetiradaEnabled: shipRetirada,
+          minOrderEnabled,
+          minOrderType,
+          minOrderValue,
+          minOrderQty,
+          minOrderMessage,
         }),
       });
       const data = await res.json();
@@ -643,6 +781,7 @@ export default function WhatsAppIaPage() {
           [
             ["conexao", "Conexão"],
             ["ia", "IA"],
+            ["configuracoes", "Config."],
             ["conversas", "Conversas"],
             ["pausar", "Pausar"],
           ] as const
@@ -771,26 +910,6 @@ export default function WhatsAppIaPage() {
               ))}
             </select>
           </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
-            Modo de venda
-          </label>
-          <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
-            Como sua loja vende. A IA conduz a conversa pela regra certa (no atacado,
-            reforça o pedido mínimo; em ambos, descobre primeiro se é para uso próprio
-            ou revenda).
-          </p>
-          <select
-            value={saleMode}
-            onChange={(e) => setSaleMode(e.target.value as SaleMode)}
-            className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-          >
-            <option value="varejo">Varejo (venda por unidade / uso próprio)</option>
-            <option value="atacado">Atacado (revenda / maior quantidade)</option>
-            <option value="ambos">Ambos (varejo e atacado)</option>
-          </select>
         </div>
 
         <div>
@@ -1218,6 +1337,193 @@ export default function WhatsAppIaPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSaveConfig}
+            disabled={saving}
+            className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
+          >
+            {saving ? "Salvando…" : "Salvar configurações"}
+          </button>
+          {savedOk && (
+            <span className="text-sm font-medium text-green-600">Salvo!</span>
+          )}
+        </div>
+      </section>
+      )}
+
+      {/* Configurações da IA */}
+      {tab === "configuracoes" && (
+      <section className="rounded-2xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm space-y-4">
+        <div>
+          <h2 className="font-semibold text-stone-800 dark:text-slate-100">
+            Configurações da IA
+          </h2>
+          <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">
+            Marque o que sua loja aceita. A IA usa isto para responder os clientes,
+            e as mesmas opções valem no checkout da sua loja.
+          </p>
+        </div>
+
+        {/* Modo de venda (tipoVenda) */}
+        <ConfigField
+          label="Modo de venda"
+          hint="Como sua loja vende. A IA conduz pela regra certa (no atacado, reforça o pedido mínimo; em ambos, descobre primeiro se é uso próprio ou revenda)."
+        >
+          <SegRadio<SaleMode>
+            value={saleMode}
+            onChange={setSaleMode}
+            options={[
+              { label: "Varejo", val: "varejo" },
+              { label: "Atacado", val: "atacado" },
+              { label: "Ambos", val: "ambos" },
+            ]}
+          />
+        </ConfigField>
+
+        {/* Formas de pagamento */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
+            Formas de pagamento
+          </h3>
+          <ConfigField
+            label="Aceita Pix?"
+            hint={
+              hasPixKey
+                ? "Mostra o Pix como opção de pagamento no checkout."
+                : "Você ainda não cadastrou uma chave Pix — cadastre em Loja → Configurações → Pix e pagamentos para o Pix aparecer no checkout."
+            }
+          >
+            <YesNo value={acceptPix} onChange={setAcceptPix} />
+          </ConfigField>
+          <ConfigField
+            label="Aceita cartão?"
+            hint="Mostra 'Cartão na entrega' como opção de pagamento no checkout."
+          >
+            <YesNo value={acceptCard} onChange={setAcceptCard} />
+          </ConfigField>
+        </div>
+
+        {/* Formas de envio */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
+            Formas de envio
+          </h3>
+          <p className="text-xs text-stone-500 dark:text-slate-400">
+            O que estiver como “Não” some do checkout da loja e a IA não oferece.
+          </p>
+          <ConfigField label="Aceita excursão?">
+            <YesNo value={shipExcursao} onChange={setShipExcursao} />
+          </ConfigField>
+          <ConfigField label="Aceita Correios?">
+            <YesNo value={shipCorreios} onChange={setShipCorreios} />
+          </ConfigField>
+          <ConfigField label="Aceita transportadora?">
+            <YesNo
+              value={shipTransportadora}
+              onChange={setShipTransportadora}
+            />
+          </ConfigField>
+          <ConfigField
+            label="Aceita retirada no local?"
+            hint="Configure o endereço e as instruções de retirada em Loja → Configurações → Pix e pagamentos."
+          >
+            <YesNo value={shipRetirada} onChange={setShipRetirada} />
+          </ConfigField>
+        </div>
+
+        {/* Pedido mínimo */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-stone-500 dark:text-slate-400">
+            Pedido mínimo
+          </h3>
+          <ConfigField
+            label="Exigir pedido mínimo?"
+            hint="Quando ligado, o checkout só libera ao atingir o mínimo e a IA informa o cliente."
+          >
+            <YesNo value={minOrderEnabled} onChange={setMinOrderEnabled} />
+          </ConfigField>
+
+          {minOrderEnabled && (
+            <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
+              <div>
+                <p className="text-sm font-semibold text-stone-800 dark:text-slate-100">
+                  Tipo de mínimo
+                </p>
+                <SegRadio<MinOrderType>
+                  value={minOrderType}
+                  onChange={setMinOrderType}
+                  options={[
+                    { label: "Por valor", val: "valor" },
+                    { label: "Por quantidade", val: "quantidade" },
+                    { label: "Ambos", val: "ambos" },
+                  ]}
+                />
+              </div>
+
+              {(minOrderType === "valor" || minOrderType === "ambos") && (
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+                    Valor mínimo do pedido (R$)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={minOrderValue || ""}
+                    onChange={(e) =>
+                      setMinOrderValue(Math.max(0, Number(e.target.value) || 0))
+                    }
+                    className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 sm:w-48"
+                    placeholder="Ex.: 100"
+                  />
+                </div>
+              )}
+
+              {(minOrderType === "quantidade" || minOrderType === "ambos") && (
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+                    Quantidade mínima de itens
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="1"
+                    inputMode="numeric"
+                    value={minOrderQty || ""}
+                    onChange={(e) =>
+                      setMinOrderQty(
+                        Math.max(0, Math.floor(Number(e.target.value) || 0))
+                      )
+                    }
+                    className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 sm:w-48"
+                    placeholder="Ex.: 3"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+                  Mensagem do pedido mínimo (opcional)
+                </label>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+                  A IA usa estas palavras ao explicar o mínimo. Vazio = mensagem
+                  automática.
+                </p>
+                <textarea
+                  value={minOrderMessage}
+                  maxLength={500}
+                  onChange={(e) => setMinOrderMessage(e.target.value)}
+                  rows={2}
+                  className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  placeholder="Ex.: Nosso pedido mínimo é de R$ 100 para o atacado. Vamos completar o seu carrinho? 😊"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3">

@@ -16,6 +16,7 @@ import {
   type StorefrontSettings,
   storefrontRichFooterVisible,
   minOrderStatus,
+  enabledShippingModeIds,
   formatBRL,
 } from "@/lib/storefront";
 import { discountPercent } from "@/lib/productCardMeta";
@@ -2601,6 +2602,12 @@ export function LojaClient({
   const pickupAddress = storefront.pickupAddress.trim();
   const pickupInstructions = storefront.pickupInstructions.trim();
 
+  // Formas de envio/retirada que a loja habilitou (Atendimento → Configurações da IA).
+  const enabledShipModes = useMemo(() => {
+    const ids = new Set(enabledShippingModeIds(storefront));
+    return SHIPPING_MODES.filter((m) => ids.has(m.id));
+  }, [storefront]);
+
   // Correios e Transportadora precisam de CEP válido (8 dígitos); excursão não exige.
   const cepRequired =
     shippingMode === "correios" || shippingMode === "transportadora";
@@ -3795,7 +3802,12 @@ export function LojaClient({
                         Excursão, Correios ou retirada — selecione uma opção.
                       </p>
                       <div className="flex flex-col gap-2">
-                        {SHIPPING_MODES.map((m) => {
+                        {enabledShipModes.length === 0 && (
+                          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
+                            Combine a forma de envio direto pelo WhatsApp da loja.
+                          </p>
+                        )}
+                        {enabledShipModes.map((m) => {
                           const sel = shippingMode === m.id;
                           return (
                             <label
