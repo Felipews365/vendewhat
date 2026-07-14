@@ -689,8 +689,9 @@ pagamento moram no JSONB `stores.storefront`; os dados do cliente (`customerAddr
 
 A antiga aba **"IA"** e a aba **"Config."** foram **fundidas numa única aba "Configuração IA"**
 (`tab === "configuracoes"`) na página [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) — as
-abas viraram **Conexão · Configuração IA · Conversas · Pausar** (não há mais aba "IA" separada; o tipo
-`tab` e o array de abas perderam o valor `"ia"`). A aba renderiza **duas seções (cards) empilhadas**,
+abas viraram **Conexão · Configuração IA · Conversas** (não há mais aba "IA" nem "Pausar" separadas; o
+tipo `tab` e o array de abas perderam os valores `"ia"` e `"pausar"` — a pausa geral virou uma faixa no
+topo da aba **Conversas**, ver "Responder na mão"). A aba renderiza **duas seções (cards) empilhadas**,
 ambas sob `tab === "configuracoes"`, com **um único** botão "Salvar configurações" no rodapé (as duas
 seções mandam o payload completo pelo mesmo `handleSaveConfig`):
 
@@ -1181,24 +1182,47 @@ Tudo por loja. **Migration:** rode
   (`saveAiConfig` + `POST /api/whatsapp/config`).
 
 A tela [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) é dividida em **abas**
-(`tab`: Conexão · IA · Conversas · Pausar). A aba **Pausar** lista os clientes que já conversaram
-(`listRecentCustomers` em [whatsappConfig.ts](src/lib/whatsappConfig.ts), das `whatsapp_messages`)
-mesclados com os pausados; cada linha mostra um **selo de status** — "IA atendendo" (verde),
-"Você assumiu" (handoff) / "Pausado por você" (manual), "IA pausada"/"IA desligada" — e um botão
-**Pausar** ou **Reativar**. Cada linha tem seu **próprio seletor de tempo** (estado `rowDuration`
-por telefone) que começa no **tempo padrão** do topo (`customerDuration`) e pode ser mudado só
-naquele contato — o botão Pausar daquela linha usa esse valor. Durações: 15min/30min/1h/3h/1 dia/
-"até eu reativar". Há ainda um campo para pausar um número que ainda não apareceu (usa o tempo padrão).
+(`tab`: Conexão · Configuração IA · Conversas). **A antiga aba "Pausar" foi removida:** a **pausa
+geral** (pausar a IA para *todos* os clientes) virou uma **faixa no topo da aba Conversas** (mostra o
+status Ativo/Pausado, botão **"Pausar tudo"** com menu de duração e **"Reativar a IA agora"**;
+`pauseGlobal`/`resumeGlobal` + `PAUSE_DURATIONS`, estado `globalPauseMenu`), e a **pausa por cliente**
+passou para **dentro de cada conversa** (botão "Pausar IA" no cabeçalho do `ConversationsPanel`, também
+com menu de duração — ver "Responder na mão"). Todo o código que só a aba Pausar usava
+(`pauseCustomer`/`resumeCustomer`/`pauseManualCustomer`/`customerRows`/`customerStatus` e os estados
+`newPausePhone`/`customerDuration`/`rowDuration`) foi **removido** da página. As durações
+(15min/30min/1h/3h/1 dia/"até eu reativar") e o endpoint `POST /api/whatsapp/pause` continuam os mesmos.
 
 ### Responder na mão (aba Conversas — WhatsApp Web dentro do painel)
 
 A aba **Conversas** deixa o lojista **ler o histórico e responder manualmente** um cliente, estilo
-WhatsApp Web. Componente [ConversationsPanel.tsx](src/components/dashboard/ConversationsPanel.tsx)
-(montado só quando `tab === "conversas"`; nessa aba o container da página vira `max-w-5xl`). Layout
-**duas colunas no desktop** (lista de conversas `lg:w-80` + thread) e **uma coluna no celular**
-(lista → toca no contato → thread em tela cheia com seta de voltar). Balões: cliente à esquerda
-(`role === "user"`), loja/IA à direita (`role === "assistant"`, roxo). Sem migration — usa
-`whatsapp_messages`, `whatsapp_pauses` e `store_whatsapp` que já existem.
+WhatsApp Web (visual inspirado numa referência). Componente
+[ConversationsPanel.tsx](src/components/dashboard/ConversationsPanel.tsx) (montado só quando
+`tab === "conversas"`; nessa aba o container da página vira `max-w-7xl`). Layout **duas colunas no
+desktop** (lista de conversas `lg:w-96` + thread) e **uma coluna no celular** (lista → toca no
+contato → thread em tela cheia com seta de voltar). **Balões estilo WhatsApp:** cliente à esquerda
+(`role === "user"`, fundo **laranja suave**), loja/IA à direita (`role === "assistant"`, **verde
+WhatsApp** `#d9fdd3`), ambos dark-aware. Acentos (enviar, item ativo, botões) em **emerald**.
+**Sem scroll externo:** a aba é uma coluna de altura travada na viewport
+(`h-[calc(100dvh-17rem)]`) — a faixa de pausa geral fica fixa em cima e o painel (`h-full`) ocupa o
+resto; **só a lista e a thread rolam por dentro**. Sem migration para o básico — usa
+`whatsapp_messages`, `whatsapp_pauses` e `store_whatsapp` que já existem (a **renomeação** tem tabela
+própria, ver abaixo).
+
+- **Nome do contato + chips de status:** a lista e o cabeçalho mostram o **nome salvo** do cliente no
+  lugar do telefone puro. O nome vem de `listRecentCustomers` (ver "Dados"), que casa o telefone da
+  conversa com o de **pedidos anteriores** (`orders`, via `toWhatsAppNumber`) — o nome **renomeado
+  pelo lojista** tem prioridade. Chip **"Nome definido"** (verde) quando há nome, **"A confirmar"**
+  (âmbar) quando não; na lista aparecem também a **data** ("Hoje"/"Ontem"/"08 de jul.") e o chip
+  **"● IA pausada"**. Avatar com iniciais do nome (ou 2 últimos dígitos do telefone).
+- **Renomear o contato:** um **lápis ✏️** ao lado do nome no cabeçalho abre edição inline (input +
+  Salvar/Cancelar; Enter salva, Esc cancela). O nome digitado **sobrepõe** o do pedido; apagar volta
+  ao do pedido/telefone. É otimista (`nameOverrides` local) e persiste via `POST /api/whatsapp/contact`
+  `{phone, name}` ([route](src/app/api/whatsapp/contact/route.ts), autentica o dono + service role) →
+  `setContactName` em [whatsappConfig.ts](src/lib/whatsappConfig.ts). **Migration:** rode
+  [supabase-migration-whatsapp-contacts.sql](supabase-migration-whatsapp-contacts.sql) (tabela
+  `whatsapp_contacts` `(store_id, customer_phone)` PK + `display_name`, sem RLS — só service role).
+  `listContactNames` (mapa telefone→nome) é lido pelo `listRecentCustomers` com `try/catch` (tolera a
+  tabela ausente até a migration ser aplicada).
 
 - **Dados:** a lista de contatos vem do mesmo `conversations` que a página já carrega de
   `GET /api/whatsapp/pause` (`listRecentCustomers`); o histórico completo de um contato vem de
@@ -1212,16 +1236,24 @@ WhatsApp Web. Componente [ConversationsPanel.tsx](src/components/dashboard/Conve
   desativado, 30min) — o mesmo comportamento do handoff automático. O painel atualiza as pausas
   (`onSent → loadPauses`), então o selo "você" aparece na lista. Exige o WhatsApp conectado
   (`status === "connected"`), senão o envio é bloqueado com aviso.
-- **Pausar/Reativar no cabeçalho:** o botão **Pausar IA / Reativar IA** no topo da conversa chama
-  `POST /api/whatsapp/pause` (`scope=customer`, `minutes=null` = até reativar) — o mesmo endpoint da
-  aba Pausar, só que sem trocar de aba. Atualiza via `onSent`.
-- **Tags na conversa:** cada conversa pode receber **tags** (rótulos como "Interessado", "Pago",
-  "VIP"). Ficam numa barra abaixo do cabeçalho (chips removíveis + botão "+ Tag" com sugestões
-  prontas `TAG_PRESETS` e campo livre) e também aparecem **na lista** de conversas. Cor por tag é
-  determinística (hash → paleta). Armazenamento: tabela `whatsapp_conversation_tags`
-  (`(store_id, customer_phone)` PK, `tags jsonb`; sem RLS, só service role) via
-  `listConversationTags`/`setConversationTags` em [whatsappConfig.ts](src/lib/whatsappConfig.ts) e a
-  rota [/api/whatsapp/tags](src/app/api/whatsapp/tags/route.ts) (GET mapa telefone→tags; POST
+- **Pausar/Reativar no cabeçalho (com duração):** quando a IA está atendendo, o botão **"Pausar IA"**
+  abre um **menu de duração** (15min/30min/1h/3h/1 dia/"até eu reativar"; estado `pauseMenuOpen`) que
+  chama `POST /api/whatsapp/pause` (`scope=customer`, `minutes` da opção escolhida). Já pausado, vira
+  **"Reativar IA"** direto (`minutes=null`). É o mesmo endpoint da antiga aba Pausar, agora por
+  conversa. Atualiza via `onSent`.
+- **Etiquetas na conversa (popover com cor):** cada conversa recebe **etiquetas** por um **popover**
+  que abre pelo ícone 🏷️ no cabeçalho ("Etiquetas da conversa — só no painel"): **sugestões prontas**
+  coloridas (`TAG_PRESETS`: Urgente/Cliente novo/Interessado/Aguardando pagamento/Pago/Sem resposta,
+  clique cria/aplica) + **"Nova etiqueta"** com **seletor de cor** (bolinhas da paleta `TAG_PALETTE`) e
+  "Criar e aplicar". As etiquetas aplicadas viram uma barra abaixo do cabeçalho (chips removíveis com
+  bolinha de cor) e também aparecem **na lista**. A **cor escolhida persiste sem migration**: fica
+  codificada na própria string guardada (`"Nome¦corId"`, separador `¦`; `splitTag`/`joinTag`) — a
+  coluna já é `string[]`; etiquetas antigas (sem separador) caem numa cor por **hash** do nome. O nome
+  é limitado a 22 chars para `nome + ¦ + corId` caber no teto de 30 do `sanitizeTags`. Armazenamento:
+  tabela `whatsapp_conversation_tags` (`(store_id, customer_phone)` PK, `tags jsonb`; sem RLS, só
+  service role) via `listConversationTags`/`setConversationTags` em
+  [whatsappConfig.ts](src/lib/whatsappConfig.ts) e a rota
+  [/api/whatsapp/tags](src/app/api/whatsapp/tags/route.ts) (GET mapa telefone→tags; POST
   `{phone, tags[]}`). **Migration:** rode
   [supabase-migration-whatsapp-tags.sql](supabase-migration-whatsapp-tags.sql). A rota tolera a
   tabela ausente (devolve vazio) até a migration ser aplicada.

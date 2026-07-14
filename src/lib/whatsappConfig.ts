@@ -394,6 +394,8 @@ export type RecentCustomer = {
   customerPhone: string;
   lastMessage: string;
   lastAt: string;
+  /** Nome salvo (de um pedido anterior), ou "" se o cliente ainda não tem cadastro. */
+  customerName: string;
 };
 
 /** Clientes que já conversaram com a loja, do mais recente para o mais antigo. */
@@ -416,9 +418,52 @@ export async function listRecentCustomers(
       customerPhone: phone,
       lastMessage: String(r.content ?? ""),
       lastAt: typeof r.created_at === "string" ? r.created_at : "",
+      customerName: "",
     });
     if (seen.size >= limit) break;
   }
+
+  // Enriquecer com o nome salvo de pedidos anteriores, numa única consulta:
+  // monta um mapa numeroWhatsApp -> nome (do pedido mais recente) e casa cada
+  // conversa pelo telefone normalizado (mesma lógica de `findCustomerName`).
+  if (seen.size > 0) {
+    const { data: orders } = await db
+      .from("orders")
+      .select("customer_name, customer_phone, created_at")
+      .eq("store_id", storeId)
+      .not("customer_phone", "is", null)
+      .not("customer_name", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(400);
+    const nameByNumber = new Map<string, string>();
+    for (const o of (orders ?? []) as Record<string, unknown>[]) {
+      const oPhone = typeof o.customer_phone === "string" ? o.customer_phone : "";
+      const oName = typeof o.customer_name === "string" ? o.customer_name.trim() : "";
+      const key = toWhatsAppNumber(oPhone);
+      if (key && oName && !nameByNumber.has(key)) nameByNumber.set(key, oName);
+    }
+
+    // Nome renomeado pelo lojista (tem prioridade sobre o do pedido). Tolera a
+    // tabela ainda não existir (migration pendente).
+    let customNames: Record<string, string> = {};
+    try {
+      customNames = await listContactNames(db, storeId);
+    } catch {
+      customNames = {};
+    }
+
+    for (const c of Array.from(seen.values())) {
+      const digits = c.customerPhone.replace(/\D/g, "");
+      if (customNames[digits]) {
+        c.customerName = customNames[digits];
+        continue;
+      }
+      const key = toWhatsAppNumber(c.customerPhone);
+      const nm = key ? nameByNumber.get(key) : "";
+      if (nm) c.customerName = nm;
+    }
+  }
+
   return Array.from(seen.values());
 }
 
@@ -440,6 +485,58 @@ export async function isCustomerPaused(
   if (new Date(String(until)).getTime() > Date.now()) return true;
   await clearCustomerPause(db, storeId, customerPhone);
   return false;
+}
+
+// --- Nome personalizado do contato ------------------------------------------
+
+const CONTACTS = "whatsapp_contacts";
+
+/** Mapa telefone (dígitos) -> nome renomeado pelo lojista, para a loja inteira. */
+export async function listContactNames(
+  db: SupabaseClient,
+  storeId: string
+): Promise<Record<string, string>> {
+  const { data } = await db
+    .from(CONTACTS)
+    .select("customer_phone, display_name")
+    .eq("store_id", storeId);
+  const map: Record<string, string> = {};
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const phone = String(r.customer_phone ?? "").replace(/\D/g, "");
+    const name = String(r.display_name ?? "").trim();
+    if (phone && name) map[phone] = name;
+  }
+  return map;
+}
+
+/** Define o nome do contato (vazio remove a linha). Devolve o nome salvo. */
+export async function setContactName(
+  db: SupabaseClient,
+  storeId: string,
+  customerPhone: string,
+  name: string
+): Promise<string> {
+  const phone = customerPhone.replace(/\D/g, "");
+  const clean = name.trim().slice(0, 80);
+  if (!phone) return "";
+  if (!clean) {
+    await db
+      .from(CONTACTS)
+      .delete()
+      .eq("store_id", storeId)
+      .eq("customer_phone", phone);
+    return "";
+  }
+  await db.from(CONTACTS).upsert(
+    {
+      store_id: storeId,
+      customer_phone: phone,
+      display_name: clean,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "store_id,customer_phone" }
+  );
+  return clean;
 }
 
 // --- Tags de conversa --------------------------------------------------------
