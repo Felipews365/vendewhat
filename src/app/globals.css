@@ -312,14 +312,23 @@ html {
   }
 }
 .vw-blur-fade {
-  animation: vw-blur-fade 0.4s ease-out both;
+  /* `backwards` (não `both`): segura o estado inicial durante o atraso e, ao
+     TERMINAR, volta ao estado base SEM `filter`/`transform` residual. Com `both`
+     o `filter: blur(0)` do frame final ficava aplicado para sempre, promovendo o
+     elemento a uma camada de GPU e deixando o TEXTO borrado no celular (a foto,
+     por ser bitmap, não sofria). O padrão de opacity/filter já é 1/none, então
+     não há flicker ao reverter. */
+  animation: vw-blur-fade 0.4s ease-out backwards;
 }
 
 /* Revela os filhos em cascata (banner: selo → título → destaque → texto → botão).
    Cada filho herda o mesmo blur-fade com um atraso crescente. Re-dispara junto do
    slide porque o container do banner remonta por `key`. */
 .vw-reveal-stagger > * {
-  animation: vw-blur-fade 0.5s ease-out both;
+  /* `backwards` (ver `.vw-blur-fade` acima): sem o `filter: blur(0)` residual do
+     `both`, o texto do banner deixa de ficar borrado no celular depois da
+     animação. */
+  animation: vw-blur-fade 0.5s ease-out backwards;
 }
 .vw-reveal-stagger > *:nth-child(1) {
   animation-delay: 0.08s;
