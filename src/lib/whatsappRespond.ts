@@ -15,6 +15,7 @@ import { sendLocation, sendMedia, sendText } from "@/lib/evolution";
 import {
   storefrontFromDb,
   describeMinOrder,
+  describeAttendance,
   enabledShippingModeIds,
 } from "@/lib/storefront";
 import { shippingModeLabel } from "@/lib/shippingModes";
@@ -256,6 +257,7 @@ export async function respondToCustomer(
     minOrder,
     minOrderMessage: sf.minOrderMessage,
     saleMode: sf.saleMode,
+    attendance: describeAttendance(sf),
     shippingModes,
     paymentMethods: paymentModes,
     customerName,

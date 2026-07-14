@@ -119,6 +119,11 @@ export function buildSystemPrompt(args: {
   paymentMethods?: string[];
   /** Nome salvo do cliente (já comprou antes) — a IA saúda pelo primeiro nome. */
   customerName?: string;
+  /**
+   * Dias/horário em que a loja atende (ex.: "segunda-feira a sexta-feira, das 9h
+   * às 18h"). Vazio = não informado.
+   */
+  attendance?: string;
 }): string {
   const {
     storeName,
@@ -144,8 +149,10 @@ export function buildSystemPrompt(args: {
     shippingModes,
     paymentMethods,
     customerName,
+    attendance,
   } = args;
   const minOrderText = (minOrder ?? "").trim();
+  const attendanceText = (attendance ?? "").trim();
   const minOrderMsg = (minOrderMessage ?? "").trim();
   const shippingList = (shippingModes ?? []).filter(Boolean);
   const paymentList = (paymentMethods ?? []).filter(Boolean);
@@ -242,6 +249,9 @@ export function buildSystemPrompt(args: {
     paymentList.length
       ? `- FORMAS DE PAGAMENTO: esta loja aceita: ${paymentList.join(", ")}. Se o cliente perguntar como pode pagar, informe SOMENTE essas opções; NÃO invente nem prometa formas de pagamento fora desta lista.`
       : "",
+    attendanceText
+      ? `- DIAS/HORÁRIO DE ATENDIMENTO: esta loja atende em ${attendanceText}. Se o cliente perguntar quando a loja funciona, em que dias/horário atende, ou se está aberta, informe exatamente isso. NÃO invente outros dias ou horários.`
+      : "",
     "",
     onlineOnly
       ? "LOCALIZAÇÃO DA LOJA:\n(Loja 100% online — sem endereço físico.)"
@@ -255,6 +265,10 @@ export function buildSystemPrompt(args: {
         }${pickupAddr && pickupInstr ? "\n" : ""}${
           pickupInstr ? `Como retirar: ${pickupInstr}` : ""
         }`
+      : "",
+    "",
+    attendanceText
+      ? `DIAS/HORÁRIO DE ATENDIMENTO:\n${attendanceText}`
       : "",
     "",
     "PRODUTOS DA LOJA:",

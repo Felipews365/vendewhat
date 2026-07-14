@@ -558,6 +558,10 @@ export type StorefrontSettings = {
   aiSendPixOnCheckout: boolean;
   /** Modo de venda da loja: varejo, atacado ou ambos — orienta a IA na condução. */
   saleMode: SaleMode;
+  /** Dias da semana em que a loja atende (chaves: seg/ter/qua/qui/sex/sab/dom). Vazio = não informado. */
+  attendanceDays: string[];
+  /** Horário de atendimento em texto livre (ex.: "9h às 18h"). Vazio = não informado. */
+  attendanceHours: string;
   /** ID do Pixel do Facebook/Meta (só números) — carrega o rastreamento na loja pública. */
   facebookPixelId: string;
   /** ID da tag do Google: GA4 "G-…", Google Ads "AW-…" ou Tag Manager "GTM-…". */
@@ -574,6 +578,47 @@ export type SaleMode = "varejo" | "atacado" | "ambos";
 export const SALE_MODES: SaleMode[] = ["varejo", "atacado", "ambos"];
 export function saleModeFromDb(v: unknown): SaleMode {
   return SALE_MODES.includes(v as SaleMode) ? (v as SaleMode) : "varejo";
+}
+
+/** Dias da semana do atendimento (chave curta → rótulos curto/completo). */
+export const ATTENDANCE_DAYS: { key: string; short: string; full: string }[] = [
+  { key: "seg", short: "Seg", full: "segunda-feira" },
+  { key: "ter", short: "Ter", full: "terça-feira" },
+  { key: "qua", short: "Qua", full: "quarta-feira" },
+  { key: "qui", short: "Qui", full: "quinta-feira" },
+  { key: "sex", short: "Sex", full: "sexta-feira" },
+  { key: "sab", short: "Sáb", full: "sábado" },
+  { key: "dom", short: "Dom", full: "domingo" },
+];
+const ATTENDANCE_DAY_ORDER = ATTENDANCE_DAYS.map((d) => d.key);
+
+/** Normaliza os dias de atendimento: só chaves conhecidas, sem repetir, na ordem da semana. */
+export function attendanceDaysFromDb(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const set = new Set<string>();
+  for (const item of v) {
+    const k = String(item).toLowerCase().trim();
+    if (ATTENDANCE_DAY_ORDER.includes(k)) set.add(k);
+  }
+  return ATTENDANCE_DAY_ORDER.filter((k) => set.has(k));
+}
+
+/**
+ * Frase natural do atendimento para a IA e avisos (ex.: "segunda-feira, terça-feira
+ * e quarta-feira, das 9h às 18h"). Vazio = não informado.
+ */
+export function describeAttendance(
+  sf: Pick<StorefrontSettings, "attendanceDays" | "attendanceHours">
+): string {
+  const days = attendanceDaysFromDb(sf.attendanceDays);
+  const hours = (sf.attendanceHours || "").trim();
+  const fulls = days.map((k) => ATTENDANCE_DAYS.find((d) => d.key === k)!.full);
+  let daysPhrase = "";
+  if (fulls.length === 1) daysPhrase = fulls[0];
+  else if (fulls.length > 1)
+    daysPhrase = `${fulls.slice(0, -1).join(", ")} e ${fulls[fulls.length - 1]}`;
+  if (daysPhrase && hours) return `${daysPhrase}, ${hours}`;
+  return daysPhrase || hours;
 }
 
 /** Como o pedido mínimo é exigido: por valor, por quantidade de itens ou ambos. */
@@ -651,6 +696,8 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   pixName: "",
   aiSendPixOnCheckout: false,
   saleMode: "varejo",
+  attendanceDays: [],
+  attendanceHours: "",
   facebookPixelId: "",
   googleAnalyticsId: "",
   contentBlocks: [],
@@ -1123,6 +1170,8 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       DEFAULT_STOREFRONT.aiSendPixOnCheckout
     ),
     saleMode: saleModeFromDb(o.saleMode),
+    attendanceDays: attendanceDaysFromDb(o.attendanceDays),
+    attendanceHours: strOrEmpty(o.attendanceHours).slice(0, 120),
     facebookPixelId: sanitizeFacebookPixelId(o.facebookPixelId),
     googleAnalyticsId: sanitizeGoogleTagId(o.googleAnalyticsId),
     contentBlocks: contentBlocksFromDb(o.contentBlocks),
@@ -1193,6 +1242,8 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     pixName: s.pixName.trim(),
     aiSendPixOnCheckout: s.aiSendPixOnCheckout,
     saleMode: saleModeFromDb(s.saleMode),
+    attendanceDays: attendanceDaysFromDb(s.attendanceDays),
+    attendanceHours: s.attendanceHours.trim().slice(0, 120),
     facebookPixelId: sanitizeFacebookPixelId(s.facebookPixelId),
     googleAnalyticsId: sanitizeGoogleTagId(s.googleAnalyticsId),
     contentBlocks: contentBlocksFromDb(s.contentBlocks).slice(

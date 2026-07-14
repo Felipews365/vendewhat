@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast";
 import { parseLatLng, isShortMapsLink } from "@/lib/geoLocation";
 import {
   storefrontFromDb,
+  ATTENDANCE_DAYS,
   type SaleMode,
   type MinOrderType,
 } from "@/lib/storefront";
@@ -241,6 +242,9 @@ export default function WhatsAppIaPage() {
   const [sendPixOnCheckout, setSendPixOnCheckout] = useState(false);
   const [saleMode, setSaleMode] = useState<SaleMode>("varejo");
   const [hasPixKey, setHasPixKey] = useState(false);
+  // Dias e horário de atendimento (mora no storefront).
+  const [attendanceDays, setAttendanceDays] = useState<string[]>([]);
+  const [attendanceHours, setAttendanceHours] = useState("");
 
   // Configurações da IA (reaproveitam campos reais do checkout/storefront).
   const [acceptPix, setAcceptPix] = useState(true);
@@ -274,7 +278,7 @@ export default function WhatsAppIaPage() {
   );
 
   const [tab, setTab] = useState<
-    "conexao" | "ia" | "configuracoes" | "conversas" | "pausar"
+    "conexao" | "configuracoes" | "conversas" | "pausar"
   >("conexao");
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -362,6 +366,8 @@ export default function WhatsAppIaPage() {
         setMinOrderValue(sf0.minOrderValue);
         setMinOrderQty(sf0.minOrderQty);
         setMinOrderMessage(sf0.minOrderMessage);
+        setAttendanceDays(sf0.attendanceDays);
+        setAttendanceHours(sf0.attendanceHours);
       }
 
       const { data: cfg } = await supabase
@@ -508,6 +514,8 @@ export default function WhatsAppIaPage() {
           minOrderValue,
           minOrderQty,
           minOrderMessage,
+          attendanceDays,
+          attendanceHours,
         }),
       });
       const data = await res.json();
@@ -780,8 +788,7 @@ export default function WhatsAppIaPage() {
         {(
           [
             ["conexao", "Conexão"],
-            ["ia", "IA"],
-            ["configuracoes", "Config."],
+            ["configuracoes", "Configuração IA"],
             ["conversas", "Conversas"],
             ["pausar", "Pausar"],
           ] as const
@@ -863,8 +870,8 @@ export default function WhatsAppIaPage() {
       </section>
       )}
 
-      {/* Configuração da IA */}
-      {tab === "ia" && (
+      {/* Atendente de IA — primeira parte da aba "Configuração IA" */}
+      {tab === "configuracoes" && (
       <section className="rounded-2xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm space-y-4">
         <h2 className="font-semibold text-stone-800 dark:text-slate-100">Atendente de IA</h2>
 
@@ -912,24 +919,55 @@ export default function WhatsAppIaPage() {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
-            Informações e políticas (FAQ)
-          </label>
-          <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
-            Frete, formas de pagamento, trocas/devoluções, horário de atendimento,
-            prazos… A IA usa isto para responder os clientes.
+        {/* Dias e horário de atendimento */}
+        <div className="rounded-xl border border-stone-200 dark:border-slate-700 p-4">
+          <p className="text-sm font-semibold text-stone-800 dark:text-slate-100">
+            Dias de atendimento
           </p>
-          <textarea
-            value={faq}
-            maxLength={4000}
-            onChange={(e) => setFaq(e.target.value)}
-            rows={8}
-            className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-            placeholder={
-              "Ex.:\n- Frete grátis acima de R$ 200.\n- Pagamento: Pix e cartão.\n- Trocas em até 7 dias.\n- Atendemos de seg a sex, 9h às 18h."
-            }
-          />
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+            Marque os dias em que a loja atende. A IA informa o cliente quando ele
+            perguntar quando a loja funciona.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {ATTENDANCE_DAYS.map((d) => {
+              const sel = attendanceDays.includes(d.key);
+              return (
+                <button
+                  key={d.key}
+                  type="button"
+                  aria-pressed={sel}
+                  onClick={() =>
+                    setAttendanceDays((prev) =>
+                      prev.includes(d.key)
+                        ? prev.filter((k) => k !== d.key)
+                        : [...prev, d.key]
+                    )
+                  }
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                    sel
+                      ? "border-green-600 bg-green-600 text-white"
+                      : "border-stone-300 text-stone-600 hover:bg-stone-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  {d.short}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3">
+            <label className="block text-sm font-medium text-stone-700 dark:text-slate-300">
+              Horário de atendimento (opcional)
+            </label>
+            <input
+              type="text"
+              value={attendanceHours}
+              maxLength={120}
+              onChange={(e) => setAttendanceHours(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 sm:w-64"
+              placeholder="Ex.: das 9h às 18h"
+            />
+          </div>
         </div>
 
         {/* A IA envia a chave Pix ao fechar o pedido (mesmo toggle do painel de pagamentos) */}
@@ -1339,27 +1377,15 @@ export default function WhatsAppIaPage() {
           </select>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSaveConfig}
-            disabled={saving}
-            className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
-          >
-            {saving ? "Salvando…" : "Salvar configurações"}
-          </button>
-          {savedOk && (
-            <span className="text-sm font-medium text-green-600">Salvo!</span>
-          )}
-        </div>
       </section>
       )}
 
-      {/* Configurações da IA */}
+      {/* O que a loja aceita — segunda parte da aba "Configuração IA" */}
       {tab === "configuracoes" && (
       <section className="rounded-2xl border border-stone-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm space-y-4">
         <div>
           <h2 className="font-semibold text-stone-800 dark:text-slate-100">
-            Configurações da IA
+            O que a sua loja aceita
           </h2>
           <p className="mt-1 text-sm text-stone-500 dark:text-slate-400">
             Marque o que sua loja aceita. A IA usa isto para responder os clientes,

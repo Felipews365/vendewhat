@@ -3,7 +3,11 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { AI_TONES, type AiTone, ensureConfig, saveAiConfig } from "@/lib/whatsappConfig";
 import { isShortMapsLink, parseLatLng, resolveMapsLatLng } from "@/lib/geoLocation";
-import { saleModeFromDb, minOrderTypeFromDb } from "@/lib/storefront";
+import {
+  saleModeFromDb,
+  minOrderTypeFromDb,
+  attendanceDaysFromDb,
+} from "@/lib/storefront";
 
 export const runtime = "nodejs";
 
@@ -29,6 +33,10 @@ type Body = {
   aiSendPixOnCheckout?: boolean;
   /** Modo de venda (varejo/atacado/ambos) — mora no storefront. */
   saleMode?: string;
+  /** Dias da semana em que a loja atende — mora no storefront. */
+  attendanceDays?: unknown;
+  /** Horário de atendimento (texto livre) — mora no storefront. */
+  attendanceHours?: string;
   // Configurações da IA que reaproveitam campos reais do storefront (checkout).
   checkoutPixEnabled?: boolean;
   checkoutCardEnabled?: boolean;
@@ -129,6 +137,12 @@ export async function POST(req: Request) {
   }
   if (typeof body.saleMode === "string") {
     sfPatch.saleMode = saleModeFromDb(body.saleMode);
+  }
+  if (Array.isArray(body.attendanceDays)) {
+    sfPatch.attendanceDays = attendanceDaysFromDb(body.attendanceDays);
+  }
+  if (typeof body.attendanceHours === "string") {
+    sfPatch.attendanceHours = body.attendanceHours.slice(0, 120);
   }
   // Formas de pagamento (aceitaPix/aceitaCartao) e de envio — booleanos diretos.
   const boolKeys = [

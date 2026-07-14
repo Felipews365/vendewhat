@@ -645,20 +645,47 @@ pagamento moram no JSONB `stores.storefront`; os dados do cliente (`customerAddr
 `carrierName`, `paymentMethod`) no `orders.payload` (ver
 [src/app/api/orders/route.ts](src/app/api/orders/route.ts)).
 
-### Configurações da IA (aba "Config." em Atendimento)
+### Configuração IA (aba única em Atendimento) — atendente + o que a loja aceita
+
+A antiga aba **"IA"** e a aba **"Config."** foram **fundidas numa única aba "Configuração IA"**
+(`tab === "configuracoes"`) na página [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) — as
+abas viraram **Conexão · Configuração IA · Conversas · Pausar** (não há mais aba "IA" separada; o tipo
+`tab` e o array de abas perderam o valor `"ia"`). A aba renderiza **duas seções (cards) empilhadas**,
+ambas sob `tab === "configuracoes"`, com **um único** botão "Salvar configurações" no rodapé (as duas
+seções mandam o payload completo pelo mesmo `handleSaveConfig`):
+
+1. **"Atendente de IA"** — ativar IA, nome do atendente, tom de voz, **dias/horário de atendimento**
+   (ver abaixo), toggle "A IA envia a chave Pix", "Minha loja é só online", localização/foto/vídeo da
+   loja, e os tempos de handoff / follow-up / pós-venda / carrinho abandonado.
+2. **"O que a sua loja aceita"** — os campos que também valem no checkout (pagamento, envio, pedido
+   mínimo, modo de venda).
+
+O antigo campo **"Informações e políticas (FAQ)"** foi **removido da interface** (o textarea não
+existe mais). A coluna `store_whatsapp.faq` continua no banco: o `faq` carregado é **preservado** no
+save (round-trip) e a IA ainda o lê via `buildSystemPrompt({ faq })`, mas **não é mais editável** pelo
+painel. O papel de "horário de atendimento" que ficava no FAQ passou para os **dias de atendimento**
+estruturados.
 
 Painel simples e rápido para o lojista leigo marcar **o que a loja aceita** — usado tanto pela IA
 (nas respostas ao cliente) quanto pelo **checkout da loja pública** (fonte única, sem divergência).
-Fica numa aba **"Config."** na página [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx)
-(`tab === "configuracoes"`, ao lado de Conexão/IA/Conversas/Pausar). Todos os campos booleanos usam
-um **radio "Sim / Não" sempre visível** (componente `YesNo`, segmentado, verde = Sim); `tipoVenda` e
-`tipoMinimo` usam radio de múltiplas opções (`SegRadio`) — **uma seleção por campo**. Os controles são
-embrulhados por `ConfigField` (rótulo + dica + controle).
+Todos os campos booleanos usam um **radio "Sim / Não" sempre visível** (componente `YesNo`,
+segmentado, verde = Sim); `tipoVenda` e `tipoMinimo` usam radio de múltiplas opções (`SegRadio`) —
+**uma seleção por campo**. Os controles são embrulhados por `ConfigField` (rótulo + dica + controle).
 
+- **Dias e horário de atendimento (`storefront.attendanceDays: string[]` +
+  `storefront.attendanceHours`, JSONB — sem migration):** botões multi-seleção dos dias da semana
+  (Seg–Dom) + um campo de texto livre de horário ("Ex.: das 9h às 18h"), na seção "Atendente de IA".
+  Helpers em [storefront.ts](src/lib/storefront.ts): `ATTENDANCE_DAYS` (chave curta `seg/ter/…/dom` +
+  rótulos curto/completo), `attendanceDaysFromDb` (normaliza para chaves conhecidas na ordem da
+  semana) e `describeAttendance(sf)` (frase natural, ex.: "segunda-feira, terça-feira e quarta-feira,
+  das 9h às 18h"; vazio = não informado). **A IA sabe:**
+  [whatsappRespond.ts](src/lib/whatsappRespond.ts) passa `attendance: describeAttendance(sf)` para
+  `buildSystemPrompt({ attendance })` ([attendant.ts](src/lib/ai/attendant.ts)), que instrui a IA a
+  informar exatamente esses dias/horário quando o cliente pergunta quando a loja funciona (proibida de
+  inventar).
 - **Sem migration** — tudo mora no JSONB `stores.storefront` e **reaproveita os campos que já
   existiam** (uma fonte de verdade; ver [storefront.ts](src/lib/storefront.ts)):
-  - **Modo de venda** (`tipoVenda`) → `saleMode` (`varejo`/`atacado`/`ambos`). Foi **movido** da aba
-    IA para cá (não duplica).
+  - **Modo de venda** (`tipoVenda`) → `saleMode` (`varejo`/`atacado`/`ambos`).
   - **Aceita Pix / cartão** → `checkoutPixEnabled` / `checkoutCardEnabled` (os mesmos toggles do
     checkout; Pix só aparece de fato com `pixKey` preenchida).
   - **Formas de envio** (`aceitaExcursao/Correios/Transportadora/Retirada`) → **campos novos**
@@ -669,10 +696,10 @@ embrulhados por `ConfigField` (rótulo + dica + controle).
     `minOrderValue`; `quantidadeMinimaPedido` → `minOrderQty`; `mensagemMinimoPedido` →
     `minOrderMessage` (**novo**, usado pela IA ao explicar o mínimo). Os campos de valor/qtd/mensagem
     só aparecem quando `minOrderEnabled` (e cada valor conforme o `tipoMinimo`).
-- **Persistência:** o "Salvar configurações" da aba chama o mesmo `handleSaveConfig` da aba IA, que
-  manda tudo para [/api/whatsapp/config](src/app/api/whatsapp/config/route.ts). A rota faz um **patch**
-  no `storefront` (preserva o resto), gravando só os campos que vieram no corpo (booleanos de
-  pagamento/envio, `minOrderEnabled/Type/Value/Qty/Message`, `saleMode`).
+- **Persistência:** o "Salvar configurações" da aba chama `handleSaveConfig`, que manda tudo para
+  [/api/whatsapp/config](src/app/api/whatsapp/config/route.ts). A rota faz um **patch** no `storefront`
+  (preserva o resto), gravando só os campos que vieram no corpo (booleanos de pagamento/envio,
+  `minOrderEnabled/Type/Value/Qty/Message`, `saleMode`, `attendanceDays`, `attendanceHours`).
 - **Retrocompat do pedido mínimo:** `minOrderEnabled` **não** existia; em `storefrontFromDb` o default
   deriva de `minOrderValue > 0 || minOrderQty > 0`, então lojas antigas continuam exigindo o mínimo. O
   cálculo efetivo respeita o interruptor + o tipo via `effectiveMinOrder(sf)` (desligado → `{0,0}`;
