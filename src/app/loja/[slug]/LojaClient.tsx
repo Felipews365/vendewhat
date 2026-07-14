@@ -3536,7 +3536,7 @@ export function LojaClient({
         <button
           type="button"
           onClick={goToStoreHome}
-          className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 active:bg-stone-100"
+          className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 outline-none focus:outline-none focus-visible:outline-none [-webkit-tap-highlight-color:transparent] active:bg-stone-100"
         >
           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M4 10.5 12 4l8 6.5" />
@@ -3550,19 +3550,19 @@ export function LojaClient({
             href={contactHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 active:bg-stone-100"
+            className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 outline-none focus:outline-none focus-visible:outline-none [-webkit-tap-highlight-color:transparent] active:bg-stone-100"
           >
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <circle cx="12" cy="8" r="3.4" />
-              <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M17.5 14.4c-.3-.15-1.8-.9-2.05-1-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.17.2-.35.22-.65.07-.3-.15-1.27-.47-2.42-1.5-.9-.8-1.5-1.78-1.67-2.08-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.68-1.65-.94-2.26-.24-.58-.5-.5-.68-.5l-.58-.01c-.2 0-.52.07-.8.37-.28.3-1.05 1.02-1.05 2.5 0 1.47 1.08 2.9 1.23 3.1.15.2 2.12 3.24 5.14 4.54.72.3 1.28.48 1.72.63.72.22 1.38.2 1.9.12.58-.08 1.8-.73 2.05-1.44.25-.7.25-1.3.17-1.44-.07-.13-.27-.2-.57-.35Z" />
+              <path d="M12 2a10 10 0 0 0-8.6 15.06L2 22l5.06-1.33A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.18-1.14l-.3-.18-3 .79.8-2.92-.2-.3A8.2 8.2 0 1 1 12 20.2Z" />
             </svg>
-            <span className="text-[10px] font-medium">Conta</span>
+            <span className="text-[10px] font-medium">WhatsApp</span>
           </a>
         ) : (
           <button
             type="button"
             onClick={goToStoreHome}
-            className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 active:bg-stone-100"
+            className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 outline-none focus:outline-none focus-visible:outline-none [-webkit-tap-highlight-color:transparent] active:bg-stone-100"
           >
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <circle cx="12" cy="8" r="3.4" />
@@ -3575,7 +3575,7 @@ export function LojaClient({
         <button
           type="button"
           onClick={() => setCartOpen(true)}
-          className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 active:bg-stone-100"
+          className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 outline-none focus:outline-none focus-visible:outline-none [-webkit-tap-highlight-color:transparent] active:bg-stone-100"
         >
           <span className="relative">
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -3601,7 +3601,7 @@ export function LojaClient({
               .getElementById("catalogo")
               ?.scrollIntoView({ behavior: "smooth", block: "start" })
           }
-          className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 active:bg-stone-100"
+          className="flex flex-col items-center justify-center gap-1 py-2.5 text-stone-600 outline-none focus:outline-none focus-visible:outline-none [-webkit-tap-highlight-color:transparent] active:bg-stone-100"
         >
           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M4 7h16M4 12h16M4 17h16" />
