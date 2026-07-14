@@ -58,7 +58,13 @@ Orientações para o Claude Code trabalhar neste repositório.
     de categorias, blocos de conteúdo, cards promo escalonados), como a referência. **Cuidado:**
     o `filter` residual (`blur(0)`) cria containing block — **não** envolver elementos que tenham
     `position: fixed` dentro (por isso o menu de categorias do topo, cujo dropdown usa backdrop
-    `fixed inset-0`, ficou **sem** `BlurFade`).
+    `fixed inset-0`, ficou **sem** `BlurFade`). **fill-mode `backwards` (não `both`):** tanto
+    `.vw-blur-fade` quanto `.vw-reveal-stagger > *` usam `animation-fill-mode: backwards`. Com
+    `both`, o `filter: blur(0)` do frame final ficava aplicado **para sempre**, promovendo o
+    elemento a uma camada de GPU e rasterizando o **texto em resolução menor no celular** (texto do
+    banner "borrado" — a foto, por ser bitmap, não sofria). `backwards` segura o estado inicial
+    durante o atraso e, ao terminar, **reverte ao estado base sem `filter`/`transform` residual**
+    (opacity/filter base já são 1/none, sem flicker).
   - **Cascata de texto (`vw-reveal-stagger`):** revela os filhos diretos em cascata (blur-fade
     com atrasos por `nth-child`) — usado no **texto do banner** (selo → título → destaque →
     subtítulo → botão) em todos os formatos (overlay/split em LojaClient e os templates em
@@ -452,9 +458,12 @@ distorce** em nenhum formato. A foto grande no **detalhe** do produto também us
 
 `<nav class="… md:hidden">` fixa no rodapé (só no celular) em
 [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx), com 4 ícones em linha: **Início** (topo),
-**Conta** (abre o WhatsApp da loja se `contactHref`), **Carrinho** (abre o carrinho + selo de
+**WhatsApp** (abre a conversa da loja quando há `contactHref`; ícone do WhatsApp — sem `contactHref`
+vira "Conta" levando ao topo, caso raro sem WhatsApp), **Carrinho** (abre o carrinho + selo de
 quantidade) e **Menu** (rola até `#catalogo`). Substituiu o antigo "carrinho flutuante"; o espaço já
-está reservado pelo `pb-28` do wrapper. SVGs inline (casa/pessoa/sacola/hambúrguer).
+está reservado pelo `pb-28` do wrapper. SVGs inline (casa/WhatsApp/sacola/hambúrguer). Cada item usa
+`outline-none`/`focus:outline-none` + `[-webkit-tap-highlight-color:transparent]` para o **foco não
+ficar preso** após o toque no celular (senão sobrava um outline/caixa fixa no item tocado).
 
 ### Componentes Magic UI (portados do `sitederoupa`)
 
