@@ -238,6 +238,26 @@ Orientações para o Claude Code trabalhar neste repositório.
   [storefront.ts](src/lib/storefront.ts)) e de novo antes de entrar no `<script>` (só dígitos /
   `[A-Z0-9-]`), impedindo injeção de código. Sem migration: mora no JSONB `stores.storefront`.
 
+- **Temas prontos da loja ("Aparência da loja"):** em vez de o lojista leigo montar cores na mão (e
+  arriscar combinação feia), há **20 temas prontos e premium** em
+  [src/lib/storeThemes.ts](src/lib/storeThemes.ts) (`STORE_THEMES`). **Este projeto NÃO usa
+  shadcn/ui** — cada tema é só um **preset** que preenche de uma vez os mesmos tokens que a loja já
+  renderiza (`themePrimary`/`themeSecondary` → CSS vars `--store-primary`/`--store-secondary`,
+  `headerBackground`, `pageBackground`, `announcementBarBg`), então a vitrine pública já mostra o
+  tema **sem tocar em componente**. `applyStoreTheme(sf, id)` devolve o storefront com essas cores +
+  o rótulo `storefront.themeId` (novo campo no JSONB, **sem migration**); `detectActiveTheme`
+  descobre o tema ativo (pelo `themeId` ou casando as cores). Paletas escolhidas com accent em tom
+  médio-escuro (luminância ~0.4–0.6) para o texto branco do botão e o preço no card sempre terem
+  contraste. **Tela dedicada** [/dashboard/aparencia](src/app/dashboard/aparencia/page.tsx): grade de
+  cards com mockup real de cada tema (barra de avisos + cabeçalho + produto), prévia grande
+  instantânea ao clicar, destaque do tema atual (✓) e barra fixa "Aplicar tema" (grava o `storefront`
+  no banco). **Ponto de entrada único:** o item "🎨 Aparência da loja" do menu "Configurações da
+  loja" ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)) navega para essa
+  página — **substituiu** o antigo "Cores da loja" (painel `colors` de hex manual, que ficou
+  legado/sem link para não poluir nem deixar o lojista estragar o visual). Os **cards de produto**
+  seguem na paleta fixa `EC` de propósito (o tema não os recolore). Para **adicionar um tema novo**
+  basta acrescentar um objeto em `STORE_THEMES`.
+
 - **Pendente:** os widgets internos compartilhados ainda estão só no tema claro — editor visual
   da loja ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), cuja
   pré-visualização da loja pública deve continuar clara de propósito), seletor de fotos,
@@ -556,8 +576,11 @@ rota [/api/whatsapp/config](src/app/api/whatsapp/config/route.ts) recebe `aiSend
 >
 > **Menu único "⚙️ Configurações da loja":** logo acima do canvas há um botão destacado (cor
 > `landing-primary`, âncora `id="passo-configuracoes"`) que abre um **dropdown listando todas as
-> seções** do editor (Pix/pagamentos, logo, banner, textos, cores, avisos, busca, infos, redes,
-> categorias, blocos) — cada item chama `openSection(panel)` (= `setPanel`) ou navega para o banner.
+> seções** do editor (Pix/pagamentos, logo, banner, textos, **aparência (temas prontos)**, avisos,
+> busca, infos, redes, categorias, blocos) — cada item chama `openSection(panel)` (= `setPanel`) ou
+> navega (o item "🎨 Aparência da loja" faz `router.push("/dashboard/aparencia")`; o antigo painel
+> `colors` de cores manuais ficou legado/sem link — ver "Temas prontos" abaixo). O item do banner
+> navega para `/dashboard/banner`.
 > Ponto de entrada **único** para o lojista não precisar caçar os atalhos. Estado `settingsMenuOpen`;
 > fecha ao clicar fora (backdrop `fixed inset-0`). A **antiga fila de chips abaixo do canvas foi
 > removida** (o menu cobre tudo); o [StoreSetupGuideModal.tsx](src/components/dashboard/StoreSetupGuideModal.tsx)

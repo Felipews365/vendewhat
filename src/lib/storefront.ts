@@ -463,6 +463,13 @@ export type StorefrontSettings = {
   headerBackground: string;
   /** Fundo da página inteira (atrás do banner e dos cards) — hex ou rgba */
   pageBackground: string;
+  /**
+   * ID do tema pronto aplicado (ver `src/lib/storeThemes.ts`). É só um rótulo
+   * para destacar o tema escolhido na tela "Aparência da loja" — as cores em si
+   * (themePrimary/themeSecondary/pageBackground/headerBackground/announcementBarBg)
+   * continuam sendo a fonte de verdade do render. Vazio = tema personalizado/nenhum.
+   */
+  themeId: string;
   searchPlaceholder: string;
   /**
    * Barra de avisos preta no topo (frete grátis, parcelamento, troca…).
@@ -543,6 +550,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   themeSecondary: "#5c2e36",
   headerBackground: "#11212D",
   pageBackground: "#f7f8fa",
+  themeId: "",
   searchPlaceholder: "Buscar roupas, modelos, tamanhos...",
   announcementBarEnabled: true,
   announcementBarBg: "#06141B",
@@ -857,6 +865,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       DEFAULT_STOREFRONT.headerBackground
     ),
     pageBackground: str(o.pageBackground, DEFAULT_STOREFRONT.pageBackground),
+    themeId: str(o.themeId, DEFAULT_STOREFRONT.themeId).trim().slice(0, 40),
     searchPlaceholder: str(
       o.searchPlaceholder,
       DEFAULT_STOREFRONT.searchPlaceholder
@@ -941,6 +950,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     themeSecondary: s.themeSecondary.trim(),
     headerBackground: s.headerBackground.trim(),
     pageBackground: s.pageBackground.trim(),
+    themeId: s.themeId.trim().slice(0, 40),
     searchPlaceholder: s.searchPlaceholder.trim(),
     announcementBarEnabled: s.announcementBarEnabled,
     announcementBarBg: s.announcementBarBg.trim() || "#06141B",

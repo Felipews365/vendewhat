@@ -600,7 +600,7 @@ export function StoreVisualEditor({
                     { emoji: "🖼️", label: "Logo da loja", onClick: () => openSection("logo") },
                     { emoji: "🎞️", label: "Banner da loja", onClick: () => { setSettingsMenuOpen(false); openBannerEditor(); } },
                     { emoji: "✍️", label: "Textos do banner", onClick: () => openSection("texts") },
-                    { emoji: "🎨", label: "Cores da loja", onClick: () => openSection("colors") },
+                    { emoji: "🎨", label: "Aparência da loja", onClick: () => { setSettingsMenuOpen(false); router.push("/dashboard/aparencia"); } },
                     { emoji: "📢", label: "Barra de avisos do topo", onClick: () => openSection("avisos") },
                     { emoji: "🔎", label: "Barra de busca", onClick: () => openSection("search") },
                     { emoji: "ℹ️", label: "Informações abaixo do logo", onClick: () => openSection("info") },
