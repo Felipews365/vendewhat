@@ -537,7 +537,24 @@ As **formas de envio** estão em [src/lib/shippingModes.ts](src/lib/shippingMode
   (`*Como retirar:*`) **e** no prompt da IA (a IA atendente explica a retirada — ver seção da IA).
 
 A liberação dos botões de finalizar usa `checkoutReady` (junta nome, telefone, forma de envio,
-endereço quando aplicável, nome da excursão/transportadora e **forma de pagamento**).
+endereço quando aplicável, nome da excursão/transportadora, **forma de pagamento** e o **pedido
+mínimo** — ver abaixo).
+
+**Pedido mínimo por valor e/ou quantidade (`storefront.minOrderValue` + `storefront.minOrderQty`,
+JSONB — sem migration):** a loja pode exigir um mínimo em **R$** (`minOrderValue`) e/ou em **quantidade
+de itens** (`minOrderQty`); `0` = sem exigência, e se **ambos** forem definidos os dois precisam ser
+atingidos. Os helpers ficam em [storefront.ts](src/lib/storefront.ts): `minOrderStatus(sf, subtotal,
+totalItems)` (`{ required, met, missingValue, missingQty, ... }`), `describeMinOrder(sf)` (frase p/ a
+IA) e `formatBRL`. Em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx), `minOrder` (useMemo) entra
+no `checkoutReady` (**os botões de finalizar/pagar só liberam com o mínimo atingido**) e um aviso
+abaixo do **Total** no carrinho mostra o mínimo exigido e **quanto falta** (valor/itens), virando ✓
+verde ao atingir. Editado no painel **"Pix, pagamentos e rodapé"** do
+[StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (bloco "Pedido mínimo", dois
+campos, **auto-save**). **A IA sabe:** `describeMinOrder(sf)` vai por
+[whatsappRespond.ts](src/lib/whatsappRespond.ts) → `buildSystemPrompt({ minOrder })`
+([attendant.ts](src/lib/ai/attendant.ts)), que instrui a IA a informar o mínimo real (proibida de
+inventar) quando o cliente pergunta e a incentivar a completar o carrinho. Substitui o antigo hábito
+de escrever "pedido mínimo" à mão nos `infoBullets` (abaixo do logo).
 
 **Forma de pagamento no checkout ([src/lib/paymentMethods.ts](src/lib/paymentMethods.ts)):** o cliente
 escolhe entre `pix` / `dinheiro` / `cartao` / `mercadopago` (`PAYMENT_METHODS`), mas **só aparecem as
