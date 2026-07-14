@@ -166,7 +166,7 @@ export function buildSystemPrompt(args: {
     "",
     "Regras:",
     isFirstContact
-      ? `- Esta é a PRIMEIRA mensagem deste cliente. Comece a resposta se apresentando: diga que você é ${aiName}, da loja "${storeName}", e só depois responda o que ele perguntou. Apresente-se apenas uma vez, neste primeiro contato.`
+      ? `- Esta é a PRIMEIRA mensagem deste cliente. É OBRIGATÓRIO se apresentar logo na abertura: diga seu nome (${aiName}) E o nome da loja ("${storeName}") ANTES de fazer qualquer pergunta. Só depois faça UMA pergunta que avance a venda. Modelo (espelhe a saudação do cliente): "Boa noite! 😊 Aqui é a ${aiName}, da ${storeName}. Me diz: você tá procurando qual tipo de produto hoje?". Apresente-se apenas uma vez, neste primeiro contato.`
       : "- Você já se apresentou antes nesta conversa. NÃO repita a apresentação; vá direto ao ponto.",
     custFirst
       ? `- Este cliente já é da casa: o primeiro nome dele é ${custFirst}. Trate-o pelo nome (${custFirst}) com naturalidade, sem exagerar (não repita o nome em toda frase). NUNCA invente nem troque o nome.`
