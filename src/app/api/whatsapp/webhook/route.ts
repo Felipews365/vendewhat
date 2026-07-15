@@ -122,30 +122,6 @@ export async function POST(req: Request) {
   const message = unwrapMessage(asObj(msg.message));
   const text = extractText(message).trim();
 
-  // Mensagem enviada pelo próprio número da loja.
-  if (key.fromMe === true) {
-    // Pode ser o eco da própria IA (ignora) ou o dono respondendo manualmente.
-    // Quando é o dono, pausa a IA para esse cliente pelo tempo de "handoff".
-    if (text && cfg.aiHandoffMinutes > 0) {
-      // Janela maior porque a IA agora responde em várias partes (vários balões);
-      // cada uma volta como fromMe e precisa ser reconhecida como eco (não handoff).
-      const recentAi = await getLastAssistantMessages(
-        admin,
-        cfg.storeId,
-        customerPhone,
-        8
-      );
-      const isEcho = recentAi.some((c) => c.trim() === text);
-      if (!isEcho) {
-        const until = new Date(
-          Date.now() + cfg.aiHandoffMinutes * 60_000
-        ).toISOString();
-        await setCustomerPause(admin, cfg.storeId, customerPhone, until, "handoff");
-      }
-    }
-    return ok();
-  }
-
   // Tipo de mídia (para tratar imagem/áudio além de texto).
   const imageMsg = asObj(message?.imageMessage);
   const audioMsg = asObj(message?.audioMessage);
@@ -154,6 +130,35 @@ export async function POST(req: Request) {
     : audioMsg
     ? "audio"
     : "none";
+
+  // Mensagem enviada pelo próprio número da loja.
+  if (key.fromMe === true) {
+    // Pode ser o eco da própria IA (ignora) ou o dono respondendo manualmente.
+    // Quando é o dono, pausa a IA para esse cliente pelo tempo de "handoff".
+    if (cfg.aiHandoffMinutes > 0) {
+      // Áudio é sempre o dono falando: a IA só manda texto, foto, vídeo,
+      // localização e PDF — nunca áudio.
+      let ownerSpoke = mediaKind === "audio";
+      if (!ownerSpoke && text) {
+        // Janela maior porque a IA agora responde em várias partes (vários balões);
+        // cada uma volta como fromMe e precisa ser reconhecida como eco (não handoff).
+        const recentAi = await getLastAssistantMessages(
+          admin,
+          cfg.storeId,
+          customerPhone,
+          8
+        );
+        ownerSpoke = !recentAi.some((c) => c.trim() === text);
+      }
+      if (ownerSpoke) {
+        const until = new Date(
+          Date.now() + cfg.aiHandoffMinutes * 60_000
+        ).toISOString();
+        await setCustomerPause(admin, cfg.storeId, customerPhone, until, "handoff");
+      }
+    }
+    return ok();
+  }
 
   // Nada que a gente saiba tratar (sticker, contato, etc.) e sem texto → ignora.
   if (!text && mediaKind === "none") return ok();

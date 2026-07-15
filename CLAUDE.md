@@ -1373,6 +1373,23 @@ Tudo por loja. **Migration:** rode
   própria IA (comparada com `getLastAssistantMessages`) é tratada como o dono respondendo → cria
   uma pausa `reason='handoff'` daquele cliente por X minutos. Necessário porque a Evolution assina
   `MESSAGES_UPSERT` e reflete também as mensagens enviadas pela API.
+  - **Áudio do dono também pausa:** a IA **nunca** manda áudio (o `sendMedia` só aceita
+    `image`/`video`/`document`, mais o `sendLocation`), então todo `fromMe` de `audioMessage` é o
+    dono assumindo — pausa direto, sem checar eco. A comparação de texto ficou **só** para o
+    `fromMe` de texto, que é o único formato em que os balões da IA voltam. Antes o handoff exigia
+    `text`, então assumir por áudio não pausava nada e a IA seguia respondendo por cima do lojista.
+  - **Foto/vídeo/figurinha do dono NÃO pausam (limitação consciente):** a IA também envia foto,
+    vídeo, PDF do catálogo e o pino de localização, e todos voltam como `fromMe` **sem texto**,
+    indistinguíveis dos do dono — pausar em qualquer mídia faria a IA **se auto-pausar** ao mandar
+    a localização/catálogo (ficaria muda pelo tempo do handoff, que numa loja real já está em
+    180 min). Resolver de verdade exige guardar o `key.id` que a Evolution devolve no envio (hoje a
+    resposta é descartada em [evolution.ts](src/lib/evolution.ts)) numa tabela nova, e comparar com
+    o `key.id` do webhook: id conhecido = IA, desconhecido = dono. **Avaliado e adiado** (jul/2026)
+    por causa da migration; se for feito, resolve junto o espelho do painel (abaixo).
+  - **O que o dono manda pelo celular não entra no histórico:** o ramo `fromMe` só cria a pausa e
+    dá `return` — não chama `appendMessage`. Por isso a aba **Conversas** mostra só cliente + IA, e
+    não é um espelho completo do WhatsApp. Depende da mesma distinção de `key.id` acima (sem ela,
+    gravar o `fromMe` duplicaria os balões da própria IA no painel).
 - **Onde o webhook checa**: só responde se a IA está ligada (`aiEnabled`), **não** há pausa global
   ativa e **não** há pausa do cliente.
 - **API/UI:** `src/app/api/whatsapp/pause/route.ts` (`GET` lista estado **+ conversas recentes**;
