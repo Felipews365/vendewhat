@@ -16,7 +16,7 @@ import {
   type StorefrontCategoryItem,
   type StorefrontSettings,
 } from "@/lib/storefront";
-import { AnnouncementBar } from "@/components/storefront/AnnouncementBar";
+import { AnnouncementBar, AnnouncementText } from "@/components/storefront/AnnouncementBar";
 import { BlockRenderer } from "@/components/storefront/blocks";
 import { createBlock } from "@/components/storefront/blocks/registry";
 import {
@@ -386,6 +386,8 @@ export function StoreVisualEditor({
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   /** Abre a página dedicada de edição do banner (em vez de um modal). */
   const openBannerEditor = () => router.push("/dashboard/banner");
+  /** Abre a página dedicada dos cards promo (aba própria, fora do banner). */
+  const openPromoCardsEditor = () => router.push("/dashboard/cards");
   /** Abre uma seção do editor pelo menu de configurações (fecha o menu antes). */
   const openSection = (p: EditorPanel) => {
     setSettingsMenuOpen(false);
@@ -658,6 +660,7 @@ export function StoreVisualEditor({
                     { emoji: "💳", label: "Pix, pagamentos e rodapé", onClick: () => openSection("footer") },
                     { emoji: "🖼️", label: "Logo da loja", onClick: () => openSection("logo") },
                     { emoji: "🎞️", label: "Banner da loja", onClick: () => { setSettingsMenuOpen(false); openBannerEditor(); } },
+                    { emoji: "🏷️", label: "Cards abaixo do banner", onClick: () => { setSettingsMenuOpen(false); openPromoCardsEditor(); } },
                     { emoji: "✍️", label: "Textos do banner", onClick: () => openSection("texts") },
                     { emoji: "🎨", label: "Aparência da loja", onClick: () => { setSettingsMenuOpen(false); router.push("/dashboard/aparencia"); } },
                     { emoji: "📢", label: "Barra de avisos do topo", onClick: () => openSection("avisos") },
@@ -995,13 +998,13 @@ export function StoreVisualEditor({
             )}
           </div>
 
-          {/* Cards promo — faixa logo abaixo do banner, como na loja. Editados na
-              página do banner, então o clique leva para lá (igual ao banner). */}
+          {/* Cards promo — faixa logo abaixo do banner, como na loja. Têm aba
+              própria (/dashboard/cards), então o clique leva para lá. */}
           {sf.promoCardsEnabled && sf.promoCards.length > 0 && (
             <div className="relative mt-3" id="passo-promo-cards">
               <button
                 type="button"
-                onClick={openBannerEditor}
+                onClick={openPromoCardsEditor}
                 title="Editar os cards abaixo do banner"
                 className="grid w-full grid-cols-3 gap-2 rounded-xl p-1 text-left ring-offset-2 transition hover:ring-2 hover:ring-landing-primary/50"
               >
@@ -1023,7 +1026,7 @@ export function StoreVisualEditor({
                       </span>
                     )}
                     <span className="truncate text-[11px] font-bold leading-snug text-white sm:text-sm">
-                      {c.title}
+                      <AnnouncementText text={c.title} />
                     </span>
                     {c.subtitle && (
                       <span className="truncate text-[9px] text-white/85 sm:text-[11px]">
@@ -1036,7 +1039,7 @@ export function StoreVisualEditor({
               <div className="absolute -top-1 right-0">
                 <PlusFab
                   label="Editar os cards abaixo do banner"
-                  onClick={openBannerEditor}
+                  onClick={openPromoCardsEditor}
                 />
               </div>
             </div>

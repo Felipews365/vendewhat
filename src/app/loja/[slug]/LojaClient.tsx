@@ -20,7 +20,7 @@ import {
   enabledShippingModeIds,
   formatBRL,
 } from "@/lib/storefront";
-import { AnnouncementBar } from "@/components/storefront/AnnouncementBar";
+import { AnnouncementBar, AnnouncementText } from "@/components/storefront/AnnouncementBar";
 import { TabAttention } from "@/components/storefront/TabAttention";
 import { discountPercent } from "@/lib/productCardMeta";
 import {
@@ -3186,7 +3186,8 @@ export function LojaClient({
                     </p>
                   )}
                   <h3 className="text-xs sm:text-base font-bold text-white leading-snug">
-                    {c.title}
+                    {/* `**trecho**` no título vira dourado (igual à barra de avisos). */}
+                    <AnnouncementText text={c.title} />
                     {c.subtitle && (
                       <>
                         <br />

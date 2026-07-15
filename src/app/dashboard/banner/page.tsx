@@ -22,13 +22,9 @@ import {
   DEFAULT_STOREFRONT,
   bannerPhotoLimitForPlan,
   HERO_TARGET_RATIO,
-  MAX_PROMO_CARDS,
-  PROMO_CARD_COLORS,
-  PROMO_CARD_PRESETS,
   type HeroSlide,
   type HeroSplitPhotoSide,
   type HeroTemplate,
-  type PromoCard,
   type StorefrontSettings,
   storefrontFromDb,
   storefrontToDb,
@@ -738,28 +734,6 @@ export default function BannerEditPage() {
       return { ...d, images };
     });
 
-  /* ---- Cards promocionais ---- */
-  const cards = sf.promoCards;
-  const addCard = (card: PromoCard) =>
-    setSf((s) =>
-      s.promoCards.length >= MAX_PROMO_CARDS ? s : { ...s, promoCards: [...s.promoCards, { ...card }] }
-    );
-  const patchCard = (i: number, patch: Partial<PromoCard>) =>
-    setSf((s) => ({
-      ...s,
-      promoCards: s.promoCards.map((c, j) => (j === i ? { ...c, ...patch } : c)),
-    }));
-  const removeCard = (i: number) =>
-    setSf((s) => ({ ...s, promoCards: s.promoCards.filter((_, j) => j !== i) }));
-  const moveCard = (i: number, dir: -1 | 1) =>
-    setSf((s) => {
-      const j = i + dir;
-      if (j < 0 || j >= s.promoCards.length) return s;
-      const next = [...s.promoCards];
-      [next[i], next[j]] = [next[j]!, next[i]!];
-      return { ...s, promoCards: next };
-    });
-
   async function saveRest() {
     await persist(sf, "Alterações salvas!");
   }
@@ -1406,124 +1380,24 @@ export default function BannerEditPage() {
         )}
       </div>
 
-      {/* Cards promocionais abaixo do banner */}
-      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-            Cards abaixo do banner
-          </p>
-          {/* É AQUI que a loja diz "não quero" — apagar os cards não resolve,
-              a lista vazia renasce com os modelos (ver `promoCardsFromDb`). */}
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={sf.promoCardsEnabled}
-              onChange={(e) =>
-                setSf((s) => ({ ...s, promoCardsEnabled: e.target.checked }))
-              }
-              className="h-4 w-4"
-            />
-            Mostrar na loja
-          </label>
-        </div>
-        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-          {sf.promoCardsEnabled
-            ? `Faixa de cartões coloridos. Toque num modelo pronto para adicionar (${cards.length}/${MAX_PROMO_CARDS}).`
-            : "A faixa está escondida na loja. Marque “Mostrar na loja” para exibi-la."}
-        </p>
-
-        <div className="mb-4 flex flex-wrap gap-2">
-          {PROMO_CARD_PRESETS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => addCard(p.card)}
-              disabled={cards.length >= MAX_PROMO_CARDS}
-              className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              <span
-                className="h-4 w-4 rounded"
-                style={{ backgroundImage: `linear-gradient(135deg, ${p.card.from}, ${p.card.to})` }}
-              />
-              + {p.label}
-            </button>
-          ))}
-        </div>
-
-        {cards.length === 0 ? (
-          <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-            Nenhum card ainda. Escolha um modelo acima para começar.
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {cards.map((card, i) => (
-              <div key={i} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <div className="mb-2 flex items-center justify-between">
-                  <span
-                    className="rounded-lg px-3 py-1.5 text-xs font-bold text-white"
-                    style={{ backgroundImage: `linear-gradient(135deg, ${card.from}, ${card.to})` }}
-                  >
-                    {card.title || card.eyebrow || `Card ${i + 1}`}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => moveCard(i, -1)}
-                      disabled={i === 0}
-                      className="h-7 w-7 rounded border border-slate-200 text-slate-600 disabled:opacity-30 dark:border-slate-700 dark:text-slate-300"
-                      aria-label="Subir"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveCard(i, 1)}
-                      disabled={i === cards.length - 1}
-                      className="h-7 w-7 rounded border border-slate-200 text-slate-600 disabled:opacity-30 dark:border-slate-700 dark:text-slate-300"
-                      aria-label="Descer"
-                    >
-                      ▼
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeCard(i)}
-                      className="h-7 w-7 rounded border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900"
-                      aria-label="Remover"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Cor:</span>
-                  {PROMO_CARD_COLORS.map((col) => {
-                    const active = card.from === col.from && card.to === col.to;
-                    return (
-                      <button
-                        key={col.id}
-                        type="button"
-                        onClick={() => patchCard(i, { from: col.from, to: col.to })}
-                        className={`h-6 w-6 rounded ${active ? "ring-2 ring-landing-primary ring-offset-1" : ""}`}
-                        style={{ backgroundImage: `linear-gradient(135deg, ${col.from}, ${col.to})` }}
-                        aria-label={`Cor ${col.id}`}
-                      />
-                    );
-                  })}
-                </div>
-
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Field label="Etiqueta" value={card.eyebrow} placeholder="🔥 Imperdível" onChange={(v) => patchCard(i, { eyebrow: v })} />
-                  <Field label="Título" value={card.title} placeholder="Camisetas & Polos" onChange={(v) => patchCard(i, { title: v })} />
-                  <Field label="Frase" value={card.subtitle} placeholder="A partir de R$ 39" onChange={(v) => patchCard(i, { subtitle: v })} />
-                  <Field label="Texto do link" value={card.ctaLabel} placeholder="Explorar" onChange={(v) => patchCard(i, { ctaLabel: v })} />
-                  <Field label="Link" value={card.href} placeholder="#catalogo" mono onChange={(v) => patchCard(i, { href: v })} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Os cards abaixo do banner têm página própria (/dashboard/cards) — são
+          outra decisão do lojista, não misturam com a edição do banner. */}
+      <Link
+        href="/dashboard/cards"
+        className="mt-6 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 hover:border-landing-primary/60 dark:border-slate-700 dark:bg-slate-900"
+      >
+        <span>
+          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+            🏷️ Cards abaixo do banner
+          </span>
+          <span className="block text-xs text-slate-500 dark:text-slate-400">
+            A faixa de cartões coloridos tem uma aba só dela.
+          </span>
+        </span>
+        <span aria-hidden className="text-slate-400">
+          →
+        </span>
+      </Link>
 
       {/* Menu de categorias no topo */}
       <label className="mt-6 flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">

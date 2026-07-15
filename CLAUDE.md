@@ -166,9 +166,10 @@ Orientações para o Claude Code trabalhar neste repositório.
     (De/Via/Até + barra), altura (slider + pills Compacto/Médio/Alto/Extra), cor do botão (+
     "Resetar"), posição da foto, fotos extras (strips/duo) e "só a foto". A prévia usa o **mesmo
     `HeroTemplateSlide`** da loja (`SlideInner`/`BannerPreview`), então mostra as animações reais
-    (foto surgindo, texto em cascata, gradiente/brilho do botão). Abaixo ficam as seções "Cards
-    abaixo do banner", "Menu de categorias" e "Texto geral", com um **"Salvar alterações"** no rodapé
-    (`saveRest`) que persiste o resto. O clique no banner dentro do
+    (foto surgindo, texto em cascata, gradiente/brilho do botão). Abaixo ficam as seções "Menu de
+    categorias" e "Texto geral", com um **"Salvar alterações"** no rodapé (`saveRest`) que persiste o
+    resto — mais um **link para a aba própria dos cards** (`/dashboard/cards`, ver "Cards
+    promocionais abaixo do banner"). O clique no banner dentro do
     [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (canvas + FAB) navega para
     essa página (`openBannerEditor`); o antigo painel `banner` do modal ficou **legado/inacessível**.
     - **O banner do canvas PASSA as fotos** (`previewIdx` + `setInterval` de **5,5s**, o mesmo ritmo
@@ -263,19 +264,32 @@ Orientações para o Claude Code trabalhar neste repositório.
     (`promoCardsFromDb`), para o lojista leigo achar a faixa pronta e só trocar os textos, em vez de
     encarar um vazio. **Como "vazio = mostra os modelos", esvaziar a lista NÃO esconde a faixa** (ela
     renasce na próxima leitura): quem não quer usa o **interruptor `promoCardsEnabled`** (default
-    `true`, checkbox "Mostrar na loja" no card "Cards abaixo do banner" da
-    [/dashboard/banner](src/app/dashboard/banner/page.tsx)) — a loja pública checa
+    `true`, checkbox "Mostrar os cards na loja" na página dedicada
+    [/dashboard/cards](src/app/dashboard/cards/page.tsx)) — a loja pública checa
     `promoCardsEnabled && promoCards.length > 0`. Lojas que **já têm** cards salvos não são tocadas
     (a de 1 card continua com 1; para chegar aos 3 é só clicar nos modelos prontos).
   Renderizados em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) logo **abaixo do banner**
-  (grid `sm:grid-cols-3`); link usa `handleHeroCta`. Editados na página
-  [/dashboard/banner](src/app/dashboard/banner/page.tsx) com **modelos prontos** (`PROMO_CARD_PRESETS`
-  em [storefront.ts](src/lib/storefront.ts) — Imperdível/Destaque/Oferta/Frete/Novidade/Premium),
-  seletor de cor (`PROMO_CARD_COLORS`), reordenar/remover. Sem migration (JSONB).
+  (grid `sm:grid-cols-3`); link usa `handleHeroCta`.
+  - **Destaque dourado no título (`**asteriscos**`):** um trecho do `title` entre `**…**` sai em
+    **dourado** (`#FFDA6C`) — é o preset "Oferta" (`Até **50% OFF**`) do print. Reusa o
+    **`AnnouncementText`** exportado por [AnnouncementBar.tsx](src/components/storefront/AnnouncementBar.tsx)
+    (mesma convenção da barra de avisos do topo, sem mecanismo novo), nos **três** renderizadores:
+    loja, canvas do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) e prévia
+    da [/dashboard/cards](src/app/dashboard/cards/page.tsx). Título **sem** `**` renderiza igual ao
+    de antes (um span só), então cards já salvos não mudam.
+  - **Aba própria [/dashboard/cards](src/app/dashboard/cards/page.tsx)** (não é mais uma seção da
+    página do banner — banner é a vitrine, os cards são atalhos de oferta; misturados, o lojista
+    leigo não achava onde trocar o texto). A página traz **prévia "Como fica na loja"** (mesma regra
+    de cor da loja: com `themeId`, gradiente do tema; sem tema, as cores do card), o interruptor
+    "Mostrar os cards na loja", os **modelos prontos** (`PROMO_CARD_PRESETS` em
+    [storefront.ts](src/lib/storefront.ts) — Imperdível/Destaque/Oferta/Frete/Novidade/Premium),
+    seletor de cor (`PROMO_CARD_COLORS`), reordenar/remover e um "Salvar alterações" no rodapé
+    (grava o `storefront` inteiro via `storefrontToDb`). Sem migration (JSONB).
+  - **Como se chega lá:** item **"🏷️ Cards abaixo do banner"** no menu "⚙️ Configurações da loja"
+    (`openPromoCardsEditor` em [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)),
+    o **clique na faixa** desenhada no canvas (ou no **+** dela) e um link no fim da página do banner.
   - **Na prévia do editor:** o [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
-    desenha a faixa **logo abaixo do banner** no canvas (mesma regra de cor da loja: com `themeId`,
-    gradiente do tema; sem tema, as cores do card). Como eles são editados na página do banner, o
-    clique no card ou no **+** leva para lá (`openBannerEditor`, igual ao banner).
+    desenha a faixa **logo abaixo do banner** no canvas, com a mesma regra de cor.
 - **Menu de categorias no topo (`storefront.showCategoryNav`, default `true`):** barra horizontal
   (`CategoryNavBar` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)) abaixo do cabeçalho,
   reaproveita os `categoryStripItems` e o `categoryFilter`. Estilo **igual ao `sitederoupa`**: fundo
@@ -783,7 +797,8 @@ IA salva `store_whatsapp`, a rota [/api/whatsapp/config](src/app/api/whatsapp/co
 >
 > **Menu único "⚙️ Configurações da loja":** logo acima do canvas há um botão destacado (cor
 > `landing-primary`, âncora `id="passo-configuracoes"`) que abre um **dropdown listando todas as
-> seções** do editor (Pix/pagamentos, logo, banner, textos, **aparência (temas prontos)**, avisos,
+> seções** do editor (Pix/pagamentos, logo, banner, **cards abaixo do banner**, textos,
+> **aparência (temas prontos)**, avisos,
 > busca, infos, redes, categorias, blocos) — cada item chama `openSection(panel)` (= `setPanel`) ou
 > navega (o item "🎨 Aparência da loja" faz `router.push("/dashboard/aparencia")`; o antigo painel
 > `colors` de cores manuais ficou legado/sem link — ver "Temas prontos" abaixo). O item do banner

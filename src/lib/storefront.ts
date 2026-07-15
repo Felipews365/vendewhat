@@ -256,6 +256,9 @@ function heroSlideTextFromRaw(
 /**
  * Card promocional colorido exibido **abaixo do banner** (faixa de 3).
  * `from`/`to` = cores do gradiente (hex). `href` = âncora #catalogo ou URL.
+ *
+ * No `title`, um trecho entre `**asteriscos**` vira **dourado** (renderizado
+ * por `AnnouncementText` — a mesma convenção da barra de avisos do topo).
  */
 export type PromoCard = {
   eyebrow: string;
@@ -291,7 +294,7 @@ export const PROMO_CARD_PRESETS: { id: string; label: string; card: PromoCard }[
     card: {
       eyebrow: "✨ Destaque",
       title: "Vestidos",
-      subtitle: "Coleção nova",
+      subtitle: "Coleção Verão",
       ctaLabel: "Ver modelos",
       href: "#catalogo",
       from: "#a855f7",
@@ -303,7 +306,8 @@ export const PROMO_CARD_PRESETS: { id: string; label: string; card: PromoCard }[
     label: "Oferta (azul)",
     card: {
       eyebrow: "⚡ Oferta",
-      title: "Até 50% OFF",
+      // `**…**` = trecho em dourado (mesma convenção da barra de avisos).
+      title: "Até **50% OFF**",
       subtitle: "Peças selecionadas",
       ctaLabel: "Aproveitar",
       href: "#catalogo",
