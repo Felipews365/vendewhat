@@ -704,10 +704,11 @@ pagamento moram no JSONB `stores.storefront`; os dados do cliente (`customerAddr
 ### Configuração IA (aba única em Atendimento) — atendente + o que a loja aceita
 
 A antiga aba **"IA"** e a aba **"Config."** foram **fundidas numa única aba "Configuração IA"**
-(`tab === "configuracoes"`) na página [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) — as
-abas viraram **Conexão · Configuração IA · Conversas** (não há mais aba "IA" nem "Pausar" separadas; o
-tipo `tab` e o array de abas perderam os valores `"ia"` e `"pausar"` — a pausa geral virou uma faixa no
-topo da aba **Conversas**, ver "Responder na mão"). A aba renderiza **duas seções (cards) empilhadas**,
+(`tab === "configuracoes"`) no componente
+[WhatsAppIaClient.tsx](src/components/dashboard/WhatsAppIaClient.tsx) — as abas são **Conexão ·
+Configuração IA · Conversas** (não há mais aba "IA" nem "Pausar" separadas; o tipo `tab` e o array de
+abas perderam os valores `"ia"` e `"pausar"` — a pausa geral virou uma faixa no topo da aba
+**Conversas**, ver "Responder na mão"). A aba renderiza **duas seções (cards) empilhadas**,
 ambas sob `tab === "configuracoes"`, com **um único** botão "Salvar configurações" no rodapé (as duas
 seções mandam o payload completo pelo mesmo `handleSaveConfig`):
 
@@ -781,9 +782,17 @@ segmentado, verde = Sim); `tipoVenda` e `tipoMinimo` usam radio de múltiplas op
   ([attendant.ts](src/lib/ai/attendant.ts)) — a IA **só oferece** o que está habilitado e usa as
   palavras do lojista ao explicar o mínimo. A **retirada** só é oferecida pela IA se
   `shipRetiradaEnabled` (senão `pickupAddress`/`pickupInstructions` são zerados no prompt).
-- **Nav:** o item do menu do painel que apontava para essa página foi renomeado de **"WhatsApp"** para
-  **"Atendimento & IA"** (o ícone do WhatsApp continua) em
-  [DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx) (`DASH_NAV`).
+- **Nav (dois itens):** o painel de WhatsApp/IA está **dividido em dois itens do `DASH_NAV`**
+  ([DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx)):
+  **"Configuração da IA"** (`/dashboard/ia`, ícone `ia` = chip/robô em
+  [DashboardNavIcons.tsx](src/components/icons/DashboardNavIcons.tsx)) com as abas **Conexão** +
+  **Configuração IA**, e **"Atendimento"** (`/dashboard/whatsapp`, ícone `whatsapp`) só com as
+  **Conversas** (sem barra de abas, já entra nas conversas). **Um componente só:** as duas rotas são
+  páginas finas que renderizam [WhatsAppIaClient.tsx](src/components/dashboard/WhatsAppIaClient.tsx)
+  passando a prop `view` (`"ia"` → `["conexao","configuracoes"]`; `"atendimento"` → `["conversas"]`);
+  `VIEW_TABS` filtra as abas visíveis (a barra some quando há uma só) e o `?tab=` só é aceito se a aba
+  existir naquela seção. Links que levavam à conexão/config (editor visual, créditos, painel inicial)
+  apontam para `/dashboard/ia`.
 
 ### Impressão de pedidos
 
@@ -1247,8 +1256,9 @@ Tudo por loja. **Migration:** rode
   = indefinido, com teto de 7 dias). O `ai_handoff_minutes` é salvo junto do resto da config IA
   (`saveAiConfig` + `POST /api/whatsapp/config`).
 
-A tela [whatsapp/page.tsx](src/app/dashboard/whatsapp/page.tsx) é dividida em **abas**
-(`tab`: Conexão · Configuração IA · Conversas). **A antiga aba "Pausar" foi removida:** a **pausa
+O componente [WhatsAppIaClient.tsx](src/components/dashboard/WhatsAppIaClient.tsx) tem as **abas**
+(`tab`: Conexão · Configuração IA · Conversas), distribuídas em dois itens de menu — ver "Nav (dois
+itens)" acima (Conversas fica em `/dashboard/whatsapp`). **A antiga aba "Pausar" foi removida:** a **pausa
 geral** (pausar a IA para *todos* os clientes) virou uma **faixa no topo da aba Conversas** (mostra o
 status Ativo/Pausado, botão **"Pausar tudo"** com menu de duração e **"Reativar a IA agora"**;
 `pauseGlobal`/`resumeGlobal` + `PAUSE_DURATIONS`, estado `globalPauseMenu`), e a **pausa por cliente**

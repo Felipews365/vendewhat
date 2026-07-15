@@ -220,7 +220,7 @@ export default function DashboardPage() {
                     WhatsApp ainda não conectado
                   </p>
                   <Link
-                    href="/dashboard/whatsapp"
+                    href="/dashboard/ia"
                     className="text-xs font-semibold text-landing-primary hover:text-landing-accent dark:text-violet-400 dark:hover:text-violet-300 underline-offset-2 hover:underline"
                   >
                     Conectar WhatsApp →

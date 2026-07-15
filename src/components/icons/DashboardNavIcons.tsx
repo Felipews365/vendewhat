@@ -100,6 +100,19 @@ export function NavIconWhatsapp(props: NavGlyphProps) {
   );
 }
 
+/** Configuração da IA — chip/robô com brilho */
+export function NavIconIa(props: NavGlyphProps) {
+  return (
+    <Shell {...props}>
+      <rect x="4.5" y="7" width="15" height="12" rx="3" {...s} />
+      <path d="M12 7V3.5M9.5 3.5h5" {...s} />
+      <path d="M4.5 11H2.5M21.5 11h-2M4.5 15H2.5M21.5 15h-2" {...s} />
+      <circle cx="9.5" cy="13" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="14.5" cy="13" r="1.15" fill="currentColor" stroke="none" />
+    </Shell>
+  );
+}
+
 /** Pagamentos — cartão */
 export function NavIconPagamentos(props: NavGlyphProps) {
   return (
@@ -136,6 +149,7 @@ export const DASH_NAV_ICONS = {
   pedidos: NavIconPedidos,
   conta: NavIconConta,
   whatsapp: NavIconWhatsapp,
+  ia: NavIconIa,
   pagamentos: NavIconPagamentos,
   planos: NavIconPlanos,
 } as const;

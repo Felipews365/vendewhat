@@ -99,10 +99,10 @@ export default function CreditosPage() {
     <main className="max-w-xl mx-auto px-4 py-8 pb-16">
       <div className="flex items-center gap-2 mb-1">
         <Link
-          href="/dashboard/whatsapp"
+          href="/dashboard/ia"
           className="text-sm text-landing-primary dark:text-violet-400 font-medium hover:underline"
         >
-          ← WhatsApp &amp; IA
+          ← Configuração da IA
         </Link>
       </div>
       <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">

@@ -2334,10 +2334,10 @@ export function StoreVisualEditor({
             Você escolhe quais formas o cliente pode usar (Pix, dinheiro, cartão,
             Mercado Pago) e o <strong>pedido mínimo</strong> em{" "}
             <Link
-              href="/dashboard/whatsapp?tab=configuracoes"
+              href="/dashboard/ia?tab=configuracoes"
               className="text-landing-primary font-semibold hover:underline"
             >
-              Atendimento › Configuração IA
+              Configuração da IA
             </Link>{" "}
             (seção “O que a sua loja aceita”). Assim não fica repetido em dois
             lugares — o que você marca lá já vale aqui no checkout.
