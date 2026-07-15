@@ -181,6 +181,8 @@ export default function PagamentosPage() {
   const [token, setToken] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   async function load() {
     try {
@@ -197,6 +199,16 @@ export default function PagamentosPage() {
   useEffect(() => {
     load();
   }, []);
+
+  // Esc fecha o modal de desconectar (não fecha no meio do envio).
+  useEffect(() => {
+    if (!confirmOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !disconnecting) setConfirmOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmOpen, disconnecting]);
 
   async function handleConnect() {
     setError("");
@@ -228,15 +240,17 @@ export default function PagamentosPage() {
 
   async function handleDisconnect() {
     setError("");
-    if (!confirm("Desconectar o Mercado Pago desta loja? Seus clientes deixarão de pagar online.")) {
-      return;
-    }
+    setDisconnecting(true);
     try {
       await fetch("/api/store/payment-gateway", { method: "DELETE" });
       showToast("Mercado Pago desconectado.");
       setStatus({ connected: false });
+      setConfirmOpen(false);
     } catch {
       setError("Falha de rede ao desconectar.");
+      setConfirmOpen(false);
+    } finally {
+      setDisconnecting(false);
     }
   }
 
@@ -323,7 +337,8 @@ export default function PagamentosPage() {
               </p>
             )}
             <button
-              onClick={handleDisconnect}
+              type="button"
+              onClick={() => setConfirmOpen(true)}
               className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Desconectar
@@ -374,6 +389,68 @@ export default function PagamentosPage() {
         Recurso dos planos Profissional e Empresarial. Seu token fica guardado com
         segurança no servidor e nunca é exibido por completo.
       </p>
+
+      {/* Confirmação de desconectar o Mercado Pago (modal, no lugar do confirm() do browser) */}
+      {confirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="desconectar-mp-titulo"
+          onClick={() => {
+            if (!disconnecting) setConfirmOpen(false);
+          }}
+        >
+          <section
+            onClick={(e) => e.stopPropagation()}
+            className="vw-pop-in w-full max-w-md rounded-2xl border border-stone-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-800"
+          >
+            <div className="flex items-start gap-3">
+              <span
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xl dark:bg-amber-950/50"
+                aria-hidden
+              >
+                ⚠️
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2
+                  id="desconectar-mp-titulo"
+                  className="text-base font-bold text-stone-800 dark:text-slate-100"
+                >
+                  Desconectar o Mercado Pago?
+                </h2>
+                <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-slate-300">
+                  O botão <strong>“Pagar com Mercado Pago”</strong> vai sumir do carrinho e
+                  seus clientes deixarão de pagar online. Sua loja continua vendendo por
+                  Pix, dinheiro e cartão combinados pelo WhatsApp.
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-stone-500 dark:text-slate-400">
+                  Você pode conectar de novo quando quiser, colando o token outra vez.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(false)}
+                disabled={disconnecting}
+                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {disconnecting ? "Desconectando…" : "Sim, desconectar"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
