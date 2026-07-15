@@ -276,6 +276,9 @@ html {
 
 .vw-marquee-track {
   animation: vw-marquee 50s linear infinite;
+  /* Quem tem conteúdo de largura variável (barra de avisos) manda a duração
+     pela var, para a velocidade em px/s ficar igual em qualquer loja. */
+  animation-duration: var(--vw-marquee-duration, 50s);
 }
 
 .vw-marquee:hover .vw-marquee-track {

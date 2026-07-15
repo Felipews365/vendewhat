@@ -267,12 +267,24 @@ Orientações para o Claude Code trabalhar neste repositório.
 - **Barra de avisos preta no topo (`storefront.announcements` + `announcementBarEnabled`/`announcementBarBg`):**
   faixa full-width **acima do cabeçalho** (`AnnouncementBar` em
   [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)) no estilo `sitederoupa` — fundo escuro
-  (`announcementBarBg`, default `#06141B`), frases separadas por `|` no desktop e só a 1ª no celular.
-  Cada frase é texto livre; um trecho entre `**asteriscos**` vira **destaque dourado** (`#FFDA6C`) via
-  `AnnouncementText` (split por regex). Defaults = as 4 frases do print (nova coleção / frete grátis /
-  10x / troca). Editada no painel **"Barra de avisos"** do
-  [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (toggle + cor + lista de
-  avisos + `headerTagline`). Sem migration (JSONB).
+  (`announcementBarBg`, default `#06141B`). Cada frase é texto livre; um trecho entre
+  `**asteriscos**` vira **destaque dourado** (`#FFDA6C`) via `AnnouncementText` (split por regex).
+  Defaults = as 4 frases do print (nova coleção / frete grátis / 10x / troca). Editada no painel
+  **"Barra de avisos"** do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
+  (toggle + cor + lista de avisos + `headerTagline`). Sem migration (JSONB).
+  - **Carrossel contínuo (marquee), igual no celular e no desktop:** as frases **passam rolando**
+    (reusa `.vw-marquee-track` + o keyframe `vw-marquee` do [globals.css](src/app/globals.css), os
+    mesmos da landing). Substituiu o texto parado — que no desktop separava as frases por `|` e no
+    **celular mostrava só a 1ª** (as outras nunca eram lidas, pois não cabiam).
+    - **Duas metades idênticas + `translateX(-50%)`** = laço imperceptível. Cada metade repete a
+      lista `repeats` vezes para ficar **mais larga que a tela** (senão andaria um vão vazio); a
+      2ª metade é `aria-hidden` (o leitor de tela não lê tudo duas vezes).
+    - **Largura estimada por nº de caracteres** (`MARQUEE_CHAR_PX` etc.), **não medida no DOM** — o
+      servidor e o cliente renderizam igual, sem flash na hidratação. Dessa estimativa sai também a
+      `--vw-marquee-duration` (nova var no `.vw-marquee-track`, default 50s = o da landing), para a
+      **velocidade em px/s ser a mesma** em qualquer loja, com poucas ou muitas frases.
+    - **A máscara (`.vw-marquee`, esmaece as pontas) fica no wrapper interno, não no pai** — no pai
+      ela apagaria junto a **cor de fundo** da barra. Ela também dá o pause no hover.
 - **Cabeçalho escuro estilo e-commerce (redesenho do `<header>` em LojaClient):** fundo
   `headerBackground` (default agora `#11212D`), **dark-aware** (`headerDark = isDarkRgb`). Logo/nome da
   loja em branco + **subtítulo** `storefront.headerTagline` (default `"MODA & ESTILO"`) em

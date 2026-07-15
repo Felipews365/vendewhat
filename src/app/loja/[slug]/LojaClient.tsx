@@ -263,24 +263,63 @@ function AnnouncementText({ text }: { text: string }) {
   );
 }
 
-/** Barra preta de avisos no topo (frete grátis, parcelamento, troca…). */
+/**
+ * Barra de avisos no topo (frete grátis, parcelamento, troca…) — um carrossel
+ * contínuo (marquee), igual no celular e no desktop: no celular o texto não
+ * caberia parado, e antes só a 1ª frase aparecia.
+ *
+ * O track é feito de DUAS metades idênticas e a animação anda `-50%`, então o
+ * laço é imperceptível. Cada metade repete a lista de avisos `repeats` vezes
+ * para ser mais larga que a tela (senão sobraria um vão andando na barra).
+ * A conta é por estimativa de largura (nº de caracteres), não por medição no
+ * DOM — assim o servidor e o cliente renderizam igual, sem flash na hidratação.
+ */
+const MARQUEE_CHAR_PX = 7; // largura média por char no tamanho da barra
+const MARQUEE_ITEM_GAP_PX = 40; // = gap-x-10
+const MARQUEE_MIN_HALF_PX = 1600; // cobre telas largas
+const MARQUEE_SPEED_PX_S = 60;
+
 function AnnouncementBar({ items, bg }: { items: string[]; bg: string }) {
   if (items.length === 0) return null;
-  return (
-    <div
-      className="w-full text-white text-center text-[11px] sm:text-xs font-medium tracking-wide py-2 px-4"
-      style={{ backgroundColor: bg }}
-    >
-      <div className="hidden sm:block">
-        {items.map((it, i) => (
-          <span key={i} className="whitespace-nowrap">
-            {i > 0 && <span className="text-white/30 mx-2">|</span>}
+
+  const cyclePx = items.reduce(
+    (sum, it) =>
+      sum + it.replace(/\*\*/g, "").length * MARQUEE_CHAR_PX + MARQUEE_ITEM_GAP_PX,
+    0
+  );
+  const repeats = Math.max(1, Math.ceil(MARQUEE_MIN_HALF_PX / Math.max(cyclePx, 1)));
+  const halfPx = cyclePx * repeats;
+  const duration = Math.min(90, Math.max(20, Math.round(halfPx / MARQUEE_SPEED_PX_S)));
+
+  const half = (hidden: boolean) => (
+    <div className="flex shrink-0 items-center gap-x-10 pr-10" aria-hidden={hidden}>
+      {Array.from({ length: repeats }).flatMap((_, r) =>
+        items.map((it, i) => (
+          <span key={`${r}-${i}`} className="whitespace-nowrap">
             <AnnouncementText text={it} />
           </span>
-        ))}
-      </div>
-      <div className="sm:hidden">
-        <AnnouncementText text={items[0]} />
+        ))
+      )}
+    </div>
+  );
+
+  return (
+    <div
+      className="w-full text-white text-[11px] sm:text-xs font-medium tracking-wide py-2"
+      style={{ backgroundColor: bg }}
+    >
+      {/* A máscara vai AQUI (não no pai): esmaece só o texto nas pontas — no pai
+          ela apagaria também a cor de fundo da barra. Também dá o pause no hover. */}
+      <div className="vw-marquee overflow-hidden">
+        <div
+          className="vw-marquee-track flex w-max"
+          style={
+            { "--vw-marquee-duration": `${duration}s` } as React.CSSProperties
+          }
+        >
+          {half(false)}
+          {half(true)}
+        </div>
       </div>
     </div>
   );
