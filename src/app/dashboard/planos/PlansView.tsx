@@ -5,8 +5,10 @@ import Link from "next/link";
 import {
   formatBRL,
   monthlyEquivalentAnnual,
+  planHasAi,
   type PlanDefinition,
 } from "@/lib/plans";
+import { includedTokensForPlan } from "@/lib/aiCredits";
 import type { CurrentSubscription } from "@/lib/plans.server";
 
 /** Rótulo amigável do status da assinatura. */
@@ -121,6 +123,16 @@ export default function PlansView({
   const subStatus = current ? statusLabel(current.status) : null;
   const renewLabel = formatDate(current?.expiresAt ?? null);
 
+  // Paga avulso (ou o admin registrou na mão) e o plano não é vitalício → dá para
+  // ativar a renovação automática. `recurring` = tem preapproval no Mercado Pago.
+  const canGoRecurring = Boolean(
+    currentPlan && !current?.recurring && current?.status !== "vitalicio",
+  );
+  // Plano com IA e sem franquia mensal (IA Sob Medida) → a IA roda de créditos.
+  const needsCredits = Boolean(
+    currentPlan && planHasAi(currentPlan.id) && includedTokensForPlan(currentPlan.id) === 0,
+  );
+
   /** Leva ao checkout do Mercado Pago: assinatura que renova ou pagamento avulso. */
   async function handlePay(planId: string, mode: PayMode) {
     setError(null);
@@ -209,15 +221,41 @@ export default function PlansView({
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
                 R$ {formatBRL(currentPlan.monthly)}/mês
                 {current?.billingCycle === "annual" && " (ciclo anual)"}
-                {renewLabel && ` · renova em ${renewLabel}`}
+                {renewLabel &&
+                  ` · ${current?.recurring ? "renova" : "vence"} em ${renewLabel}`}
               </p>
+              {canGoRecurring && (
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  Você paga avulso: quando vencer, precisa pagar de novo na mão.{" "}
+                  <button
+                    type="button"
+                    onClick={() => handlePay(currentPlan.id, "recurring")}
+                    disabled={busy !== null}
+                    className="font-bold text-violet-700 underline underline-offset-2 transition hover:text-violet-800 disabled:opacity-60 dark:text-violet-300 dark:hover:text-violet-200"
+                  >
+                    {busy?.planId === currentPlan.id && busy.mode === "recurring"
+                      ? "Redirecionando…"
+                      : "Ativar renovação automática"}
+                  </button>
+                </p>
+              )}
             </div>
-            <a
-              href="#planos"
-              className="shrink-0 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700"
-            >
-              Fazer upgrade
-            </a>
+            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+              {needsCredits && (
+                <Link
+                  href="/dashboard/creditos"
+                  className="rounded-xl border border-violet-300 px-4 py-2.5 text-center text-sm font-bold text-violet-700 transition hover:bg-violet-100 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950/50"
+                >
+                  Comprar créditos
+                </Link>
+              )}
+              <a
+                href="#planos"
+                className="rounded-xl bg-violet-600 px-4 py-2.5 text-center text-sm font-bold text-white shadow-sm transition hover:bg-violet-700"
+              >
+                Fazer upgrade
+              </a>
+            </div>
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3">

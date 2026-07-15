@@ -69,6 +69,12 @@ export type CurrentSubscription = {
   status: string | null;
   billingCycle: string | null;
   expiresAt: string | null;
+  /**
+   * Renova sozinha? Só o preapproval (assinatura recorrente) grava o
+   * `gateway_subscription_id` — avulso e registro manual do admin ficam sem.
+   * Derivado no servidor: o id do gateway não precisa ir ao browser.
+   */
+  recurring: boolean;
 };
 
 /**
@@ -92,7 +98,7 @@ export async function loadCurrentSubscription(): Promise<CurrentSubscription | n
 
     const { data: sub } = await supabase
       .from("subscriptions")
-      .select("plan_id, status, billing_cycle, expires_at")
+      .select("plan_id, status, billing_cycle, expires_at, gateway_subscription_id")
       .eq("store_id", (store as { id: string }).id)
       .maybeSingle();
     if (!sub) return null;
@@ -102,12 +108,14 @@ export async function loadCurrentSubscription(): Promise<CurrentSubscription | n
       status: string | null;
       billing_cycle: string | null;
       expires_at: string | null;
+      gateway_subscription_id: string | null;
     };
     return {
       planId: s.plan_id,
       status: s.status,
       billingCycle: s.billing_cycle,
       expiresAt: s.expires_at,
+      recurring: Boolean(s.gateway_subscription_id),
     };
   } catch {
     return null;
