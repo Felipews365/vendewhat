@@ -18,7 +18,7 @@ import {
   type WhatsAppConfig,
 } from "@/lib/whatsappConfig";
 import { toWhatsAppNumber } from "@/lib/customerPhone";
-import { consumeTokens, hasAiBalance } from "@/lib/aiCredits";
+import { consumeTokens, hasAiBalance, storePlanHasAi } from "@/lib/aiCredits";
 import { isEvolutionConfigured, sendText } from "@/lib/evolution";
 import {
   type AttendantProduct,
@@ -120,6 +120,7 @@ async function runSilenceFollowups(
   for (const cfg of configs) {
     if (sent >= MAX_TOTAL) break;
     if (globalPauseActive(cfg)) continue;
+    if (!(await storePlanHasAi(admin, cfg.storeId))) continue; // plano "Sem IA"
 
     const minMs = cfg.aiFollowupMinutes * 60_000;
     const [times, pausedSet, followupTimes] = await Promise.all([
@@ -197,6 +198,8 @@ async function runPostsale(
   for (const cfg of configs) {
     if (sent >= MAX_TOTAL) break;
     if (globalPauseActive(cfg)) continue;
+
+    if (!(await storePlanHasAi(admin, cfg.storeId))) continue; // plano "Sem IA"
 
     const [orders, pausedSet] = await Promise.all([
       listDuePostsaleOrders(admin, cfg.storeId, cfg.aiPostsaleDays, MAX_PER_STORE),
@@ -280,6 +283,8 @@ async function runAbandonedCarts(
   for (const cfg of configs) {
     if (sent >= MAX_TOTAL) break;
     if (globalPauseActive(cfg)) continue;
+
+    if (!(await storePlanHasAi(admin, cfg.storeId))) continue; // plano "Sem IA"
 
     const [carts, pausedSet] = await Promise.all([
       listDueAbandonedCarts(admin, cfg.storeId, cfg.aiCartMinutes, MAX_PER_STORE),

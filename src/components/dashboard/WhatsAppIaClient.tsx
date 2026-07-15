@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
@@ -214,10 +222,17 @@ const VIEW_TABS: Record<WhatsAppView, TabKey[]> = {
 
 export default function WhatsAppIaClient({
   view = "ia",
+  planHasAi = true,
 }: {
   view?: WhatsAppView;
+  /** Plano "Sem IA" → esconde a aba de configuração da IA (a Conexão continua:
+   *  o WhatsApp segue conectado para os pedidos e o atendimento na mão). */
+  planHasAi?: boolean;
 }) {
-  const visibleTabs = VIEW_TABS[view];
+  const visibleTabs = useMemo(
+    () => VIEW_TABS[view].filter((t) => planHasAi || t !== "configuracoes"),
+    [view, planHasAi],
+  );
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -770,6 +785,38 @@ export default function WhatsAppIaClient({
               </button>
             ))}
         </div>
+      )}
+
+      {/* Plano "Sem IA": a aba de configuração da IA nem é montada (visibleTabs).
+          A Conexão continua: o WhatsApp conectado recebe os pedidos e serve o
+          Atendimento na mão. Nada do que ele já configurou é apagado. */}
+      {view === "ia" && !planHasAi && (
+        <section className="rounded-2xl border border-violet-200 bg-violet-50/70 p-5 dark:border-violet-900/60 dark:bg-violet-950/30">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl" aria-hidden>
+              🤖
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-bold text-stone-800 dark:text-slate-100">
+                Seu plano não inclui a IA
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-slate-300">
+                No plano <strong>Sem IA</strong> o WhatsApp continua conectado: você recebe
+                os pedidos normalmente e responde seus clientes na aba{" "}
+                <strong>Atendimento</strong>. O que não acontece é a IA responder sozinha.
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-stone-500 dark:text-slate-400">
+                Se fizer o upgrade, tudo que você já configurou volta como estava.
+              </p>
+              <Link
+                href="/dashboard/planos"
+                className="mt-3 inline-block rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700"
+              >
+                Ver planos com IA
+              </Link>
+            </div>
+          </div>
+        </section>
       )}
 
       {/* Conexão */}

@@ -2,15 +2,9 @@ import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { getConfig, globalPauseActive } from "@/lib/whatsappConfig";
+import { planHasAi as planIncludesAi } from "@/lib/plans";
 
 export const runtime = "nodejs";
-
-/**
- * Ids de plano que NÃO incluem IA — nesses planos o aviso de "IA pausada /
- * sem conectar" não deve aparecer. Cobre o id atual ("essencial" = "Sem IA")
- * e um alias por segurança.
- */
-const NO_AI_PLAN_IDS = new Set(["essencial", "sem-ia"]);
 
 /**
  * Estado enxuto para o aviso do topo do painel: se o plano tem IA, se a IA
@@ -43,7 +37,7 @@ export async function GET() {
     .eq("store_id", storeId)
     .maybeSingle();
   const planId = (sub as { plan_id?: string | null } | null)?.plan_id ?? null;
-  const planHasAi = !(planId && NO_AI_PLAN_IDS.has(planId));
+  const planHasAi = planIncludesAi(planId);
 
   const admin = createAdminSupabase();
   const cfg = admin ? await getConfig(admin, storeId) : null;

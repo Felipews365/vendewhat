@@ -8,8 +8,13 @@
  *
  * Regra de consumo: desconta PRIMEIRO da franquia do mês, depois dos créditos.
  * Quando o saldo zera, a IA para de responder e o dono é avisado (Opção A).
+ *
+ * Antes do saldo vem o PLANO: no "Sem IA" a IA não atende de jeito nenhum
+ * (`hasAiBalance`), mas nada é apagado — config, histórico e créditos ficam
+ * guardados e voltam inteiros se o lojista fizer upgrade.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { planHasAi } from "@/lib/plans";
 
 const TABLE = "store_ai_credits";
 
@@ -54,9 +59,14 @@ export function findPackage(brl: number): CreditPackage | null {
   return CREDIT_PACKAGES.find((p) => p.brl === brl) ?? null;
 }
 
+/** Por que a IA não pode responder (`null` = pode). */
+export type AiBlockReason = "no_ai_plan" | "empty" | null;
+
 export type CreditState = {
   storeId: string;
   cycleStart: string; // YYYY-MM-DD
+  /** O plano da loja inclui IA (ver `planHasAi` em plans.ts). */
+  planHasAi: boolean;
   includedTokens: number;
   usedTokens: number;
   creditTokens: number;
@@ -87,11 +97,12 @@ export function conversationsFromTokens(tokens: number): number {
   return Math.max(0, Math.floor(tokens / TOKENS_PER_CONVERSATION));
 }
 
-function toState(row: Row): CreditState {
+function toState(row: Row, planHasAi: boolean): CreditState {
   const available = availableFrom(row.included_tokens, row.used_tokens, row.credit_tokens);
   return {
     storeId: row.store_id,
     cycleStart: row.cycle_start,
+    planHasAi,
     includedTokens: row.included_tokens,
     usedTokens: row.used_tokens,
     creditTokens: row.credit_tokens,
@@ -114,6 +125,18 @@ async function getStorePlanId(
     .maybeSingle();
   const planId = (data as { plan_id?: string | null } | null)?.plan_id;
   return typeof planId === "string" ? planId : null;
+}
+
+/**
+ * O plano da loja inclui IA? Atalho para os crons pularem a loja cedo, sem
+ * carregar/criar o saldo — as automações (follow-up, pós-venda, carrinho) são do
+ * plano com IA, inclusive as de mensagem fixa, que não custam token.
+ */
+export async function storePlanHasAi(
+  admin: SupabaseClient,
+  storeId: string
+): Promise<boolean> {
+  return planHasAi(await getStorePlanId(admin, storeId));
 }
 
 /** Mesmo ano-mês? (o ciclo renova por mês-calendário). */
@@ -141,6 +164,7 @@ export async function loadCredits(
   const { data } = await admin.from(TABLE).select("*").eq("store_id", storeId).maybeSingle();
   const planId = await getStorePlanId(admin, storeId);
   const included = includedTokensForPlan(planId);
+  const hasAiPlan = planHasAi(planId);
 
   // Primeira vez: cria a linha com a franquia do plano + bônus de boas-vindas.
   if (!data) {
@@ -154,7 +178,7 @@ export async function loadCredits(
       empty_warned_at: null,
     };
     await admin.from(TABLE).insert(row);
-    return toState(row);
+    return toState(row, hasAiPlan);
   }
 
   const row = data as Row;
@@ -178,16 +202,23 @@ export async function loadCredits(
     Object.assign(row, patch);
   }
 
-  return toState(row);
+  return toState(row, hasAiPlan);
 }
 
-/** Tem saldo para a IA responder? */
+/**
+ * A IA pode responder? Barra por PLANO antes do saldo: no "Sem IA" a IA não
+ * atende nem com crédito (o bônus de boas-vindas viraria IA vitalícia de graça,
+ * pois crédito não expira). Os créditos ficam **guardados** para quando o lojista
+ * fizer upgrade — nada é gasto nem apagado enquanto está bloqueado.
+ */
 export async function hasAiBalance(
   admin: SupabaseClient,
   storeId: string
-): Promise<{ ok: boolean; state: CreditState }> {
+): Promise<{ ok: boolean; state: CreditState; reason: AiBlockReason }> {
   const state = await loadCredits(admin, storeId);
-  return { ok: state.available > 0, state };
+  if (!state.planHasAi) return { ok: false, state, reason: "no_ai_plan" };
+  if (state.available <= 0) return { ok: false, state, reason: "empty" };
+  return { ok: true, state, reason: null };
 }
 
 export type ConsumeResult = {

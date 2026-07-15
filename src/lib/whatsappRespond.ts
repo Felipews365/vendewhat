@@ -45,12 +45,20 @@ type AnyObj = Record<string, unknown>;
  */
 async function notifyOwnerCredits(
   cfg: WhatsAppConfig,
-  kind: "empty" | "low",
+  kind: "empty" | "low" | "no_ai_plan",
   conversationsLeft: number
 ): Promise<void> {
   if (cfg.connectionStatus !== "connected" || !cfg.connectedNumber) return;
   const msg =
-    kind === "empty"
+    kind === "no_ai_plan"
+      ? [
+          "ℹ️ *Seu plano não inclui a IA*",
+          "",
+          "Um cliente falou com você no WhatsApp e a IA não respondeu, porque o seu plano atual é o *Sem IA*.",
+          "",
+          "Você continua atendendo normalmente pelo painel (Atendimento). Para a IA responder sozinha, faça o upgrade em Planos. 🙂",
+        ].join("\n")
+      : kind === "empty"
       ? [
           "⚠️ *Créditos de IA esgotados*",
           "",
@@ -368,12 +376,13 @@ export async function respondToCustomer(
   const customerWantsCatalog =
     /\bcat[aá]logos?\b|lista de produtos|\bpdf\b/i.test(combinedUserText);
 
-  // Motor de créditos: sem saldo, a IA NÃO responde ao cliente e o dono é avisado
-  // uma vez (Opção A). O aviso vai para o WhatsApp da própria loja, nunca ao cliente.
+  // Plano + créditos: no "Sem IA", ou sem saldo, a IA NÃO responde ao cliente e o
+  // dono é avisado uma vez (Opção A) — no WhatsApp da própria loja, nunca ao cliente.
+  // O `empty_warned_at` serve de trava dos dois casos (um aviso por vez, sem spam).
   const balance = await hasAiBalance(admin, cfg.storeId);
   if (!balance.ok) {
     if (!balance.state.emptyWarnedAt) {
-      await notifyOwnerCredits(cfg, "empty", 0);
+      await notifyOwnerCredits(cfg, balance.reason === "no_ai_plan" ? "no_ai_plan" : "empty", 0);
       await markEmptyWarned(admin, cfg.storeId);
     }
     return false;

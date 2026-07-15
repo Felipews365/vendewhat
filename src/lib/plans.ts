@@ -14,6 +14,18 @@ export type PlanDefinition = {
 
 export const PLAN_ANNUAL_DISCOUNT = 0.16;
 
+/** Ids de plano que NÃO incluem IA: o atual ("essencial" = "Sem IA") + um alias. */
+export const NO_AI_PLAN_IDS = new Set(["essencial", "sem-ia"]);
+
+/**
+ * O plano da loja inclui a IA? Regra única (painel, aviso do topo e atendimento).
+ * **Sem assinatura (`null`) assume que SIM** — loja sem registro não pode perder a
+ * IA por falta de dado; só bloqueia quem está explicitamente num plano sem IA.
+ */
+export function planHasAi(planId: string | null | undefined): boolean {
+  return !(planId && NO_AI_PLAN_IDS.has(planId));
+}
+
 export const PLAN_CATALOG: PlanDefinition[] = [
   {
     id: "essencial",
