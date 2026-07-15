@@ -915,6 +915,15 @@ pinga [/api/loja/visit](src/app/api/loja/visit/route.ts) no carregamento (`LojaC
 load via `useRef`, gravação por service role). Migration:
 [supabase-migration-store-visits.sql](supabase-migration-store-visits.sql).
 
+- **Visitas por dia (clique no card):** o card **Visitas** é o único clicável dos quatro (vira
+  `<button>` com a chamada "Ver por dia →"; os outros seguem `<div>`) e abre o
+  [VisitsByDayModal.tsx](src/components/dashboard/VisitsByDayModal.tsx), que lista os **últimos 30
+  dias** com rótulo ("Hoje"/"Ontem"/"08 de jul."), barrinha proporcional ao dia de maior movimento e
+  a contagem. Mostra **todos** os dias da janela, inclusive os zerados (dia sem visita também
+  informa). **Sem rota de API nem migration:** consulta `store_visits` direto pelo client do browser
+  (a policy "Donos veem visitas da loja" já dá o SELECT ao dono) e **agrupa por dia em JS**, no fuso
+  local do lojista — por isso os dias batem com o que ele vê no relógio, e não em UTC.
+
 ## Supabase
 
 - **Project URL:** `https://dbtoinsifpevufbtwyzu.supabase.co`

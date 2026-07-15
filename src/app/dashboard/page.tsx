@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { StoreSetupGuideModal } from "@/components/dashboard/StoreSetupGuideModal";
+import { VisitsByDayModal } from "@/components/dashboard/VisitsByDayModal";
 
 interface Store {
   id: string;
@@ -28,6 +29,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [showVisits, setShowVisits] = useState(false);
   const [waStatus, setWaStatus] = useState<WaStatus>("disconnected");
   const [waNumber, setWaNumber] = useState<string | null>(null);
   const [stats, setStats] = useState({
@@ -136,6 +138,12 @@ export default function DashboardPage() {
         onClose={() => setShowSetupGuide(false)}
       />
 
+      <VisitsByDayModal
+        open={showVisits}
+        storeId={user.store?.id ?? null}
+        onClose={() => setShowVisits(false)}
+      />
+
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Painel da loja</h1>
@@ -153,7 +161,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {[
+        {([
           { label: "Produtos", value: String(stats.products), icon: "📦" },
           { label: "Pedidos", value: String(stats.orders), icon: "🛒" },
           {
@@ -164,20 +172,47 @@ export default function DashboardPage() {
             }).format(stats.salesToday),
             icon: "💰",
           },
-          { label: "Visitas", value: String(stats.visits), icon: "👁️" },
-        ].map((stat, i) => (
-          <div
-            key={stat.label}
-            className="vw-pop-in bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow"
-            style={{ animationDelay: `${i * 70}ms` }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-slate-500 dark:text-slate-400">{stat.label}</span>
-              <span className="text-2xl">{stat.icon}</span>
+          {
+            label: "Visitas",
+            value: String(stats.visits),
+            icon: "👁️",
+            onClick: () => setShowVisits(true),
+          },
+        ] as { label: string; value: string; icon: string; onClick?: () => void }[]).map((stat, i) => {
+          const inner = (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-slate-500 dark:text-slate-400">{stat.label}</span>
+                <span className="text-2xl">{stat.icon}</span>
+              </div>
+              <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{stat.value}</p>
+              {stat.onClick && (
+                <p className="mt-1 text-xs font-semibold text-landing-primary dark:text-violet-400">
+                  Ver por dia →
+                </p>
+              )}
+            </>
+          );
+          const cls =
+            "vw-pop-in bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow";
+          const style = { animationDelay: `${i * 70}ms` };
+
+          return stat.onClick ? (
+            <button
+              key={stat.label}
+              type="button"
+              onClick={stat.onClick}
+              className={`${cls} text-left w-full hover:dark:ring-violet-700`}
+              style={style}
+            >
+              {inner}
+            </button>
+          ) : (
+            <div key={stat.label} className={cls} style={style}>
+              {inner}
             </div>
-            <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{stat.value}</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="mb-8 max-w-xl">
