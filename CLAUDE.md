@@ -58,6 +58,20 @@ Orientações para o Claude Code trabalhar neste repositório.
     `localStorage` (`vw-sidebar-collapsed`), restaurada num `useEffect` no mount (evita mismatch de
     hidratação). No desktop **não há** mais cabeçalho no topo (a sidebar cobre marca + controles); o
     `<header>` sticky com marca + tema + Sair é **`lg:hidden`**, só no celular.
+  - **Aviso do topo "IA pausada / sem conectar"
+    ([AiStatusBanner.tsx](src/components/dashboard/AiStatusBanner.tsx)):** faixa **âmbar** renderizada
+    no topo da coluna de conteúdo do [DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx)
+    (acima de `children`, em **todas** as páginas do painel) quando a IA **está pausada** (botão
+    "Reativar a IA" → `/dashboard/whatsapp`) ou o **WhatsApp não está conectado** (botão "Conectar
+    agora" → `/dashboard/ia`); pausa tem prioridade sobre conexão. O estado vem do endpoint
+    [/api/whatsapp/banner](src/app/api/whatsapp/banner/route.ts) (`GET` → `{ planHasAi, aiEnabled,
+    connected, paused }`, usando `getConfig` + `globalPauseActive` + a assinatura da loja); recarrega a
+    cada troca de rota (`usePathname`), então some ao conectar/reativar. **Não aparece no plano "Sem
+    IA"** (`plan_id === "essencial"` → `planHasAi=false`; sem assinatura assume que tem IA) **nem com a
+    IA desligada** (`aiEnabled=false` — o lojista optou por não usar). **Dispensável (✕):** guarda o
+    tipo dispensado em `localStorage` (`vw-ai-banner-dismissed`, valor `paused`|`disconnected`) e
+    persiste enquanto o problema continuar; um `useEffect` **limpa a dispensa** quando o problema é
+    resolvido ou vira outro tipo, para uma nova ocorrência voltar a avisar.
 - **Tema claro/escuro:** Tailwind com `darkMode: "class"` ([tailwind.config.ts](tailwind.config.ts)).
   Botão [src/components/ThemeToggle.tsx](src/components/ThemeToggle.tsx) alterna a classe `dark`
   no `<html>` e salva em `localStorage` (`vw-theme`). Um script anti-flash em

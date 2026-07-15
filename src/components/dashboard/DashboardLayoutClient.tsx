@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AiStatusBanner } from "@/components/dashboard/AiStatusBanner";
 import {
   DASH_NAV_ICONS,
   type DashNavIconKey,
@@ -471,6 +472,9 @@ export function DashboardLayoutClient({
               </div>
             </div>
           </header>
+
+          {/* Aviso do topo: IA pausada ou WhatsApp sem conectar (some no plano Sem IA) */}
+          <AiStatusBanner />
 
           {/* pb extra no celular para não ficar atrás da barra inferior */}
           <div
