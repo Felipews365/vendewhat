@@ -388,6 +388,7 @@ export async function respondToCustomer(
     isFirstContact,
     storeAddress,
     onlineOnly,
+    onlineCity: onlineOnly ? sf.onlineCity : "",
     hasLocationPin,
     hasStorePhoto,
     hasStoreVideo,

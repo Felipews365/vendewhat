@@ -1104,6 +1104,17 @@ loja, configurado na aba **Atendente de IA** (seção "Localização e foto da l
   (sem endereço/visita) e mandar o link do catálogo. **Migration:**
   [supabase-migration-whatsapp-online-only.sql](supabase-migration-whatsapp-online-only.sql)
   (só adiciona a coluna booleana).
+  - **Cidade da loja só online (`storefront.onlineCity`, JSONB — sem migration):** quando
+    "só online" está marcado, aparece um campo **"Cidade da loja (para a IA responder)"**
+    (ex.: `Recife - PE`) logo abaixo do checkbox na aba Atendente de IA
+    ([WhatsAppIaClient.tsx](src/components/dashboard/WhatsAppIaClient.tsx), estado `onlineCity`,
+    salvo pela rota [config/route.ts](src/app/api/whatsapp/config/route.ts) via patch no
+    `storefront`, igual ao `saleMode`). O `whatsappRespond` passa `onlineCity` (só quando
+    `onlineOnly`) ao `buildSystemPrompt({ onlineCity })` em
+    [attendant.ts](src/lib/ai/attendant.ts): se o cliente pergunta **de onde a loja é/de qual
+    cidade**, a IA responde que a loja fica em `onlineCity` **e** que atende tudo online (proibida
+    de inventar cidade/endereço). Cidade vazia = a IA diz só que é 100% online, sem citar lugar. O
+    campo só é gravado quando a loja é só online (desmarcar zera o envio).
 
 - **Endereço:** `ai_location_address` (onde a loja fica — pode ser igual ou
   diferente do `storefront.pickupAddress` de retirada). No webhook, se vazio, cai
@@ -1273,14 +1284,16 @@ com menu de duração — ver "Responder na mão"). Todo o código que só a aba
 A aba **Conversas** deixa o lojista **ler o histórico e responder manualmente** um cliente, estilo
 WhatsApp Web (visual inspirado numa referência). Componente
 [ConversationsPanel.tsx](src/components/dashboard/ConversationsPanel.tsx) (montado só quando
-`tab === "conversas"`; nessa aba o container da página vira `max-w-7xl`). Layout **duas colunas no
+`tab === "conversas"`; nessa aba o container da página vira `max-w-none` — **usa a largura toda**,
+só com a folga do `p-6`, para ver as conversas melhor; as outras abas ficam `max-w-2xl`). Layout **duas colunas no
 desktop** (lista de conversas `lg:w-96` + thread) e **uma coluna no celular** (lista → toca no
 contato → thread em tela cheia com seta de voltar). **Balões estilo WhatsApp:** cliente à esquerda
 (`role === "user"`, fundo **laranja suave**), loja/IA à direita (`role === "assistant"`, **verde
 WhatsApp** `#d9fdd3`), ambos dark-aware. Acentos (enviar, item ativo, botões) em **emerald**.
 **Sem scroll externo:** a aba é uma coluna de altura travada na viewport
-(`h-[calc(100dvh-17rem)]` no celular; **`lg:h-[calc(100dvh-11rem)]`** no desktop, mais alta porque a
-sidebar substituiu o cabeçalho do topo e sobrou espaço vertical) — a faixa de pausa geral fica fixa em
+(`h-[calc(100dvh-7rem)]` no celular = desconta o header sticky + `p-4`; **`lg:h-[calc(100dvh-3rem)]`**
+no desktop, que casa exatamente com o `p-6` de cima/baixo do wrapper — no desktop não há header, então
+o painel **preenche quase toda** a altura, sem sobra escura embaixo) — a faixa de pausa geral fica fixa em
 cima e o painel (`h-full`) ocupa o resto; **só a lista e a thread rolam por dentro**. Sem migration para o básico — usa
 `whatsapp_messages`, `whatsapp_pauses` e `store_whatsapp` que já existem (a **renomeação** tem tabela
 própria, ver abaixo).

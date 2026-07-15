@@ -558,6 +558,11 @@ export type StorefrontSettings = {
   aiSendPixOnCheckout: boolean;
   /** Modo de venda da loja: varejo, atacado ou ambos — orienta a IA na condução. */
   saleMode: SaleMode;
+  /**
+   * Cidade/UF da loja só online (sem ponto físico). A IA informa isso quando o
+   * cliente pergunta de onde a loja é/atende. Vazio = não informado.
+   */
+  onlineCity: string;
   /** Dias da semana em que a loja atende (chaves: seg/ter/qua/qui/sex/sab/dom). Vazio = não informado. */
   attendanceDays: string[];
   /** Horário de atendimento em texto livre (ex.: "9h às 18h"). Vazio = não informado. */
@@ -696,6 +701,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   pixName: "",
   aiSendPixOnCheckout: false,
   saleMode: "varejo",
+  onlineCity: "",
   attendanceDays: [],
   attendanceHours: "",
   facebookPixelId: "",
@@ -1170,6 +1176,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       DEFAULT_STOREFRONT.aiSendPixOnCheckout
     ),
     saleMode: saleModeFromDb(o.saleMode),
+    onlineCity: strOrEmpty(o.onlineCity).slice(0, 120),
     attendanceDays: attendanceDaysFromDb(o.attendanceDays),
     attendanceHours: strOrEmpty(o.attendanceHours).slice(0, 120),
     facebookPixelId: sanitizeFacebookPixelId(o.facebookPixelId),
@@ -1242,6 +1249,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     pixName: s.pixName.trim(),
     aiSendPixOnCheckout: s.aiSendPixOnCheckout,
     saleMode: saleModeFromDb(s.saleMode),
+    onlineCity: s.onlineCity.trim().slice(0, 120),
     attendanceDays: attendanceDaysFromDb(s.attendanceDays),
     attendanceHours: s.attendanceHours.trim().slice(0, 120),
     facebookPixelId: sanitizeFacebookPixelId(s.facebookPixelId),

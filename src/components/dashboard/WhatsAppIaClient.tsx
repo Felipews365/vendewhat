@@ -240,6 +240,7 @@ export default function WhatsAppIaClient({
   const [postsaleMessage, setPostsaleMessage] = useState("");
   const [cartMinutes, setCartMinutes] = useState(0);
   const [onlineOnly, setOnlineOnly] = useState(false);
+  const [onlineCity, setOnlineCity] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [locationUrl, setLocationUrl] = useState("");
   // Campos de latitude/longitude (sincronizados com o link acima).
@@ -372,6 +373,7 @@ export default function WhatsAppIaClient({
         setPickupAddress(sf0.pickupAddress);
         setSendPixOnCheckout(sf0.aiSendPixOnCheckout);
         setSaleMode(sf0.saleMode);
+        setOnlineCity(sf0.onlineCity);
         setPixKey(sf0.pixKey);
         setPixName(sf0.pixName);
         setAcceptPix(sf0.checkoutPixEnabled);
@@ -519,6 +521,7 @@ export default function WhatsAppIaClient({
           aiPostsaleMessage: postsaleMessage,
           aiCartMinutes: cartMinutes,
           aiOnlineOnly: onlineOnly,
+          onlineCity: onlineOnly ? onlineCity : "",
           aiLocationAddress: locationAddress,
           aiLocationUrl: locationUrl,
           aiStorePhotoUrl: storePhotoUrl,
@@ -724,7 +727,7 @@ export default function WhatsAppIaClient({
   return (
     <div
       className={`mx-auto p-4 sm:p-6 space-y-6 ${
-        tab === "conversas" ? "max-w-7xl" : "max-w-2xl"
+        tab === "conversas" ? "max-w-none" : "max-w-2xl"
       }`}
     >
       {error && (
@@ -994,6 +997,26 @@ export default function WhatsAppIaClient({
             </span>
           </span>
         </label>
+
+        {/* Cidade da loja só online (a IA responde "de onde a loja é") */}
+        {onlineOnly && (
+          <div className="rounded-xl border border-stone-200 dark:border-slate-700 p-4">
+            <label className="block text-sm font-medium text-stone-800 dark:text-slate-100">
+              Cidade da loja (para a IA responder)
+            </label>
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+              Se o cliente perguntar de onde a loja é, a IA responde essa cidade.
+              Deixe vazio para a IA dizer só que o atendimento é 100% online.
+            </p>
+            <input
+              type="text"
+              value={onlineCity}
+              onChange={(e) => setOnlineCity(e.target.value)}
+              placeholder="Ex.: Recife - PE"
+              className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-stone-400 focus:border-violet-500 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+            />
+          </div>
+        )}
 
         {/* Localização e foto da loja (escondido quando a loja é só online) */}
         {!onlineOnly && (
@@ -1546,7 +1569,7 @@ export default function WhatsAppIaClient({
 
       {/* Conversas + pausa geral do atendimento */}
       {tab === "conversas" && (
-        <div className="flex h-[calc(100dvh-17rem)] min-h-[26rem] flex-col gap-4 lg:h-[calc(100dvh-11rem)]">
+        <div className="flex h-[calc(100dvh-7rem)] min-h-[26rem] flex-col gap-4 lg:h-[calc(100dvh-3rem)]">
           {/* Pausa geral: pausa a IA para TODOS os clientes de uma vez */}
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="min-w-0">

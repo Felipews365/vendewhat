@@ -77,6 +77,11 @@ export function buildSystemPrompt(args: {
   storeAddress?: string;
   /** Loja é só online (sem ponto físico): a IA não oferece endereço/visita. */
   onlineOnly?: boolean;
+  /**
+   * Cidade/UF de onde a loja só online atende (ex.: "Recife - PE"). A IA informa
+   * quando o cliente pergunta de onde a loja é. Vazio = não informado.
+   */
+  onlineCity?: string;
   /** A loja tem coordenadas: a IA pode enviar o pino do mapa do WhatsApp. */
   hasLocationPin?: boolean;
   /** A loja tem foto da fachada: a IA pode enviar a imagem. */
@@ -125,6 +130,7 @@ export function buildSystemPrompt(args: {
     isFirstContact,
     storeAddress,
     onlineOnly,
+    onlineCity,
     hasLocationPin,
     hasStorePhoto,
     hasStoreVideo,
@@ -149,6 +155,7 @@ export function buildSystemPrompt(args: {
   const custFirst = custName ? custName.split(/\s+/)[0] : "";
   const storeUrl = `${baseUrl.replace(/\/+$/, "")}/loja/${slug}`;
   const address = (storeAddress ?? "").trim();
+  const onlineCityText = (onlineCity ?? "").trim();
   // Retirada só faz sentido em loja com ponto físico.
   const pickupAddr = onlineOnly ? "" : (pickupAddress ?? "").trim();
   const pickupInstr = onlineOnly ? "" : (pickupInstructions ?? "").trim();
@@ -188,7 +195,11 @@ export function buildSystemPrompt(args: {
     '- FECHE A VENDA de forma assertiva. Depois que o cliente demonstra interesse ou você mostra o produto/preço, conduza para o fechamento com uma pergunta direta e objetiva, sempre convidando à ação, como: "Vamos fechar seu pedido?", "Vamos finalizar seu pedido?", "Bora fechar seu pedido?", "Vamos concluir seu pedido agora?" ou "Posso seguir com o fechamento do seu pedido?" (varie as palavras). NUNCA encerre de forma passiva do tipo "se quiser, é só me avisar", "qualquer coisa estou à disposição" ou "fico no aguardo" — isso deixa a decisão no cliente e não fecha venda. Sempre puxe você o próximo passo.',
     '- Quando o cliente estiver INDECISO (ex.: "estou na dúvida", "não sei qual escolher"), NÃO responda de forma passiva ("estou aqui para ajudar"). Ajude a decidir de forma ativa: ofereça comparar os modelos, cores, tamanhos ou preços, ou pergunte o que ele procura (uso, ocasião, preferência) para recomendar a melhor opção. Ex.: "Entendo, escolher nem sempre é fácil 😅 Posso te ajudar a comparar os modelos, cores ou tamanhos pra ficar mais fácil decidir?". Conduza sempre para a decisão e o fechamento.',
     onlineOnly
-      ? "- Esta loja é 100% ONLINE: NÃO tem loja física, endereço para visita, nem ponto de retirada. Se o cliente pedir a localização, o endereço, para visitar ou conhecer a loja, explique com gentileza que a loja é só online (tudo pelo WhatsApp e pelo catálogo) e direcione para o link da loja. NUNCA invente endereço, nem diga que vai verificar um endereço."
+      ? `- Esta loja é 100% ONLINE: NÃO tem loja física, endereço para visita, nem ponto de retirada. Se o cliente pedir a localização, o endereço, para visitar ou conhecer a loja, explique com gentileza que a loja é só online (tudo pelo WhatsApp e pelo catálogo) e direcione para o link da loja. NUNCA invente endereço, nem diga que vai verificar um endereço.${
+          onlineCityText
+            ? ` Se o cliente perguntar DE ONDE a loja é/fica/atende, ou de qual cidade/estado, informe naturalmente que a loja fica em ${onlineCityText} e atende tudo online (entregando para todo o Brasil, se fizer sentido). Use exatamente "${onlineCityText}" como a cidade; NÃO invente outra cidade nem um endereço.`
+            : " Se o cliente perguntar de onde a loja é/de qual cidade, e a loja não informou a cidade, diga apenas que o atendimento é 100% online e evite inventar um lugar."
+        }`
       : address
       ? "- Se o cliente pedir a localização, o endereço ou como chegar na loja, informe o endereço abaixo. Não invente endereço."
       : "- A loja não cadastrou um endereço. Se o cliente pedir a localização, diga que vai verificar com a loja; não invente endereço.",
@@ -260,7 +271,9 @@ export function buildSystemPrompt(args: {
       : "",
     "",
     onlineOnly
-      ? "LOCALIZAÇÃO DA LOJA:\n(Loja 100% online — sem endereço físico.)"
+      ? `LOCALIZAÇÃO DA LOJA:\n(Loja 100% online — sem endereço físico.${
+          onlineCityText ? ` Fica em ${onlineCityText}, atende online.` : ""
+        })`
       : address
       ? `LOCALIZAÇÃO DA LOJA:\n${address}\nMapa: ${mapsLink(address)}`
       : "LOCALIZAÇÃO DA LOJA:\n(Endereço não cadastrado.)",

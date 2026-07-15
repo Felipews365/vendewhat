@@ -36,6 +36,8 @@ type Body = {
   pixName?: string;
   /** Modo de venda (varejo/atacado/ambos) — mora no storefront. */
   saleMode?: string;
+  /** Cidade/UF da loja só online — mora no storefront. */
+  onlineCity?: string;
   /** Dias da semana em que a loja atende — mora no storefront. */
   attendanceDays?: unknown;
   /** Horário de atendimento (texto livre) — mora no storefront. */
@@ -146,6 +148,9 @@ export async function POST(req: Request) {
   }
   if (typeof body.saleMode === "string") {
     sfPatch.saleMode = saleModeFromDb(body.saleMode);
+  }
+  if (typeof body.onlineCity === "string") {
+    sfPatch.onlineCity = body.onlineCity.trim().slice(0, 120);
   }
   if (Array.isArray(body.attendanceDays)) {
     sfPatch.attendanceDays = attendanceDaysFromDb(body.attendanceDays);
