@@ -309,8 +309,10 @@ function AnnouncementBar({ items, bg }: { items: string[]; bg: string }) {
       style={{ backgroundColor: bg }}
     >
       {/* A máscara vai AQUI (não no pai): esmaece só o texto nas pontas — no pai
-          ela apagaria também a cor de fundo da barra. Também dá o pause no hover. */}
-      <div className="vw-marquee overflow-hidden">
+          ela apagaria também a cor de fundo da barra. É a `-mask` (sem o pause no
+          hover da `.vw-marquee`): a barra é fina e colada no topo, então o
+          ponteiro passa por ela toda hora e a faixa viveria congelada. */}
+      <div className="vw-marquee-mask overflow-hidden">
         <div
           className="vw-marquee-track flex w-max"
           style={

@@ -257,7 +257,14 @@ html {
   color: transparent;
 }
 
-.vw-marquee {
+/* Máscara que esmaece as pontas do marquee.
+   `.vw-marquee` = máscara + PAUSE NO HOVER (faixa de depoimentos da landing:
+   o ponteiro parar em cima é intencional, dá tempo de ler o card).
+   `.vw-marquee-mask` = só a máscara, SEM pause — para faixas finas no topo da
+   página (barra de avisos), onde o ponteiro passa/descansa o tempo todo a
+   caminho do cabeçalho e a barra viveria congelada. */
+.vw-marquee,
+.vw-marquee-mask {
   mask-image: linear-gradient(
     to right,
     transparent,
@@ -295,6 +302,12 @@ html {
   .vw-gradient-text,
   .vw-marquee-track {
     animation: none;
+  }
+  /* Parado, o que passa da tela fica inalcançável (no celular sobraria só o 1º
+     aviso). Libera a rolagem manual para o conteúdo continuar legível sem
+     movimento automático. */
+  .vw-marquee-mask {
+    overflow-x: auto;
   }
 }
 
