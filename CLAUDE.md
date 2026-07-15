@@ -931,9 +931,10 @@ load via `useRef`, gravação por service role). Migration:
 ## Painel do Admin (dono do SaaS)
 
 Área em `/admin` para você (dono) gerenciar os lojistas-clientes: ver todos, seus planos,
-status e **vencimento**, mudar valores/planos e registrar pagamentos manuais. O gateway
-**Mercado Pago** está previsto para a fase 2 (cobrança automática); por enquanto o controle
-de pagamento/vencimento é **manual**.
+status e **vencimento**, mudar valores/planos e registrar pagamentos manuais. Desde jul/2026 o
+lojista **também paga sozinho** pelo Mercado Pago (assinatura recorrente **ou** avulso — ver
+"Pagamentos"), que ativa a `subscription` e estende o `expires_at` pelo webhook; o registro
+**manual** aqui continua valendo para Pix/dinheiro e correções.
 
 - **Migration:** rode [supabase-migration-admin.sql](supabase-migration-admin.sql)
   (cria `plans`, `subscriptions`, `payments`; semeia os 3 planos atuais).
