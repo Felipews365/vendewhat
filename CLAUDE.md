@@ -1564,6 +1564,19 @@ Duas integrações distintas, ambas via wrapper REST [src/lib/mercadopago.ts](sr
    com o pedido e "Pagamento confirmado". Só dispara uma vez (checa o status anterior) e exige o
    WhatsApp da loja conectado; sem conexão, fica só o selo no painel.
 
+- **Passo a passo no painel (lojista leigo):** [/dashboard/pagamentos](src/app/dashboard/pagamentos/page.tsx)
+  traz um guia **"Como conectar — passo a passo"** (componente `GuiaConexao` no próprio arquivo, com os
+  helpers `Step` = bolinha numerada e `Faq` = `<details>`), já que o Access Token é o ponto onde o
+  lojista trava. 5 passos: conta MP → **criar aplicação** no painel de desenvolvedores
+  (`MP_PANEL_URL`) → copiar o **Access Token de produção** (`APP_USR-`) → colar e conectar → pronto (o
+  botão "Pagar com Mercado Pago" aparece **sozinho** no checkout, pois `enabled: true` sai do POST e
+  `checkoutMercadoPagoEnabled` já é `true` por default — **não há toggle na UI** para ele). O guia
+  aparece **aberto acima do card do token** quando `!connected` e vira um `<details>` recolhido
+  ("Rever o passo a passo") quando conectado. O **passo 2 alerta que a aplicação precisa ser do produto
+  Checkout Pro** — com outro produto o `createPreference` falha com `UNAUTHORIZED` (mesma pegadinha
+  documentada em "Créditos da IA"), e é a 1ª suspeita listada na FAQ "Token inválido ou sem permissão".
+  O selo **"Modo teste"** (token `TEST-`) ganhou a explicação de que nenhum dinheiro real entra.
+
 - **Segurança:** access tokens só no servidor; `store_payment_gateway` não tem policy de select
   (só service role). Os webhooks **sempre reconsultam** o status na API do MP antes de confirmar e
   são idempotentes (checam `payment_id`/`payment_id_external`).
