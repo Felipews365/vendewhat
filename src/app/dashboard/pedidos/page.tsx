@@ -523,6 +523,7 @@ export default function PedidosPage() {
   const [alertEnabled, setAlertEnabled] = useState(false);
   const [alertPhone, setAlertPhone] = useState("");
   const [savingAlert, setSavingAlert] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const { showToast } = useToast();
 
   // Restaura as preferências de som (por dispositivo).
@@ -535,6 +536,16 @@ export default function PedidosPage() {
     setSoundId(readSaleSoundId());
     setVolume(readSaleVolume());
   }, []);
+
+  // Esc fecha o modal de avisos.
+  useEffect(() => {
+    if (!alertsOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAlertsOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [alertsOpen]);
 
   const toggleSound = useCallback((next: boolean) => {
     setSoundOn(next);
@@ -822,8 +833,17 @@ export default function PedidosPage() {
             contato continua pelo WhatsApp da loja.
           </p>
         </div>
-        {visibleOrders.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setAlertsOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            title="Configurar os avisos de venda"
+          >
+            <span aria-hidden>🔔</span>
+            Avisos de venda
+          </button>
+          {visibleOrders.length > 0 && (
             <button
               type="button"
               onClick={() =>
@@ -852,204 +872,231 @@ export default function PedidosPage() {
               </svg>
               {selectMode ? "Cancelar seleção" : "Selecionar"}
             </button>
-            {!selectMode && (
-              <button
-                type="button"
-                onClick={() =>
-                  printAllOrders(storeInfo, visibleOrders.map(orderToPrintData))
-                }
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-4 h-4"
-                  aria-hidden
-                >
-                  <polyline points="6 9 6 2 18 2 18 9" />
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                  <rect x="6" y="14" width="12" height="8" />
-                </svg>
-                Imprimir todos
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* 🔔 Avisos de venda: bipe no painel + aviso por WhatsApp */}
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-        <div className="flex items-start gap-3">
-          <span className="text-2xl" aria-hidden>
-            🔔
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
-              Avisos de venda
-            </h2>
-            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-              Seja avisado na hora quando entrar uma venda nova — pela IA ou pelo
-              catálogo da loja.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-4">
-          {/* Som no painel (por dispositivo) */}
-          <label className="flex cursor-pointer items-center justify-between gap-4">
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Tocar um som ao entrar venda
-              </span>
-              <span className="block text-xs text-slate-500 dark:text-slate-400">
-                Vale só neste aparelho. O alerta na tela aparece de qualquer forma.
-              </span>
-            </span>
+          )}
+          {visibleOrders.length > 0 && !selectMode && (
             <button
               type="button"
-              role="switch"
-              aria-checked={soundOn}
-              onClick={() => toggleSound(!soundOn)}
-              className={
-                "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
-                (soundOn
-                  ? "bg-emerald-500"
-                  : "bg-slate-300 dark:bg-slate-600")
+              onClick={() =>
+                printAllOrders(storeInfo, visibleOrders.map(orderToPrintData))
               }
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
-              <span
-                className={
-                  "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all " +
-                  (soundOn ? "left-[22px]" : "left-0.5")
-                }
-              />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4"
+                aria-hidden
+              >
+                <polyline points="6 9 6 2 18 2 18 9" />
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                <rect x="6" y="14" width="12" height="8" />
+              </svg>
+              Imprimir todos
             </button>
-          </label>
+          )}
+        </div>
+      </div>
 
-          {/* Escolha do som + volume (só quando o som está ligado) */}
-          {soundOn && (
-            <div className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="sale-sound"
-                  className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300"
+      {/* 🔔 Avisos de venda (modal): bipe no painel + aviso por WhatsApp */}
+      {alertsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="avisos-de-venda-titulo"
+          onClick={() => setAlertsOpen(false)}
+        >
+          <section
+            onClick={(e) => e.stopPropagation()}
+            className="vw-pop-in max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-800"
+          >
+            <div className="flex items-start gap-3">
+              <span className="text-2xl" aria-hidden>
+                🔔
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2
+                  id="avisos-de-venda-titulo"
+                  className="text-base font-bold text-slate-800 dark:text-slate-100"
                 >
-                  Som do aviso
-                </label>
-                <div className="flex items-center gap-2">
-                  <select
-                    id="sale-sound"
-                    value={soundId}
-                    onChange={(e) =>
-                      changeSound(e.target.value as SaleSoundId, volume)
+                  Avisos de venda
+                </h2>
+                <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                  Seja avisado na hora quando entrar uma venda nova — pela IA ou
+                  pelo catálogo da loja.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAlertsOpen(false)}
+                aria-label="Fechar"
+                className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {/* Som no painel (por dispositivo) */}
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    Tocar um som ao entrar venda
+                  </span>
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">
+                    Vale só neste aparelho. O alerta na tela aparece de qualquer forma.
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={soundOn}
+                  onClick={() => toggleSound(!soundOn)}
+                  className={
+                    "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
+                    (soundOn
+                      ? "bg-emerald-500"
+                      : "bg-slate-300 dark:bg-slate-600")
+                  }
+                >
+                  <span
+                    className={
+                      "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all " +
+                      (soundOn ? "left-[22px]" : "left-0.5")
                     }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                  >
-                    {SALE_SOUNDS.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
+                </button>
+              </label>
+
+              {/* Escolha do som + volume (só quando o som está ligado) */}
+              {soundOn && (
+                <div className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="sale-sound"
+                      className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300"
+                    >
+                      Som do aviso
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        id="sale-sound"
+                        value={soundId}
+                        onChange={(e) =>
+                          changeSound(e.target.value as SaleSoundId, volume)
+                        }
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                      >
+                        {SALE_SOUNDS.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => playSaleSound(soundId, volume)}
+                        title="Ouvir o som"
+                        className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        ▶ Testar
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="sale-volume"
+                      className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300"
+                    >
+                      Volume: {Math.round(volume * 100)}%
+                    </label>
+                    <input
+                      id="sale-volume"
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={Math.round(volume * 100)}
+                      onChange={(e) => changeVolume(Number(e.target.value) / 100)}
+                      onMouseUp={() => playSaleSound(soundId, volume)}
+                      onTouchEnd={() => playSaleSound(soundId, volume)}
+                      className="mt-2 h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-emerald-600 dark:bg-slate-700"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Aviso por WhatsApp (número escolhido) */}
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+                <label className="flex cursor-pointer items-center justify-between gap-4">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      Avisar por WhatsApp
+                    </span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">
+                      A loja manda uma mensagem para o número abaixo a cada venda.
+                      Precisa do WhatsApp da loja conectado.
+                    </span>
+                  </span>
                   <button
                     type="button"
-                    onClick={() => playSaleSound(soundId, volume)}
-                    title="Ouvir o som"
-                    className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    role="switch"
+                    aria-checked={alertEnabled}
+                    onClick={() => setAlertEnabled((v) => !v)}
+                    className={
+                      "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
+                      (alertEnabled
+                        ? "bg-emerald-500"
+                        : "bg-slate-300 dark:bg-slate-600")
+                    }
                   >
-                    ▶ Testar
+                    <span
+                      className={
+                        "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all " +
+                        (alertEnabled ? "left-[22px]" : "left-0.5")
+                      }
+                    />
+                  </button>
+                </label>
+
+                {alertEnabled && (
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      value={alertPhone}
+                      onChange={(e) =>
+                        setAlertPhone(e.target.value.replace(/\D/g, "").slice(0, 15))
+                      }
+                      placeholder="Ex.: 81999998888 (DDD + número)"
+                      className="w-full flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+                )}
+
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => saveSaleAlert(alertEnabled, alertPhone)}
+                    disabled={savingAlert}
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:text-emerald-950"
+                  >
+                    {savingAlert ? "Salvando…" : "Salvar aviso"}
                   </button>
                 </div>
               </div>
-              <div>
-                <label
-                  htmlFor="sale-volume"
-                  className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300"
-                >
-                  Volume: {Math.round(volume * 100)}%
-                </label>
-                <input
-                  id="sale-volume"
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={Math.round(volume * 100)}
-                  onChange={(e) => changeVolume(Number(e.target.value) / 100)}
-                  onMouseUp={() => playSaleSound(soundId, volume)}
-                  onTouchEnd={() => playSaleSound(soundId, volume)}
-                  className="mt-2 h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-emerald-600 dark:bg-slate-700"
-                />
-              </div>
             </div>
-          )}
-
-          {/* Aviso por WhatsApp (número escolhido) */}
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
-            <label className="flex cursor-pointer items-center justify-between gap-4">
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  Avisar por WhatsApp
-                </span>
-                <span className="block text-xs text-slate-500 dark:text-slate-400">
-                  A loja manda uma mensagem para o número abaixo a cada venda.
-                  Precisa do WhatsApp da loja conectado.
-                </span>
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={alertEnabled}
-                onClick={() => setAlertEnabled((v) => !v)}
-                className={
-                  "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
-                  (alertEnabled
-                    ? "bg-emerald-500"
-                    : "bg-slate-300 dark:bg-slate-600")
-                }
-              >
-                <span
-                  className={
-                    "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all " +
-                    (alertEnabled ? "left-[22px]" : "left-0.5")
-                  }
-                />
-              </button>
-            </label>
-
-            {alertEnabled && (
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  value={alertPhone}
-                  onChange={(e) =>
-                    setAlertPhone(e.target.value.replace(/\D/g, "").slice(0, 15))
-                  }
-                  placeholder="Ex.: 81999998888 (DDD + número)"
-                  className="w-full flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                />
-              </div>
-            )}
-
-            <div className="mt-3 flex justify-end">
-              <button
-                type="button"
-                onClick={() => saveSaleAlert(alertEnabled, alertPhone)}
-                disabled={savingAlert}
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:text-emerald-950"
-              >
-                {savingAlert ? "Salvando…" : "Salvar aviso"}
-              </button>
-            </div>
-          </div>
+          </section>
         </div>
-      </section>
+      )}
 
       {selectMode && visibleOrders.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-landing-primary/30 bg-landing-primary/5 dark:bg-landing-primary/10 px-4 py-3">

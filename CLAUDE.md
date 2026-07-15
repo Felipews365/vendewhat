@@ -850,8 +850,12 @@ Quando entra **uma venda nova** — fechada pela **IA** na conversa/PDF **ou** p
 — o lojista é avisado de três formas. Config **sem migration** (dois campos no JSONB `storefront`:
 `saleAlertEnabled` + `saleAlertPhone`, só dígitos); as preferências de **som** são locais (por
 dispositivo, `localStorage`): ligado/desligado (`vw-sale-sound`), **som escolhido** (`vw-sale-sound-id`)
-e **volume** (`vw-sale-sound-volume`, 0..1). Tudo editado num **card "🔔 Avisos de venda"** no topo de
-[/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx).
+e **volume** (`vw-sale-sound-volume`, 0..1). Tudo editado num **modal "🔔 Avisos de venda"**, aberto
+pelo botão de mesmo nome na barra do topo de
+[/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (estado `alertsOpen`; fecha no ✕, no Esc ou
+clicando fora). Era um card fixo no topo da página, que ocupava muito espaço acima dos pedidos. O
+botão fica **sempre** visível — inclusive sem nenhum pedido, que é justamente quando o lojista quer
+configurar o aviso —, enquanto Selecionar/Imprimir seguem só com `visibleOrders.length > 0`.
 
 - **Bipe + alerta flutuante no painel (todo o dashboard):** o
   [SaleAlertWatcher.tsx](src/components/dashboard/SaleAlertWatcher.tsx), montado no
@@ -1362,6 +1366,25 @@ própria, ver abaixo).
   `listContactNames` (mapa telefone→nome) é lido pelo `listRecentCustomers` com `try/catch` (tolera a
   tabela ausente até a migration ser aplicada).
 
+- **Buscar conversa (`query`) + filtrar por etiqueta (`tagFilter`):** no cabeçalho da lista há um
+  campo **"Pesquisar conversa"** (pílula com lupa + ✕ para limpar) e, abaixo, os **chips de etiqueta**.
+  A busca casa **nome, telefone, última mensagem e etiquetas**, sem acento e sem caixa
+  (`normalizeSearch` — usa o range `[̀-ͯ]`, que é o padrão do repo, e **não** `\p{Diacritic}`,
+  que não compila no target atual); no telefone compara **só os dígitos**, então "8199" acha
+  "(81) 99999-…" mesmo formatado. Os chips vêm de `tagFilterOptions` (as etiquetas **em uso** nas
+  conversas, sem repetir, já na cor delas): marcar várias é **OU** entre elas, e o resultado é **E**
+  com a busca (`filtered`, um `useMemo`). **Tudo local** sobre o `conversations`/`tagsMap` que a
+  página já carrega — nenhum endpoint novo e sem mexer no polling de 6s.
+  - **Muitas etiquetas se recolhem:** acima de `TAG_FILTER_INLINE_MAX` (5) os chips somem atrás de um
+    botão **"🏷️ Filtrar por etiqueta"** (estado `tagsShown`), senão engoliriam a lista; com 5 ou menos
+    ficam à mostra atrás do rótulo "Filtrar:". Recolhido, o botão mostra a **contagem** dos filtros
+    ativos e fica verde, e o "Limpar filtro" continua visível — senão dava para filtrar, recolher e
+    não entender por que a lista encurtou.
+  - **Sem etiqueta nenhuma** (`tagFilterOptions` vazio) não há o que filtrar, mas em vez de sumir com
+    tudo (o recurso ficava invisível) a barra vira uma **dica** ensinando a criar pelo 🏷️ da conversa.
+    Atenção: sem a migration de tags a rota devolve vazio, o que cai nesse mesmo estado.
+  - A tela de vazio distingue **busca sem resultado** × **filtro sem resultado** × **loja sem
+    conversas**, com um "Limpar busca e filtros" nos dois primeiros.
 - **Dados:** a lista de contatos vem do mesmo `conversations` que a página já carrega de
   `GET /api/whatsapp/pause` (`listRecentCustomers`); o histórico completo de um contato vem de
   `GET /api/whatsapp/conversation?phone=` (`getFullConversation` em

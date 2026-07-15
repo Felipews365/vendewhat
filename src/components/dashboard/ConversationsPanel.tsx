@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 
 type RecentCustomer = {
@@ -61,6 +61,10 @@ const TAG_PRESETS: { name: string; color: string }[] = [
 
 const TAG_SEP = "¦"; // separador nome¦cor (não digitável no teclado comum)
 
+// Até esta quantidade os chips do filtro ficam à mostra; acima disso eles se
+// recolhem atrás do botão "Filtrar por etiqueta" para não engolir a lista.
+const TAG_FILTER_INLINE_MAX = 5;
+
 // Durações da pausa da IA (minutes null = até o lojista reativar).
 const PAUSE_DURATIONS: { label: string; minutes: number | null }[] = [
   { label: "15 minutos", minutes: 15 },
@@ -89,6 +93,15 @@ function splitTag(raw: string): { name: string; color: TagColor } {
 /** Monta a string guardada a partir do nome + cor. */
 function joinTag(name: string, colorId: string): string {
   return `${name}${TAG_SEP}${colorId}`;
+}
+
+/** Minúsculas e sem acento, para a busca casar "João" com "joao". */
+function normalizeSearch(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 /** Formata o telefone (dígitos) para leitura: (11) 99999-9999. */
@@ -172,6 +185,11 @@ export default function ConversationsPanel({
 }: Props) {
   const { showToast } = useToast();
   const [selected, setSelected] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  // Etiquetas marcadas no filtro da lista (por nome).
+  const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
+  // Chips do filtro à mostra (só importa quando há muitas etiquetas).
+  const [tagsShown, setTagsShown] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loadingThread, setLoadingThread] = useState(false);
   const [text, setText] = useState("");
@@ -428,6 +446,42 @@ export default function ConversationsPanel({
     [showToast, onSent]
   );
 
+  // --- Busca e filtro por etiqueta --------------------------------------------
+  // Etiquetas em uso nas conversas (por nome, sem repetir), para os chips do filtro.
+  const tagFilterOptions = useMemo(() => {
+    const byName = new Map<string, TagColor>();
+    for (const c of conversations) {
+      for (const raw of tagsMap[c.customerPhone] ?? []) {
+        const { name, color } = splitTag(raw);
+        if (name && !byName.has(name)) byName.set(name, color);
+      }
+    }
+    const out: { name: string; color: TagColor }[] = [];
+    byName.forEach((color, name) => out.push({ name, color }));
+    return out.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [conversations, tagsMap]);
+
+  const manyTags = tagFilterOptions.length > TAG_FILTER_INLINE_MAX;
+
+  // Casa por nome, telefone (dígitos ou formatado), última mensagem e etiquetas.
+  // O filtro de etiquetas é "E" com a busca, e "OU" entre as etiquetas marcadas.
+  const filtered = useMemo(() => {
+    const q = normalizeSearch(query);
+    return conversations.filter((c) => {
+      const tagNames = (tagsMap[c.customerPhone] ?? []).map((t) => splitTag(t).name);
+      if (tagFilter.size > 0 && !tagNames.some((t) => tagFilter.has(t))) return false;
+      if (!q) return true;
+      const name = (nameOverrides[c.customerPhone] ?? c.customerName ?? "").trim();
+      const haystack = normalizeSearch(
+        [name, formatPhone(c.customerPhone), c.lastMessage, ...tagNames].join(" ")
+      );
+      if (haystack.includes(q)) return true;
+      // Telefone: compara só os dígitos, então "8199" acha "(81) 99999-…".
+      const qDigits = q.replace(/\D/g, "");
+      return qDigits.length > 0 && c.customerPhone.replace(/\D/g, "").includes(qDigits);
+    });
+  }, [conversations, query, tagFilter, nameOverrides, tagsMap]);
+
   // --- Lista de conversas -----------------------------------------------------
   const list = (
     <div
@@ -439,10 +493,127 @@ export default function ConversationsPanel({
         <p className="text-sm font-semibold text-stone-700 dark:text-slate-200">
           Conversas
         </p>
+
+        {/* Busca: nome, telefone, última mensagem e etiquetas */}
+        <div className="relative mt-2">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-slate-500">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </span>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Pesquisar conversa"
+            aria-label="Pesquisar conversa"
+            className="w-full rounded-full border border-stone-200 bg-stone-50 py-2 pl-9 pr-9 text-sm text-slate-900 placeholder:text-stone-400 focus:border-emerald-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Limpar busca"
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-200 hover:text-stone-600 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* Filtro por etiqueta: chips à mostra; muitos, recolhidos num botão */}
+        {tagFilterOptions.length === 0 ? (
+          // Sem etiqueta em nenhuma conversa não há o que filtrar — mas sem esta
+          // dica o recurso fica invisível e parece que não existe.
+          <p className="mt-2 text-[11px] text-stone-400 dark:text-slate-500">
+            Sem etiquetas ainda. Abra uma conversa e use o 🏷️ no topo para criar
+            — depois elas viram filtro aqui.
+          </p>
+        ) : (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {manyTags ? (
+              <button
+                type="button"
+                onClick={() => setTagsShown((v) => !v)}
+                aria-expanded={tagsShown}
+                className={
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition " +
+                  (tagFilter.size > 0
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    : "border-stone-200 text-stone-500 hover:bg-stone-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800")
+                }
+              >
+                <span aria-hidden>🏷️</span>
+                Filtrar por etiqueta
+                {tagFilter.size > 0 && ` (${tagFilter.size})`}
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={tagsShown ? "rotate-180" : ""}
+                  aria-hidden
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+            ) : (
+              <span className="text-[10px] font-bold uppercase tracking-wide text-stone-400 dark:text-slate-500">
+                Filtrar:
+              </span>
+            )}
+
+            {(!manyTags || tagsShown) &&
+              tagFilterOptions.map(({ name, color }) => {
+                const on = tagFilter.has(name);
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      setTagFilter((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(name)) next.delete(name);
+                        else next.add(name);
+                        return next;
+                      })
+                    }
+                    className={
+                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition " +
+                      color.chip +
+                      " " +
+                      (on
+                        ? "ring-2 ring-emerald-500 ring-offset-1 dark:ring-offset-slate-900"
+                        : "opacity-70 hover:opacity-100")
+                    }
+                  >
+                    <span className={`h-2 w-2 rounded-full ${color.dot}`} />
+                    {name}
+                  </button>
+                );
+              })}
+
+            {tagFilter.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setTagFilter(new Set())}
+                className="rounded-full px-2 py-1 text-[11px] font-semibold text-stone-500 transition hover:bg-stone-100 dark:text-slate-400 dark:hover:bg-slate-800"
+              >
+                Limpar filtro
+              </button>
+            )}
+          </div>
+        )}
       </div>
-      {conversations.length > 0 ? (
+      {filtered.length > 0 ? (
         <ul className="flex-1 divide-y divide-stone-100 overflow-y-auto dark:divide-slate-800">
-          {conversations.map((c) => {
+          {filtered.map((c) => {
             const active = c.customerPhone === selected;
             const paused = pausedPhones.has(c.customerPhone);
             const tags = tagsMap[c.customerPhone] ?? [];
@@ -518,9 +689,31 @@ export default function ConversationsPanel({
           })}
         </ul>
       ) : (
-        <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-stone-500 dark:text-slate-400">
-          Nenhuma conversa ainda. Quando um cliente falar com a loja, ela aparece
-          aqui.
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-stone-500 dark:text-slate-400">
+          {query || tagFilter.size > 0 ? (
+            <>
+              <p>
+                {query
+                  ? `Nenhuma conversa encontrada para “${query}”.`
+                  : "Nenhuma conversa com essas etiquetas."}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setTagFilter(new Set());
+                }}
+                className="text-sm font-semibold text-emerald-600 hover:underline dark:text-emerald-400"
+              >
+                Limpar busca e filtros
+              </button>
+            </>
+          ) : (
+            <p>
+              Nenhuma conversa ainda. Quando um cliente falar com a loja, ela
+              aparece aqui.
+            </p>
+          )}
         </div>
       )}
     </div>
