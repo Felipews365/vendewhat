@@ -16,6 +16,7 @@ import {
   type StorefrontSettings,
   storefrontRichFooterVisible,
   minOrderStatus,
+  announcementMinOrder,
   enabledShippingModeIds,
   formatBRL,
 } from "@/lib/storefront";
@@ -314,7 +315,7 @@ function AnnouncementBar({ items, bg }: { items: string[]; bg: string }) {
           ponteiro passa por ela toda hora e a faixa viveria congelada. */}
       <div className="vw-marquee-mask overflow-hidden">
         <div
-          className="vw-marquee-track flex w-max"
+          className="vw-marquee-track vw-marquee-always flex w-max"
           style={
             { "--vw-marquee-duration": `${duration}s` } as React.CSSProperties
           }
@@ -2698,6 +2699,14 @@ export function LojaClient({
     [storefront, subtotal, totalItems]
   );
 
+  // Avisos do topo: o pedido mínimo entra automático (na frente, é a regra que
+  // o cliente precisa saber antes de montar o carrinho) + os avisos escritos
+  // pelo lojista. Sem mínimo exigido, some — nada a anunciar.
+  const announcementItems = useMemo(() => {
+    const min = announcementMinOrder(storefront);
+    return min ? [min, ...storefront.announcements] : storefront.announcements;
+  }, [storefront]);
+
   // Condição única para liberar o envio/pagamento do pedido.
   const checkoutReady =
     customerName.trim().length >= 2 &&
@@ -2950,10 +2959,10 @@ export function LojaClient({
       className="min-h-screen pb-28 md:pb-8 text-stone-800"
       style={themeStyle}
     >
-      {/* Barra de avisos preta no topo (frete grátis, parcelamento, troca…) */}
-      {storefront.announcementBarEnabled && storefront.announcements.length > 0 && (
+      {/* Barra de avisos preta no topo (pedido mínimo, frete grátis, troca…) */}
+      {storefront.announcementBarEnabled && announcementItems.length > 0 && (
         <AnnouncementBar
-          items={storefront.announcements}
+          items={announcementItems}
           bg={storefront.announcementBarBg}
         />
       )}

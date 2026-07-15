@@ -272,6 +272,14 @@ Orientações para o Claude Code trabalhar neste repositório.
   Defaults = as 4 frases do print (nova coleção / frete grátis / 10x / troca). Editada no painel
   **"Barra de avisos"** do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
   (toggle + cor + lista de avisos + `headerTagline`). Sem migration (JSONB).
+  - **Pedido mínimo entra automático (1º aviso):** `announcementMinOrder(sf)` em
+    [storefront.ts](src/lib/storefront.ts) monta "🛒 Pedido mínimo de **R$ 400,00** em compras" (ou
+    "**10 itens**", ou os dois) e o `announcementItems` (useMemo em LojaClient) o coloca **na frente**
+    dos avisos escritos pelo lojista — é a regra que o cliente precisa saber **antes** de montar o
+    carrinho. Sai do **mesmo** `effectiveMinOrder` do checkout e da IA (fonte única: o que a loja
+    marcou na aba "Configuração IA"), então o topo nunca anuncia um mínimo diferente do que o
+    carrinho cobra. **Loja sem mínimo** (varejo, ou valor/qtd zerados) → string vazia, o aviso não
+    aparece e a barra some se não houver mais nada. Sem campo novo (deriva do que já existe).
   - **Carrossel contínuo (marquee), igual no celular e no desktop:** as frases **passam rolando**
     (reusa `.vw-marquee-track` + o keyframe `vw-marquee` do [globals.css](src/app/globals.css), os
     mesmos da landing). Substituiu o texto parado — que no desktop separava as frases por `|` e no
@@ -291,10 +299,16 @@ Orientações para o Claude Code trabalhar neste repositório.
       no topo**, então o ponteiro passa por ela o tempo todo (é o caminho até o cabeçalho/aba do
       navegador) e com o pause ela **vivia congelada** — foi exatamente esse o bug de "o carrossel
       não roda" (`f8e8f46`). Ao criar outro marquee, escolha a classe pelo **lugar** dele na tela.
-    - **`prefers-reduced-motion`:** o `.vw-marquee-track` para (regra que já existia). Como parado o
-      que passa da tela ficaria inalcançável (no celular sobraria só o 1º aviso), a
-      `.vw-marquee-mask` ganha `overflow-x: auto` nesse modo — rolagem manual, sem movimento
-      automático.
+    - **Sentido:** `translateX(0 → -50%)` = os avisos **entram pela direita e somem na esquerda**
+      (as pontas esmaecem pela máscara).
+    - **`prefers-reduced-motion` — exceção consciente:** a regra geral do projeto (`.vw-marquee-track
+      { animation: none }`) **não** vale aqui: `.vw-marquee-always` (usada só por esta barra)
+      **re-liga** a animação nesse modo, por decisão do dono do produto — é a faixa de marketing da
+      loja e, parada, não cumpre o papel. Vence por **especificidade** (`.vw-marquee-track
+      .vw-marquee-always` = 2 classes), sem `!important`. **Não copie** para animações novas: o
+      padrão do projeto continua sendo respeitar a preferência (a faixa de depoimentos da landing,
+      p.ex., segue parando). Uma tentativa anterior de fallback (`overflow-x: auto` para rolar na
+      mão) foi **revertida** — virava uma barra de rolagem feia sob a faixa.
 - **Cabeçalho escuro estilo e-commerce (redesenho do `<header>` em LojaClient):** fundo
   `headerBackground` (default agora `#11212D`), **dark-aware** (`headerDark = isDarkRgb`). Logo/nome da
   loja em branco + **subtítulo** `storefront.headerTagline` (default `"MODA & ESTILO"`) em

@@ -33,7 +33,7 @@ export async function generateMetadata({ params }: Props) {
   const supabase = await createServerSupabase();
   const { data: store } = await supabase
     .from("stores")
-    .select("name, description")
+    .select("name, description, logo")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -41,11 +41,17 @@ export async function generateMetadata({ params }: Props) {
     return { title: "Loja não encontrada | VendeWhat" };
   }
 
+  const logo = typeof store.logo === "string" ? store.logo.trim() : "";
+
   return {
     title: `${store.name} | Catálogo VendeWhat`,
     description:
       store.description ||
       `Confira os produtos de ${store.name}. Compre pelo WhatsApp.`,
+    /* Sem logo, cai no ícone padrão do VendeWhat (o do layout raiz). */
+    ...(logo
+      ? { icons: { icon: logo, shortcut: logo, apple: logo } }
+      : null),
   };
 }
 

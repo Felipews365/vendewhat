@@ -303,11 +303,14 @@ html {
   .vw-marquee-track {
     animation: none;
   }
-  /* Parado, o que passa da tela fica inalcançável (no celular sobraria só o 1º
-     aviso). Libera a rolagem manual para o conteúdo continuar legível sem
-     movimento automático. */
-  .vw-marquee-mask {
-    overflow-x: auto;
+  /* EXCEÇÃO CONSCIENTE: a barra de avisos roda mesmo com "reduzir movimento".
+     Decisão do dono do produto — é a faixa de marketing da loja e, parada, ela
+     não cumpre o papel (no celular só o 1º aviso caberia). Especificidade maior
+     (2 classes) que o `animation: none` acima, então vence sem !important.
+     NÃO copie isto para animações novas: o padrão do projeto é respeitar a
+     preferência. Marquees de leitura (depoimentos da landing) seguem parando. */
+  .vw-marquee-track.vw-marquee-always {
+    animation: vw-marquee var(--vw-marquee-duration, 50s) linear infinite;
   }
 }
 

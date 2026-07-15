@@ -827,6 +827,23 @@ export function describeMinOrder(sf: MinOrderFields): string {
   return parts.join(" e ");
 }
 
+/**
+ * Aviso do pedido mínimo para a **barra de avisos** da loja (`AnnouncementBar`).
+ * Vazio = a loja não exige mínimo (varejo, ou valor/qtd zerados).
+ *
+ * Sai da MESMA fonte do checkout e da IA (`effectiveMinOrder`), então o mínimo
+ * anunciado no topo nunca diverge do que o carrinho cobra. O número vai entre
+ * `**…**` = destaque dourado do `AnnouncementText`.
+ */
+export function announcementMinOrder(sf: MinOrderFields): string {
+  const { value, qty } = effectiveMinOrder(sf);
+  const parts: string[] = [];
+  if (value > 0) parts.push(`**${formatBRL(value)}**`);
+  if (qty > 0) parts.push(`**${qty} ${qty === 1 ? "item" : "itens"}**`);
+  if (parts.length === 0) return "";
+  return `🛒 Pedido mínimo de ${parts.join(" e ")} em compras`;
+}
+
 /** Formas de envio/retirada que a loja aceita, na ordem canônica de `SHIPPING_MODES`. */
 export function enabledShippingModeIds(
   sf: Pick<
