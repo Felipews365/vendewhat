@@ -21,6 +21,7 @@ import {
   formatBRL,
 } from "@/lib/storefront";
 import { AnnouncementBar } from "@/components/storefront/AnnouncementBar";
+import { TabAttention } from "@/components/storefront/TabAttention";
 import { discountPercent } from "@/lib/productCardMeta";
 import {
   HeroTemplateSlide,
@@ -2311,6 +2312,19 @@ export function LojaClient({
   /** Filtro "🔥 Promoções" da barra do topo (só produtos em promoção). */
   const [promoOnly, setPromoOnly] = useState(false);
 
+  /**
+   * Frases que ficam passando no título da aba quando o cliente sai da loja.
+   * Promoções primeiro (é o que traz de volta); sem elas, os primeiros produtos.
+   */
+  const tabMessages = useMemo(() => {
+    const featured = products.filter((p) => p.isPromotion);
+    const names = (featured.length > 0 ? featured : products)
+      .slice(0, 3)
+      .map((p) => titleCasePtBr(p.name.trim()))
+      .filter(Boolean);
+    return ["👋 Volte!", "Não perca as ofertas...", ...names];
+  }, [products]);
+
   /** Registra uma visita ao abrir a loja (uma vez por carregamento). */
   const visitPinged = useRef(false);
   useEffect(() => {
@@ -2878,6 +2892,9 @@ export function LojaClient({
       className="min-h-screen pb-28 md:pb-8 text-stone-800"
       style={themeStyle}
     >
+      {/* Aba em outra janela: o título fica chamando o cliente de volta. */}
+      <TabAttention messages={tabMessages} />
+
       {/* Barra de avisos preta no topo (pedido mínimo, frete grátis, troca…) */}
       {storefront.announcementBarEnabled && announcementItems.length > 0 && (
         <AnnouncementBar
