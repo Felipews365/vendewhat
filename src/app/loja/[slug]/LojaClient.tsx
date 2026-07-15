@@ -599,6 +599,61 @@ function parseCartKey(key: string): {
   }
 }
 
+/** Onde o carrinho de cada loja fica guardado no aparelho do cliente. */
+const CART_STORAGE_PREFIX = "vw-cart-";
+/** Carrinho parado há mais de 7 dias é descartado (preço/estoque já mudaram). */
+const CART_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+type StoredCart = { savedAt: number; lines: Record<string, number> };
+
+/** Lê o carrinho guardado; qualquer coisa estranha vira carrinho vazio. */
+function readStoredCart(slug: string): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_PREFIX + slug);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as StoredCart | null;
+    if (!parsed || typeof parsed !== "object") return {};
+    if (
+      typeof parsed.savedAt !== "number" ||
+      !Number.isFinite(parsed.savedAt) ||
+      Date.now() - parsed.savedAt > CART_MAX_AGE_MS
+    ) {
+      return {};
+    }
+    if (!parsed.lines || typeof parsed.lines !== "object") return {};
+    const out: Record<string, number> = {};
+    for (const [key, qty] of Object.entries(parsed.lines)) {
+      if (typeof qty === "number" && Number.isFinite(qty) && qty > 0) {
+        out[key] = Math.floor(qty);
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Encaixa o carrinho guardado no catálogo de agora: produto apagado sai da
+ * lista e a quantidade volta ao que o estoque/fardo permitem — o cliente pode
+ * ter deixado o carrinho parado por dias.
+ */
+function reconcileStoredCart(
+  stored: Record<string, number>,
+  products: CatalogProduct[]
+): Record<string, number> {
+  const next: Record<string, number> = {};
+  for (const [key, qty] of Object.entries(stored)) {
+    const { productId, color, size } = parseCartKey(key);
+    const p = products.find((x) => x.id === productId);
+    if (!p) continue;
+    const max = maxQtyForCartLine(p, color, size, next, key);
+    const snapped = snapQuantity(p.sale, qty, max);
+    if (snapped > 0) next[key] = snapped;
+  }
+  return next;
+}
+
 /** Soma quantidades no carrinho para o mesmo produto (todas as variações). */
 function totalQtyForProduct(
   cart: Record<string, number>,
@@ -2302,6 +2357,41 @@ export function LojaClient({
   );
   const [cart, setCart] = useState<Record<string, number>>({});
   const [cartOpen, setCartOpen] = useState(false);
+
+  /**
+   * O carrinho fica guardado no aparelho (uma chave por loja): recarregar a
+   * página, voltar do WhatsApp ou reabrir a aba não pode apagar o que o cliente
+   * já escolheu. A leitura é num efeito (não no `useState`) para o HTML do
+   * servidor bater com o do cliente na hidratação. `cartReady` segura a
+   * gravação até a restauração acontecer — senão o primeiro render (carrinho
+   * vazio) apagaria o que estava guardado.
+   */
+  const cartRestored = useRef(false);
+  const [cartReady, setCartReady] = useState(false);
+  useEffect(() => {
+    if (cartRestored.current || !store.slug) return;
+    cartRestored.current = true;
+    const restored = reconcileStoredCart(readStoredCart(store.slug), products);
+    if (Object.keys(restored).length > 0) setCart(restored);
+    setCartReady(true);
+  }, [store.slug, products]);
+
+  useEffect(() => {
+    if (!cartReady || !store.slug) return;
+    const storageKey = CART_STORAGE_PREFIX + store.slug;
+    try {
+      if (Object.keys(cart).length === 0) {
+        localStorage.removeItem(storageKey);
+        return;
+      }
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({ savedAt: Date.now(), lines: cart } satisfies StoredCart)
+      );
+    } catch {
+      /* aparelho sem localStorage não pode derrubar a loja */
+    }
+  }, [cart, cartReady, store.slug]);
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState("");
   const [notes, setNotes] = useState("");
@@ -2853,6 +2943,9 @@ export function LojaClient({
         setPayError(j.error ?? "Não foi possível iniciar o pagamento.");
         return;
       }
+      // Pedido registrado e a caminho do pagamento: o carrinho guardado sai de
+      // cena para o cliente não voltar do Mercado Pago e repetir a compra.
+      setCart({});
       window.location.assign(j.initPoint);
     } catch {
       setPayError("Falha de rede ao iniciar o pagamento.");
@@ -4097,6 +4190,9 @@ export function LojaClient({
                     );
                     if (!href) return;
                     setCartOpen(false);
+                    // Pedido enviado: o carrinho guardado no aparelho some, senão
+                    // ele reapareceria montado quando o cliente voltasse à loja.
+                    setCart({});
                     /**
                      * Depois do `await`, o browser já não trata o clique como “gesto direto”:
                      * em mobile o `window.open` costuma ser bloqueado. Navegar na mesma aba

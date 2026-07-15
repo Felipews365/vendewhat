@@ -748,6 +748,23 @@ quando `stockControlEnabled` é `false`.
 ## Loja pública — carrinho e formas de envio
 
 O checkout fica no carrinho de [src/app/loja/[slug]/LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx).
+
+**O carrinho sobrevive à recarga (`localStorage`, sem migration):** o `cart` (`Record<cartKey, qtd>`)
+é gravado no aparelho numa chave **por loja** (`vw-cart-{slug}`, prefixo `CART_STORAGE_PREFIX`, com
+`savedAt`) — antes ele vivia só em `useState` e **qualquer F5 / "puxar para atualizar" no celular
+esvaziava a lista**, jogando fora a compra montada. Detalhes que importam:
+- **A leitura é num `useEffect`, não no `useState` inicial** (senão o HTML do servidor não bate com o
+  do cliente na hidratação), e um estado **`cartReady`** segura a gravação até a restauração rodar —
+  sem ele, o 1º render (carrinho vazio) **apagaria** o que estava guardado.
+- **Reconcilia com o catálogo de agora** (`reconcileStoredCart`): produto que o lojista apagou sai da
+  lista e a quantidade passa pelo mesmo `snapQuantity`/`maxQtyForCartLine` do `setQty` (estoque,
+  fardo, quantidade mínima). Carrinho parado há mais de **7 dias** (`CART_MAX_AGE_MS`) é descartado
+  inteiro — a essa altura preço e estoque já mudaram. `readStoredCart` engole qualquer JSON estranho.
+- **Limpa ao finalizar** (`setCart({})` no "Enviar pedido no WhatsApp" e no `handlePayOnline`, depois
+  do pedido registrado): não era preciso antes justamente porque a recarga apagava tudo. Sem isso, o
+  cliente voltaria do WhatsApp/Mercado Pago com o pedido já enviado ainda montado e repetiria a
+  compra. Envio que **falha** (sem link, erro no pagamento) mantém o carrinho.
+
 As **formas de envio** estão em [src/lib/shippingModes.ts](src/lib/shippingModes.ts)
 (`SHIPPING_MODES`: excursão, correios, transportadora, retirada) e definem campos extras no carrinho:
 
