@@ -25,6 +25,8 @@ type Props = {
   connected: boolean;
   /** Chamado após enviar/pausar (para atualizar as pausas no pai). */
   onSent?: () => void;
+  /** Telefone para já abrir a conversa (ex.: link do telefone em Pedidos). */
+  initialPhone?: string;
 };
 
 // --- Cores das etiquetas -----------------------------------------------------
@@ -124,6 +126,19 @@ function avatarText(name: string, phone: string): string {
   return phone.replace(/\D/g, "").slice(-2) || "?";
 }
 
+/**
+ * Casa o telefone de um pedido com o da conversa. O WhatsApp às vezes guarda o
+ * número sem o 9 do celular (ou sem o DDI), então compara pelos 8 últimos
+ * dígitos quando não bate exatamente.
+ */
+function samePhone(a: string, b: string): boolean {
+  const da = a.replace(/\D/g, "");
+  const db = b.replace(/\D/g, "");
+  if (!da || !db) return false;
+  if (da === db) return true;
+  return da.slice(-8) === db.slice(-8);
+}
+
 function formatTime(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -182,6 +197,7 @@ export default function ConversationsPanel({
   pausedPhones,
   connected,
   onSent,
+  initialPhone,
 }: Props) {
   const { showToast } = useToast();
   const [selected, setSelected] = useState<string | null>(null);
@@ -212,6 +228,9 @@ export default function ConversationsPanel({
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // O deep link (?phone=) só abre a conversa uma vez — depois disso o lojista
+  // navega à vontade sem a lista "puxar" de volta para o contato do link.
+  const deepLinkRef = useRef(false);
 
   // Nome do contato por telefone (dígitos), a partir das conversas recebidas.
   const nameByPhone: Record<string, string> = {};
@@ -270,6 +289,16 @@ export default function ConversationsPanel({
     },
     [scrollToBottom]
   );
+
+  // Abre direto a conversa pedida no link (?phone=). As conversas chegam
+  // depois do mount, então espera a lista casar o telefone.
+  useEffect(() => {
+    if (deepLinkRef.current || !initialPhone) return;
+    const match = conversations.find((c) => samePhone(c.customerPhone, initialPhone));
+    if (!match) return;
+    deepLinkRef.current = true;
+    setSelected(match.customerPhone);
+  }, [initialPhone, conversations]);
 
   // Ao selecionar um contato: carrega e começa a atualizar a cada 12s.
   useEffect(() => {

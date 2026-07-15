@@ -610,6 +610,7 @@ export default function PedidosPage() {
         setAlertEnabled(enabled);
         setAlertPhone(digits);
         showToast("Aviso de venda salvo!");
+        setAlertsOpen(false);
       } catch {
         showToast("Não foi possível salvar o aviso.", "error");
       } finally {
@@ -824,25 +825,26 @@ export default function PedidosPage() {
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Pedidos</h1>
-          <p className="text-slate-600 dark:text-slate-300 mt-2 max-w-2xl">
-            Pedidos feitos pelo catálogo quando o cliente usa{" "}
-            <strong>Enviar pedido no WhatsApp</strong>. O resumo fica aqui; o
-            contato continua pelo WhatsApp da loja.
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Pedidos</h1>
+        <button
+          type="button"
+          onClick={() => setAlertsOpen(true)}
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          title="Configurar os avisos de venda"
+        >
+          <span aria-hidden>🔔</span>
+          Avisos de venda
+        </button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
+        <p className="text-slate-600 dark:text-slate-300 max-w-2xl">
+          Pedidos feitos pelo catálogo quando o cliente usa{" "}
+          <strong>Enviar pedido no WhatsApp</strong>. O resumo fica aqui; o
+          contato continua pelo WhatsApp da loja.
+        </p>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setAlertsOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            title="Configurar os avisos de venda"
-          >
-            <span aria-hidden>🔔</span>
-            Avisos de venda
-          </button>
           {visibleOrders.length > 0 && (
             <button
               type="button"
@@ -1329,14 +1331,28 @@ export default function PedidosPage() {
                         <>Pedido</>
                       )}
                     </p>
-                    <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
-                      <span className="font-medium text-slate-700 dark:text-slate-200">Cliente:</span>{" "}
-                      {client ?? "—"}
+                    <p className="text-base font-semibold text-slate-800 dark:text-slate-100 mt-1">
+                      {client ?? "Cliente não informado"}
                     </p>
                     {phone ? (
-                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">
-                        <span className="font-medium text-slate-700 dark:text-slate-200">Telefone:</span>{" "}
-                        {phone}
+                      <p className="mt-0.5">
+                        <Link
+                          href={`/dashboard/whatsapp?phone=${encodeURIComponent(
+                            phone.replace(/\D/g, "")
+                          )}`}
+                          title="Abrir a conversa deste cliente no Atendimento"
+                          className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            className="h-4 w-4"
+                            aria-hidden
+                          >
+                            <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm5.8 14.1c-.24.68-1.42 1.31-1.96 1.36-.5.05-.97.23-3.27-.68-2.76-1.09-4.5-3.93-4.64-4.11-.13-.18-1.1-1.47-1.1-2.8 0-1.33.7-1.98.94-2.25.25-.27.54-.34.72-.34.18 0 .36 0 .52.01.17.01.39-.06.61.47.23.54.77 1.87.84 2.01.07.14.11.3.02.48-.09.18-.13.29-.27.45-.13.16-.28.35-.4.47-.13.13-.27.28-.12.54.15.27.66 1.09 1.42 1.77.97.87 1.79 1.14 2.05 1.27.25.13.4.11.55-.07.15-.18.63-.74.8-.99.16-.25.32-.21.55-.13.22.09 1.42.67 1.66.79.24.12.4.18.46.28.06.1.06.6-.18 1.28Z" />
+                          </svg>
+                          {phone}
+                        </Link>
                       </p>
                     ) : null}
                     {shipping ? (

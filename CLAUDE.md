@@ -840,6 +840,18 @@ Em [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx):
 - **Selo de pagamento** (`paymentInfo`): "Pago pelo Mercado Pago" / "Pago (confirmado pela loja)"
   (verde), pendente/falhou (amarelo/vermelho). Só aparece quando há `payment_provider` — pedidos só
   de WhatsApp sem confirmação não mostram selo. Também sai no comprovante impresso.
+- **Cliente em destaque + telefone que abre a conversa:** no cabeçalho de cada card, o **nome do
+  cliente** perdeu o rótulo "Cliente:" e virou `text-base font-semibold` logo abaixo do nº do pedido
+  (sem nome → "Cliente não informado"). O **telefone** é um `<Link>` verde com o ícone do WhatsApp
+  para **`/dashboard/whatsapp?phone=<dígitos>`** (Atendimento), abrindo a conversa **daquele**
+  cliente. Do outro lado, [WhatsAppIaClient.tsx](src/components/dashboard/WhatsAppIaClient.tsx) lê o
+  `?phone=` da URL no mesmo `useEffect` de mount do `?tab=` (sem `<Suspense>`) e passa como prop
+  **`initialPhone`** ao [ConversationsPanel.tsx](src/components/dashboard/ConversationsPanel.tsx),
+  que seleciona o contato **quando ele aparece na lista** (as conversas chegam depois do mount, então
+  o efeito depende de `conversations`). Dois cuidados: o casamento usa **`samePhone`** (exato ou os
+  **8 últimos dígitos**, pois o pedido guarda o número sem DDI e o WhatsApp às vezes sem o 9 do
+  celular) e um **`deepLinkRef`** garante que o link **só abre a conversa uma vez** — senão o polling
+  de 6s da lista puxaria o lojista de volta ao contato do link a cada atualização.
 
 Sem migration nova: usa `orders.status` e as colunas de pagamento do
 [supabase-migration-mercadopago.sql](supabase-migration-mercadopago.sql).
@@ -851,11 +863,14 @@ Quando entra **uma venda nova** — fechada pela **IA** na conversa/PDF **ou** p
 `saleAlertEnabled` + `saleAlertPhone`, só dígitos); as preferências de **som** são locais (por
 dispositivo, `localStorage`): ligado/desligado (`vw-sale-sound`), **som escolhido** (`vw-sale-sound-id`)
 e **volume** (`vw-sale-sound-volume`, 0..1). Tudo editado num **modal "🔔 Avisos de venda"**, aberto
-pelo botão de mesmo nome na barra do topo de
-[/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (estado `alertsOpen`; fecha no ✕, no Esc ou
-clicando fora). Era um card fixo no topo da página, que ocupava muito espaço acima dos pedidos. O
-botão fica **sempre** visível — inclusive sem nenhum pedido, que é justamente quando o lojista quer
-configurar o aviso —, enquanto Selecionar/Imprimir seguem só com `visibleOrders.length > 0`.
+pelo botão de mesmo nome **à direita, na mesma linha do título "Pedidos"** em
+[/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx) (estado `alertsOpen`; fecha no ✕, no Esc,
+clicando fora **ou ao salvar** — o `setAlertsOpen(false)` roda **só depois do sucesso** em
+`saveSaleAlert`, então erro de rede/telefone inválido mantém o modal aberto com o que foi digitado).
+Era um card fixo no topo da página, que ocupava muito espaço acima dos pedidos. O botão fica
+**sempre** visível — inclusive sem nenhum pedido, que é justamente quando o lojista quer configurar o
+aviso —, enquanto Selecionar/Imprimir seguem só com `visibleOrders.length > 0` e ficam numa **segunda
+linha**, ao lado do texto explicativo.
 
 - **Bipe + alerta flutuante no painel (todo o dashboard):** o
   [SaleAlertWatcher.tsx](src/components/dashboard/SaleAlertWatcher.tsx), montado no

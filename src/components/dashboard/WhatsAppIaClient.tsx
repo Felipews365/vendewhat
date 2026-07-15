@@ -288,15 +288,21 @@ export default function WhatsAppIaClient({
   const [globalPauseMenu, setGlobalPauseMenu] = useState(false);
 
   const [tab, setTab] = useState<TabKey>(visibleTabs[0]);
+  // Telefone vindo de ?phone= (link do telefone em Pedidos) para já abrir a
+  // conversa daquele cliente.
+  const [initialPhone, setInitialPhone] = useState("");
 
   // Permite abrir direto numa aba via ?tab= (ex.: link do editor da loja para
   // "Configuração IA"). Lê da URL só no mount para não exigir <Suspense>.
   // Só aceita abas que existem nesta seção do painel.
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("tab") as TabKey | null;
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab") as TabKey | null;
     if (t && visibleTabs.includes(t)) {
       setTab(t);
     }
+    const p = (params.get("phone") ?? "").replace(/\D/g, "");
+    if (p) setInitialPhone(p);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1659,6 +1665,7 @@ export default function WhatsAppIaClient({
               }
               connected={status === "connected"}
               onSent={loadPauses}
+              initialPhone={initialPhone}
             />
           </div>
         </div>
