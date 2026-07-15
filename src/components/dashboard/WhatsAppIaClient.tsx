@@ -284,6 +284,7 @@ export default function WhatsAppIaClient({
   });
   const [customerPauses, setCustomerPauses] = useState<CustomerPause[]>([]);
   const [conversations, setConversations] = useState<RecentCustomer[]>([]);
+  const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const [pauseBusy, setPauseBusy] = useState(false);
   const [globalPauseMenu, setGlobalPauseMenu] = useState(false);
 
@@ -345,6 +346,7 @@ export default function WhatsAppIaClient({
         setConversations(
           Array.isArray(data.conversations) ? data.conversations : []
         );
+        setConversationsLoaded(true);
         if (typeof data.handoffMinutes === "number") {
           setHandoffMinutes(data.handoffMinutes);
         }
@@ -1666,6 +1668,7 @@ export default function WhatsAppIaClient({
               connected={status === "connected"}
               onSent={loadPauses}
               initialPhone={initialPhone}
+              conversationsLoaded={conversationsLoaded}
             />
           </div>
         </div>

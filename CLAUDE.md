@@ -848,10 +848,19 @@ Em [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx):
   `?phone=` da URL no mesmo `useEffect` de mount do `?tab=` (sem `<Suspense>`) e passa como prop
   **`initialPhone`** ao [ConversationsPanel.tsx](src/components/dashboard/ConversationsPanel.tsx),
   que seleciona o contato **quando ele aparece na lista** (as conversas chegam depois do mount, então
-  o efeito depende de `conversations`). Dois cuidados: o casamento usa **`samePhone`** (exato ou os
-  **8 últimos dígitos**, pois o pedido guarda o número sem DDI e o WhatsApp às vezes sem o 9 do
-  celular) e um **`deepLinkRef`** garante que o link **só abre a conversa uma vez** — senão o polling
-  de 6s da lista puxaria o lojista de volta ao contato do link a cada atualização.
+  o efeito depende de `conversations`). O casamento usa **`samePhone`** (exato ou os **8 últimos
+  dígitos**, pois o pedido guarda o número sem DDI e o WhatsApp às vezes sem o 9 do celular) e um
+  **`deepLinkRef`** garante que o link **só abre a conversa uma vez** — senão o polling de 6s da lista
+  puxaria o lojista de volta ao contato do link a cada atualização.
+  - **Abre a conversa mesmo sem histórico:** cliente que comprou pelo site mas **nunca escreveu** não
+    está em `whatsapp_messages`, logo não aparece na lista — antes o link só caía no Atendimento, sem
+    abrir nada. Quando não há match **e** a lista já chegou (prop **`conversationsLoaded`**, que o
+    `WhatsAppIaClient` liga no 1º `loadPauses`), o painel seleciona `toWhatsAppNumber(initialPhone)`
+    (**com DDI 55** — o formato em que o webhook grava), abrindo a thread **vazia** pronta para o
+    lojista mandar a 1ª mensagem, que já cai na conversa certa. O `conversationsLoaded` existe porque
+    `conversations` começa `[]`: sem ele o fallback dispararia antes do carregamento e perderia o
+    telefone canônico da lista. A thread renderiza só a partir de `selected` (não consulta
+    `conversations`), então sem histórico o cabeçalho mostra o telefone formatado + "A confirmar".
 
 Sem migration nova: usa `orders.status` e as colunas de pagamento do
 [supabase-migration-mercadopago.sql](supabase-migration-mercadopago.sql).

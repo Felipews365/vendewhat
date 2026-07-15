@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
+import { toWhatsAppNumber } from "@/lib/customerPhone";
 
 type RecentCustomer = {
   customerPhone: string;
@@ -27,6 +28,8 @@ type Props = {
   onSent?: () => void;
   /** Telefone para já abrir a conversa (ex.: link do telefone em Pedidos). */
   initialPhone?: string;
+  /** A lista de conversas já chegou do servidor (para o deep link não desistir cedo). */
+  conversationsLoaded?: boolean;
 };
 
 // --- Cores das etiquetas -----------------------------------------------------
@@ -198,6 +201,7 @@ export default function ConversationsPanel({
   connected,
   onSent,
   initialPhone,
+  conversationsLoaded,
 }: Props) {
   const { showToast } = useToast();
   const [selected, setSelected] = useState<string | null>(null);
@@ -291,14 +295,22 @@ export default function ConversationsPanel({
   );
 
   // Abre direto a conversa pedida no link (?phone=). As conversas chegam
-  // depois do mount, então espera a lista casar o telefone.
+  // depois do mount, então espera a lista casar o telefone. Cliente que fez
+  // pedido mas nunca escreveu não está na lista: aí abre a conversa vazia no
+  // número do WhatsApp (com DDI), que é o formato em que o webhook grava —
+  // então o que o lojista mandar já cai na thread certa.
   useEffect(() => {
     if (deepLinkRef.current || !initialPhone) return;
     const match = conversations.find((c) => samePhone(c.customerPhone, initialPhone));
-    if (!match) return;
+    if (match) {
+      deepLinkRef.current = true;
+      setSelected(match.customerPhone);
+      return;
+    }
+    if (!conversationsLoaded) return; // ainda pode aparecer no 1º carregamento
     deepLinkRef.current = true;
-    setSelected(match.customerPhone);
-  }, [initialPhone, conversations]);
+    setSelected(toWhatsAppNumber(initialPhone));
+  }, [initialPhone, conversations, conversationsLoaded]);
 
   // Ao selecionar um contato: carrega e começa a atualizar a cada 12s.
   useEffect(() => {
