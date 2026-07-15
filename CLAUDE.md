@@ -955,7 +955,7 @@ lojista **também paga sozinho** pelo Mercado Pago (assinatura recorrente **ou**
   mostra qual é o plano ativo da loja e destaca a opção de upgrade. O server component carrega
   `loadPlans()` **e** `loadCurrentSubscription()` ([plans.server.ts](src/lib/plans.server.ts)) — esta
   lê a assinatura da loja do usuário logado (via RLS "dono lê a própria assinatura", tabela
-  `subscriptions`; devolve `{ planId, status, billingCycle, expiresAt }` ou `null`). Em
+  `subscriptions`; devolve `{ planId, status, billingCycle, expiresAt, recurring }` ou `null`). Em
   [PlansView.tsx](src/app/dashboard/planos/PlansView.tsx) uma **faixa "Seu plano atual"** no topo traz
   nome do plano, chip de status (Ativo/Em teste/Pagamento pendente/…), valor/mês, ciclo e data de
   renovação + botão **"Fazer upgrade"** (âncora `#planos`); sem assinatura, cai num aviso "sem plano
@@ -963,6 +963,22 @@ lojista **também paga sozinho** pelo Mercado Pago (assinatura recorrente **ou**
   os demais trocam o CTA para **"Fazer upgrade"** (mais caro que o atual) ou **"Mudar para este
   plano"** (mais barato); sem plano atual mantém "Assinar". `CurrentSubscription` é importado com
   `import type` para o módulo `server-only` não vazar ao bundle do cliente.
+  - **Dois botões por card:** "Assinar/upgrade" (recorrente, `/api/billing/subscribe`) e **"Pagar
+    avulso"** (`/api/billing/checkout`) — ver "Pagamentos". No ciclo **anual**, o card mostra o
+    **total do ano** (com o preço cheio riscado) e um selo verde **"Você economiza R$ X por ano"**.
+  - **`recurring`** (derivado de `gateway_subscription_id`, que **só o preapproval grava** — avulso e
+    registro manual do admin ficam sem; o id não vai ao browser): quem paga avulso vê **"Ativar
+    renovação automática"** na faixa, e a data diz **"vence em"** em vez de "renova em". Vitalício
+    não recebe a oferta.
+  - **Botão "Créditos da IA"** (→ `/dashboard/creditos`) na faixa, quando o plano **tem IA e não tem
+    franquia mensal** (`planHasAi && includedTokensForPlan === 0` = IA Sob Medida, que roda de
+    crédito) — regra derivada, então vale para qualquer plano novo sem franquia.
+  - **Volta do pagamento (`?pagamento=ok|pendente|falhou`):** as back_urls do MP voltam para cá; a
+    [page.tsx](src/app/dashboard/planos/page.tsx) lê o param e a view mostra o aviso. **Por que
+    existe:** no **Pix** o MP **não** avisa "pagou" na tela dele (o pagamento acontece no app do
+    banco; quem confirma é o webhook), então o lojista voltava sem nenhuma resposta — e chegou a
+    **pagar 3× o mesmo plano** achando que tinha falhado. Enquanto espera, a view chama
+    `router.refresh()` a cada 5s por ~1min: o plano vira "Ativo" sozinho, sem F5.
 
 ## Atendimento por IA no WhatsApp (Evolution API)
 
@@ -971,6 +987,26 @@ Cada loja conecta o próprio WhatsApp via **QR Code** em `/dashboard/whatsapp` (
 (catálogo + FAQ que o lojista configura) e envia o link da loja para a compra. Multi-tenant:
 uma instância Evolution e uma config de IA por loja.
 
+- **Plano "Sem IA" bloqueia a IA (`planHasAi` em [plans.ts](src/lib/plans.ts)):** regra **única**
+  (`NO_AI_PLAN_IDS` = `essencial`/`sem-ia`) usada pelo painel, pelo aviso do topo
+  ([banner](src/app/api/whatsapp/banner/route.ts)) e pelo atendimento. **Sem assinatura (`null`)
+  assume que TEM IA** — loja sem registro não pode perder a IA por falta de dado; só bloqueia quem
+  está explicitamente no plano sem IA.
+  - **Onde barra:** `hasAiBalance` ([aiCredits.ts](src/lib/aiCredits.ts)) checa o **plano antes do
+    saldo** e devolve `reason` (`no_ai_plan`|`empty`). Antes o único portão era saldo — e como o
+    **bônus de boas-vindas** (30 conversas) é *crédito*, que **não expira**, a loja "Sem IA" atendia
+    com IA assim mesmo. O dono é avisado no WhatsApp com o texto certo ("seu plano não inclui a IA"),
+    uma vez (trava `empty_warned_at`). Os **crons** (follow-up/pós-venda/carrinho) pulam a loja via
+    `storePlanHasAi` — inclusive no caminho de **mensagem fixa**, que não custa token mas é automação
+    do plano com IA.
+  - **Não apaga nada:** a trava é só no **uso**. Config (`store_whatsapp`), histórico
+    (`whatsapp_messages`) e créditos (`store_ai_credits`, sem consumo) ficam guardados e voltam
+    inteiros no upgrade. **Nunca** travar a gravação (upgrade encontraria config pela metade).
+  - **A Conexão FICA:** no "Sem IA" o WhatsApp segue conectado — os pedidos chegam e o **Atendimento**
+    (responder na mão) funciona; só a IA não responde sozinha. Por isso `/dashboard/ia` **não** é
+    bloqueada inteira: o [WhatsAppIaClient](src/components/dashboard/WhatsAppIaClient.tsx) recebe
+    `planHasAi` (a [page](src/app/dashboard/ia/page.tsx) lê a assinatura no servidor), **filtra a aba
+    "Configuração IA"** do `VIEW_TABS` e mostra um card de upgrade no lugar.
 - **Migration:** rode [supabase-migration-whatsapp.sql](supabase-migration-whatsapp.sql)
   (cria `store_whatsapp` e `whatsapp_messages`).
 - **Libs:** [src/lib/evolution.ts](src/lib/evolution.ts) (wrapper REST da Evolution),
