@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   formatBRL,
   monthlyEquivalentAnnual,
@@ -104,16 +105,38 @@ function uniqueFeaturesOrdered(plans: PlanDefinition[]) {
 export default function PlansView({
   plans,
   current,
+  payment = null,
 }: {
   plans: PlanDefinition[];
   current: CurrentSubscription | null;
+  /** `?pagamento=` da volta do Mercado Pago: ok | pendente | falhou. */
+  payment?: string | null;
 }) {
+  const router = useRouter();
   const [annual, setAnnual] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [busy, setBusy] = useState<{ planId: string; mode: PayMode } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const matrixRows = useMemo(() => uniqueFeaturesOrdered(plans), [plans]);
+
+  // Pix confirma pelo webhook, não pela volta do MP: a assinatura pode ainda não
+  // ter mudado quando o lojista chega aqui. Recarrega os dados do servidor por
+  // ~1 min para o plano aparecer ativo sozinho, sem ele ter que apertar F5.
+  const [waiting, setWaiting] = useState(payment === "ok" || payment === "pendente");
+  useEffect(() => {
+    if (!waiting) return;
+    let tries = 0;
+    const id = setInterval(() => {
+      tries += 1;
+      router.refresh();
+      if (tries >= 12) {
+        clearInterval(id);
+        setWaiting(false);
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [waiting, router]);
 
   const currentPlan = useMemo(
     () => (current?.planId ? plans.find((p) => p.id === current.planId) ?? null : null),
@@ -192,6 +215,42 @@ export default function PlansView({
         Escolha o plano ideal. Todos incluem período para testar — confira na página inicial.
       </p>
 
+      {/* Volta do Mercado Pago. No Pix o MP não avisa "pagou" na tela dele: quem
+          confirma é o webhook, então aqui explicamos e a página se atualiza. */}
+      {payment && (
+        <div
+          className={`mt-6 rounded-2xl border p-4 text-sm ${
+            payment === "falhou"
+              ? "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200"
+          }`}
+        >
+          {payment === "falhou" ? (
+            <p>
+              <strong>O pagamento não foi concluído.</strong> Nada foi cobrado — você pode
+              tentar de novo abaixo.
+            </p>
+          ) : (
+            <>
+              <p>
+                <strong>
+                  {payment === "ok"
+                    ? "Pagamento recebido!"
+                    : "Estamos aguardando a confirmação do pagamento."}
+                </strong>{" "}
+                Assim que o Mercado Pago confirmar, seu plano é ativado sozinho — não
+                precisa pagar de novo. No Pix costuma levar alguns segundos.
+              </p>
+              {waiting && (
+                <p className="mt-1 text-xs opacity-80">
+                  Verificando automaticamente… esta página se atualiza sozinha.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Plano atual da loja */}
       <div className="mt-6 rounded-2xl border border-violet-200 bg-violet-50/70 p-5 dark:border-violet-900/60 dark:bg-violet-950/30">
         {currentPlan ? (
@@ -246,7 +305,7 @@ export default function PlansView({
                   href="/dashboard/creditos"
                   className="rounded-xl border border-violet-300 px-4 py-2.5 text-center text-sm font-bold text-violet-700 transition hover:bg-violet-100 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950/50"
                 >
-                  Comprar créditos
+                  Créditos da IA
                 </Link>
               )}
               <a
