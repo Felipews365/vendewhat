@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AiStatusBanner } from "@/components/dashboard/AiStatusBanner";
+import { SaleAlertWatcher } from "@/components/dashboard/SaleAlertWatcher";
 import {
   DASH_NAV_ICONS,
   type DashNavIconKey,
@@ -475,6 +476,9 @@ export function DashboardLayoutClient({
 
           {/* Aviso do topo: IA pausada ou WhatsApp sem conectar (some no plano Sem IA) */}
           <AiStatusBanner />
+
+          {/* Alerta flutuante + bipe quando entra uma venda nova (IA ou site) */}
+          <SaleAlertWatcher />
 
           {/* pb extra no celular para não ficar atrás da barra inferior */}
           <div

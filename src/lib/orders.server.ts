@@ -14,6 +14,7 @@ import { isShippingModeId, shippingModeLabel } from "@/lib/shippingModes";
 import { isPaymentMethodId } from "@/lib/paymentMethods";
 import { markCartConverted } from "@/lib/whatsappConfig";
 import { toWhatsAppNumber } from "@/lib/customerPhone";
+import { notifyNewSale } from "@/lib/saleAlert";
 
 export type CreateStoreOrderInput = {
   storeId: string;
@@ -29,6 +30,8 @@ export type CreateStoreOrderInput = {
   excursionName?: string;
   carrierName?: string;
   notes?: string;
+  /** Origem da venda para o aviso ao lojista: "ia" (conversa) ou "site" (checkout). Default "site". */
+  origin?: "ia" | "site";
 };
 
 export type CreateStoreOrderResult =
@@ -201,6 +204,17 @@ export async function createStoreOrder(
       console.error("[orders.server] markCartConverted", err);
     }
   }
+
+  // Aviso de venda para o lojista (WhatsApp), se configurado no painel. Não
+  // bloqueia nem derruba o pedido — o helper já é tolerante a falha.
+  const itemCount = payloadLines.reduce((s, l) => s + l.quantity, 0);
+  await notifyNewSale(admin, storeId, {
+    orderNumber,
+    customerName,
+    subtotal,
+    itemCount,
+    origin: input.origin === "ia" ? "ia" : "site",
+  });
 
   return {
     ok: true,

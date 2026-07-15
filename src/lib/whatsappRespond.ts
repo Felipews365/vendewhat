@@ -258,6 +258,7 @@ async function registerConversationOrder(
       customerAddress: draft.endereco ?? "",
       excursionName: draft.excursao ?? "",
       carrierName: draft.transportadora ?? "",
+      origin: "ia",
     });
     if (!result.ok) {
       console.warn("[whatsappRespond] registerConversationOrder", result.error);

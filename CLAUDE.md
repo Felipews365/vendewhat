@@ -844,6 +844,40 @@ Em [/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx):
 Sem migration nova: usa `orders.status` e as colunas de pagamento do
 [supabase-migration-mercadopago.sql](supabase-migration-mercadopago.sql).
 
+### Avisos de venda (bipe no painel + alerta na tela + WhatsApp)
+
+Quando entra **uma venda nova** — fechada pela **IA** na conversa/PDF **ou** pelo **checkout do site**
+— o lojista é avisado de três formas. Config **sem migration** (dois campos no JSONB `storefront`:
+`saleAlertEnabled` + `saleAlertPhone`, só dígitos); as preferências de **som** são locais (por
+dispositivo, `localStorage`): ligado/desligado (`vw-sale-sound`), **som escolhido** (`vw-sale-sound-id`)
+e **volume** (`vw-sale-sound-volume`, 0..1). Tudo editado num **card "🔔 Avisos de venda"** no topo de
+[/dashboard/pedidos](src/app/dashboard/pedidos/page.tsx).
+
+- **Bipe + alerta flutuante no painel (todo o dashboard):** o
+  [SaleAlertWatcher.tsx](src/components/dashboard/SaleAlertWatcher.tsx), montado no
+  [DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx), faz **polling**
+  (~25s + ao focar a aba) de [/api/orders/latest](src/app/api/orders/latest/route.ts) (maior
+  `order_number` da loja + cliente/subtotal do mais recente). A referência "já vi até aqui" mora em
+  `localStorage` (`vw-last-seen-order`): na 1ª leitura vira o pedido atual (**não avisa
+  retroativamente**); qualquer `order_number` maior dispara um **card verde** (`vw-pop-in`,
+  dismissível, com "Ver pedido") e o **som escolhido** (`playSaleAlertSound`). O som pode ser
+  bloqueado por autoplay antes de qualquer interação — o alerta visual sempre aparece.
+- **Sons configuráveis (Web Audio, sem arquivo):** [src/lib/saleSounds.ts](src/lib/saleSounds.ts)
+  sintetiza 6 sons (`SALE_SOUNDS`: bipe, caixa registradora, sininho, ding, alerta, marimba) via
+  osciladores — nada em disco, funciona offline. `playSaleSound(id, volume)` toca um som específico
+  (usado no botão **"▶ Testar"** e ao arrastar o volume, com a seleção ao vivo ainda não salva);
+  `playSaleAlertSound()` lê as prefs do dispositivo e é o que o vigia chama. O card de Pedidos traz o
+  `<select>` de som + slider de **volume** (0–100%) + Testar, salvando tudo no `localStorage`.
+- **Aviso por WhatsApp (número escolhido, opt-in):** `notifyNewSale` em
+  [src/lib/saleAlert.ts](src/lib/saleAlert.ts) manda uma mensagem (pedido, cliente, total, origem
+  IA/site) do **WhatsApp conectado da loja** para o `saleAlertPhone`. Chamado **dentro de
+  `createStoreOrder`** ([orders.server.ts](src/lib/orders.server.ts)) — **fonte única** dos dois
+  fluxos, então site e IA disparam o mesmo aviso (a IA passa `origin: "ia"` em
+  [whatsappRespond.ts](src/lib/whatsappRespond.ts); o checkout usa o default `"site"`). Só envia se
+  `saleAlertEnabled` **e** o WhatsApp está `connected`; nunca lança nem derruba o pedido. Salvo por
+  [/api/orders/sale-alert](src/app/api/orders/sale-alert/route.ts) (patch no `storefront`,
+  preservando o resto).
+
 ### Números do painel inicial e visitas
 
 [/dashboard/page.tsx](src/app/dashboard/page.tsx) mostra **Produtos**, **Pedidos**, **Vendas hoje**

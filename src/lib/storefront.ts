@@ -563,6 +563,13 @@ export type StorefrontSettings = {
    * cliente pergunta de onde a loja é/atende. Vazio = não informado.
    */
   onlineCity: string;
+  /**
+   * Avisar por WhatsApp quando entrar uma venda nova (pela IA ou pelo site).
+   * A mensagem sai da própria loja (WhatsApp conectado) para `saleAlertPhone`.
+   */
+  saleAlertEnabled: boolean;
+  /** Número (só dígitos) que recebe o aviso de venda. Vazio = não avisa. */
+  saleAlertPhone: string;
   /** Dias da semana em que a loja atende (chaves: seg/ter/qua/qui/sex/sab/dom). Vazio = não informado. */
   attendanceDays: string[];
   /** Horário de atendimento em texto livre (ex.: "9h às 18h"). Vazio = não informado. */
@@ -702,6 +709,8 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   aiSendPixOnCheckout: false,
   saleMode: "varejo",
   onlineCity: "",
+  saleAlertEnabled: false,
+  saleAlertPhone: "",
   attendanceDays: [],
   attendanceHours: "",
   facebookPixelId: "",
@@ -1177,6 +1186,8 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     ),
     saleMode: saleModeFromDb(o.saleMode),
     onlineCity: strOrEmpty(o.onlineCity).slice(0, 120),
+    saleAlertEnabled: boolFromDb(o.saleAlertEnabled, DEFAULT_STOREFRONT.saleAlertEnabled),
+    saleAlertPhone: strOrEmpty(o.saleAlertPhone).replace(/\D/g, "").slice(0, 15),
     attendanceDays: attendanceDaysFromDb(o.attendanceDays),
     attendanceHours: strOrEmpty(o.attendanceHours).slice(0, 120),
     facebookPixelId: sanitizeFacebookPixelId(o.facebookPixelId),
@@ -1250,6 +1261,8 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     aiSendPixOnCheckout: s.aiSendPixOnCheckout,
     saleMode: saleModeFromDb(s.saleMode),
     onlineCity: s.onlineCity.trim().slice(0, 120),
+    saleAlertEnabled: s.saleAlertEnabled,
+    saleAlertPhone: s.saleAlertPhone.replace(/\D/g, "").slice(0, 15),
     attendanceDays: attendanceDaysFromDb(s.attendanceDays),
     attendanceHours: s.attendanceHours.trim().slice(0, 120),
     facebookPixelId: sanitizeFacebookPixelId(s.facebookPixelId),
