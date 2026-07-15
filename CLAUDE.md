@@ -171,6 +171,13 @@ Orientações para o Claude Code trabalhar neste repositório.
     (`saveRest`) que persiste o resto. O clique no banner dentro do
     [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (canvas + FAB) navega para
     essa página (`openBannerEditor`); o antigo painel `banner` do modal ficou **legado/inacessível**.
+    - **O banner do canvas PASSA as fotos** (`previewIdx` + `setInterval` de **5,5s**, o mesmo ritmo
+      do `HeroBannerBlock` da loja; `key={activeSlideIdx}` remonta a foto e dispara a transição
+      `vw-banner-in`, igual à loja). Antes congelava na 1ª foto enquanto o selo prometia "N fotos
+      passando" (o selo virou **"Foto X de N"**). Como **cada foto tem seu formato e seu texto**, o
+      `previewLayout`/`previewSide` e o texto saem do **slide ativo**, com o mesmo fallback da loja
+      (campo vazio → texto geral) — senão a prévia passaria a foto 2 com o texto da 1ª. Trocar ou
+      reordenar as fotos volta para a 1ª (o índice antigo apontaria para outra).
   - **Modelos prontos (`HERO_PRESETS` em [src/lib/heroPresets.ts](src/lib/heroPresets.ts)):** ~15
     "receitas" prontas (ex.: Lançamento, Black Friday, Coleção Verão, Elegante, Fashion, Vitrine
     dupla, Mosaico, Neon, Premium…) exibidas como **galeria de cards no topo do formulário**, cada um

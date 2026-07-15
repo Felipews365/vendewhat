@@ -417,11 +417,37 @@ export function StoreVisualEditor({
   const heroPhotoCount = sf.heroSlides.length;
   const heroSlotsFull = heroPhotoCount >= maxBannerPhotos;
 
-  /** Formato/lado usado na prévia do canvas = o da 1ª foto (o "de fundo" da prévia). */
-  const firstSlide = sf.heroSlides[0];
-  const previewLayout: HeroLayout = firstSlide?.layout ?? sf.heroLayout;
+  /**
+   * A prévia PASSA as fotos como a loja (mesmos 5,5s do `HeroBannerBlock`), em vez
+   * de congelar na 1ª — o selo "N fotos passando" prometia isso e não cumpria.
+   * Cada foto tem seu próprio formato, então layout/lado saem do slide ATIVO.
+   */
+  const [previewIdx, setPreviewIdx] = useState(0);
+  const slidesKey = useMemo(
+    () => sf.heroSlides.map((s) => s.url).join("|"),
+    [sf.heroSlides]
+  );
+  // Trocou/reordenou as fotos: volta para a 1ª (o índice antigo apontaria para outra).
+  useEffect(() => {
+    setPreviewIdx(0);
+  }, [slidesKey]);
+  useEffect(() => {
+    if (heroPhotoCount <= 1) return;
+    const t = setInterval(
+      () => setPreviewIdx((i) => (i + 1) % heroPhotoCount),
+      5500
+    );
+    return () => clearInterval(t);
+  }, [heroPhotoCount]);
+
+  const activeSlideIdx =
+    heroPhotoCount > 0 ? Math.min(previewIdx, heroPhotoCount - 1) : 0;
+  const activeSlide = sf.heroSlides[activeSlideIdx];
+  /** Foto do slide ativo; sem fotos, cai no que a página passou. */
+  const bannerPhoto = activeSlide?.url ?? bannerBgSrc ?? null;
+  const previewLayout: HeroLayout = activeSlide?.layout ?? sf.heroLayout;
   const previewSide: HeroSplitPhotoSide =
-    firstSlide?.photoSide ?? sf.heroSplitPhotoSide;
+    activeSlide?.photoSide ?? sf.heroSplitPhotoSide;
 
   /** Muda o formato de UMA foto (não afeta as outras). */
   const setSlideLayout = (i: number, layout: HeroLayout) =>
@@ -837,20 +863,24 @@ export function StoreVisualEditor({
               }}
             >
               {(() => {
-                const photoEl = bannerBgSrc ? (
-                  bannerBgSrc.startsWith("blob:") ? (
+                // `key` no índice = remonta a cada troca, disparando a mesma
+                // transição de entrada (`vw-banner-in`) que a loja usa.
+                const photoEl = bannerPhoto ? (
+                  bannerPhoto.startsWith("blob:") ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={bannerBgSrc}
+                      key={activeSlideIdx}
+                      src={bannerPhoto}
                       alt=""
-                      className="absolute inset-0 w-full h-full object-cover"
+                      className="vw-banner-in absolute inset-0 w-full h-full object-cover"
                     />
                   ) : (
                     <Image
-                      src={bannerBgSrc}
+                      key={activeSlideIdx}
+                      src={bannerPhoto}
                       alt=""
                       fill
-                      className="object-cover"
+                      className="vw-banner-in object-cover"
                       sizes="(max-width: 896px) 100vw, 896px"
                     />
                   )
@@ -868,21 +898,33 @@ export function StoreVisualEditor({
                   </div>
                 );
 
+                // Mesma regra da loja: o texto é o do slide ativo e, vazio, cai
+                // no texto geral — senão a prévia passaria a foto 2 com o texto
+                // da 1ª.
+                const slideBadge =
+                  activeSlide?.badge?.trim() || sf.heroSubtitle.trim();
+                const slideTitle =
+                  activeSlide?.title?.trim() || heroPreviewTitle;
+                const slideCoupon =
+                  activeSlide?.couponCode?.trim() || sf.heroCouponCode.trim();
+                const slideCta =
+                  activeSlide?.ctaLabel?.trim() || sf.heroCtaLabel || "Comprar";
+
                 const textLines = (
                   <>
-                    {sf.heroSubtitle.trim() && (
+                    {slideBadge && (
                       <p className="text-[10px] font-medium tracking-wide uppercase text-white/90 drop-shadow line-clamp-1">
-                        {sf.heroSubtitle}
+                        {slideBadge}
                       </p>
                     )}
                     <h3 className="text-base sm:text-xl font-bold text-white leading-tight mt-0.5 drop-shadow-lg line-clamp-2">
-                      {heroPreviewTitle}
+                      {slideTitle}
                     </h3>
-                    {sf.heroCouponCode.trim() && (
+                    {slideCoupon && (
                       <span className="mt-1.5 inline-flex self-start items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-white/85">
                         Cód.
                         <span className="px-1.5 py-0.5 rounded bg-white/20 border border-white/30 text-white">
-                          {sf.heroCouponCode.trim()}
+                          {slideCoupon}
                         </span>
                       </span>
                     )}
@@ -890,7 +932,7 @@ export function StoreVisualEditor({
                       className="mt-2 inline-flex self-start px-2.5 py-1 rounded text-white text-[10px] font-bold uppercase shadow-md"
                       style={{ backgroundColor: sf.themePrimary }}
                     >
-                      {sf.heroCtaLabel || "Comprar"}
+                      {slideCta}
                     </span>
                   </>
                 );
@@ -945,7 +987,7 @@ export function StoreVisualEditor({
             </div>
             {heroPhotoCount > 1 && (
               <span className="absolute top-2 left-3 sm:top-3 sm:left-4 z-30 px-2 py-0.5 rounded-full bg-black/55 text-white text-[10px] font-semibold backdrop-blur-sm">
-                {heroPhotoCount} fotos passando
+                Foto {activeSlideIdx + 1} de {heroPhotoCount}
               </span>
             )}
           </div>
