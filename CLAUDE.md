@@ -283,8 +283,18 @@ Orientações para o Claude Code trabalhar neste repositório.
       servidor e o cliente renderizam igual, sem flash na hidratação. Dessa estimativa sai também a
       `--vw-marquee-duration` (nova var no `.vw-marquee-track`, default 50s = o da landing), para a
       **velocidade em px/s ser a mesma** em qualquer loja, com poucas ou muitas frases.
-    - **A máscara (`.vw-marquee`, esmaece as pontas) fica no wrapper interno, não no pai** — no pai
-      ela apagaria junto a **cor de fundo** da barra. Ela também dá o pause no hover.
+    - **A máscara (esmaece as pontas) fica no wrapper interno, não no pai** — no pai ela apagaria
+      junto a **cor de fundo** da barra.
+    - **Duas classes de máscara, e a diferença importa:** `.vw-marquee` = máscara **+ pause no
+      hover** (faixa de depoimentos da landing, onde parar para ler o card é proposital);
+      **`.vw-marquee-mask` = só a máscara**, usada pela barra de avisos. A barra é **fina e colada
+      no topo**, então o ponteiro passa por ela o tempo todo (é o caminho até o cabeçalho/aba do
+      navegador) e com o pause ela **vivia congelada** — foi exatamente esse o bug de "o carrossel
+      não roda" (`f8e8f46`). Ao criar outro marquee, escolha a classe pelo **lugar** dele na tela.
+    - **`prefers-reduced-motion`:** o `.vw-marquee-track` para (regra que já existia). Como parado o
+      que passa da tela ficaria inalcançável (no celular sobraria só o 1º aviso), a
+      `.vw-marquee-mask` ganha `overflow-x: auto` nesse modo — rolagem manual, sem movimento
+      automático.
 - **Cabeçalho escuro estilo e-commerce (redesenho do `<header>` em LojaClient):** fundo
   `headerBackground` (default agora `#11212D`), **dark-aware** (`headerDark = isDarkRgb`). Logo/nome da
   loja em branco + **subtítulo** `storefront.headerTagline` (default `"MODA & ESTILO"`) em
