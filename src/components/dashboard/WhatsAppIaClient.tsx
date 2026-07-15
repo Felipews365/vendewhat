@@ -867,6 +867,11 @@ export default function WhatsAppIaClient({
                   Abra o WhatsApp no celular → <strong>Aparelhos conectados</strong> →
                   <strong> Conectar um aparelho</strong> e aponte para o QR Code.
                 </p>
+                {/* Escanear pela câmera do celular abre uma busca no Google com o
+                    conteúdo cru do QR — erro comum, o aviso evita o suporte. */}
+                <p className="text-center text-xs font-medium text-amber-700 dark:text-amber-400">
+                  ⚠️ Não use a câmera do celular: só o WhatsApp lê este código.
+                </p>
                 {pairingCode && (
                   <p className="text-center text-xs text-stone-500 dark:text-slate-400">
                     Ou use o código de pareamento:{" "}
