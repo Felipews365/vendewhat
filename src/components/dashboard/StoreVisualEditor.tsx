@@ -12,6 +12,7 @@ import {
   announcementMinOrder,
   type HeroLayout,
   type HeroSplitPhotoSide,
+  type ProductCardRatio,
   type StorefrontCategoryItem,
   type StorefrontSettings,
 } from "@/lib/storefront";
@@ -32,6 +33,8 @@ export type CatalogPreviewProduct = {
   imageUrl: string | null;
   /** Categoria do produto (igual à loja pública). */
   category: string | null;
+  /** Formato do card deste produto; `null` = usa o padrão da loja (igual à loja pública). */
+  cardRatio?: ProductCardRatio | null;
 };
 
 function formatBRL(value: number) {
@@ -1155,6 +1158,12 @@ export function StoreVisualEditor({
             {previewSlots.map((product) => {
               if (product) {
                 const href = `/dashboard/produtos/${product.id}`;
+                // Mesma regra da loja: o formato do produto manda; sem formato
+                // próprio, vale o padrão da loja (`productCardRatio`).
+                const ratioClass =
+                  (product.cardRatio ?? sf.productCardRatio) === "1:1"
+                    ? "aspect-square"
+                    : "aspect-[3/4]";
                 return (
                   <Link
                     key={product.id}
@@ -1164,7 +1173,9 @@ export function StoreVisualEditor({
                     <div className="absolute top-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-landing-primary text-white text-sm font-light shadow ring-1 ring-white pointer-events-none">
                       +
                     </div>
-                    <div className="relative aspect-square rounded-lg bg-slate-200/90 overflow-hidden mb-1.5">
+                    <div
+                      className={`relative ${ratioClass} rounded-lg bg-slate-200/90 overflow-hidden mb-1.5`}
+                    >
                       {product.imageUrl ? (
                         <Image
                           src={product.imageUrl}
@@ -1205,7 +1216,14 @@ export function StoreVisualEditor({
                   <div className="absolute top-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-landing-primary text-white text-sm font-light shadow ring-1 ring-white">
                     +
                   </div>
-                  <div className="aspect-square rounded-lg bg-slate-200/90 flex flex-col items-center justify-center mb-1.5">
+                  {/* Slot vazio segue o padrão da loja, senão ficaria torto ao lado dos outros. */}
+                  <div
+                    className={`${
+                      sf.productCardRatio === "1:1"
+                        ? "aspect-square"
+                        : "aspect-[3/4]"
+                    } rounded-lg bg-slate-200/90 flex flex-col items-center justify-center mb-1.5`}
+                  >
                     <span className="text-[10px] text-slate-500 px-1">
                       Adicione aqui
                     </span>

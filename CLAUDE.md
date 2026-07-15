@@ -555,7 +555,12 @@ seguem o formato escolhido (3:4 recorta em retrato). Na loja, o card usa
 
 O `ProductCatalogCard` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) recebe `imageRatio` e
 troca `aspect-square` ↔ `aspect-[3/4]`; a foto é `object-cover` com ponto de foco, então **não
-distorce** em nenhum formato. A foto grande no **detalhe** do produto também usa **`object-cover`**
+distorce** em nenhum formato. **A prévia do editor obedece à mesma regra** (`product.cardRatio ??
+sf.productCardRatio` em [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) —
+antes era `aspect-square` fixo, mentindo sobre o 3:4): para isso o `CatalogPreviewProduct` ganhou
+`cardRatio`, lido de `card_ratio` em [configuracoes/page.tsx](src/app/dashboard/configuracoes/page.tsx)
+(**tolera a coluna ausente** → `null` = padrão da loja). O slot vazio "Adicione aqui" segue o padrão
+da loja, senão ficaria torto ao lado dos outros. A foto grande no **detalhe** do produto também usa **`object-cover`**
 (preenche o quadro 3:4 respeitando o ponto de foco, sem barras cinzas de letterbox); só o **zoom
 (lightbox)** mostra a foto inteira (`object-contain`), para quem quiser ver 100% sem corte.
 

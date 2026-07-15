@@ -10,6 +10,7 @@ import {
   bannerPhotoLimitForPlan,
   type HeroLayout,
   type HeroSplitPhotoSide,
+  type ProductCardRatio,
   type StorefrontSettings,
   normalizeInstagramUrl,
   normalizeSocialUrl,
@@ -92,6 +93,13 @@ export default function ConfiguracoesLojaPage() {
             p as { image?: string | null; images?: unknown }
           )[0] ?? null,
           category,
+          // Formato do card DESTE produto; null = segue o padrão da loja.
+          // A coluna pode não existir (migration não aplicada) → null.
+          cardRatio:
+            (p as { card_ratio?: unknown }).card_ratio === "1:1" ||
+            (p as { card_ratio?: unknown }).card_ratio === "3:4"
+              ? ((p as { card_ratio: ProductCardRatio }).card_ratio)
+              : null,
         };
       })
     );
