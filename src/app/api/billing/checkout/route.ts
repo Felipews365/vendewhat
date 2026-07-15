@@ -77,11 +77,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Servidor sem service role." }, { status: 503 });
   }
 
-  // O preço vem sempre do banco — nunca do cliente.
+  // O preço vem sempre do banco — nunca do cliente. `active` também aqui (não só no
+  // loadPlans da UI): sem o filtro, quem soubesse o id de um plano desativado pagaria
+  // por ele chamando a API direto.
   const { data: plan } = await admin
     .from("plans")
     .select("id, title, monthly")
     .eq("id", planId)
+    .eq("active", true)
     .maybeSingle();
   if (!plan) {
     return NextResponse.json({ ok: false, error: "Plano não encontrado." }, { status: 404 });
