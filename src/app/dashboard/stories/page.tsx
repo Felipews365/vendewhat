@@ -33,7 +33,14 @@ const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 /** Teto da foto do story. */
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-type PickerProduct = { id: string; name: string; price: number; image: string | null };
+type PickerProduct = {
+  id: string;
+  name: string;
+  price: number;
+  image: string | null;
+  /** Vídeo do cadastro; é o que faz o produto virar story sozinho. */
+  videoUrl: string | null;
+};
 
 export default function StoriesPage() {
   const router = useRouter();
@@ -84,6 +91,11 @@ export default function StoriesPage() {
               image: (p as { image?: string | null }).image,
               images: (p as { images?: unknown }).images,
             })[0] ?? null,
+          videoUrl: (() => {
+            // A coluna pode não existir (migration do vídeo não aplicada).
+            const v = (p as { video_url?: string | null }).video_url;
+            return typeof v === "string" && v.trim() ? v : null;
+          })(),
         }))
       );
       setLoading(false);
@@ -92,6 +104,11 @@ export default function StoriesPage() {
   }, [router]);
 
   const stories = sf.stories;
+  /** Quantos produtos virariam story sozinhos (mesma regra do `buildStoryList`). */
+  const usedProductIds = new Set(stories.map((s) => s.productId).filter(Boolean));
+  const autoCount = products.filter(
+    (p) => p.videoUrl && !usedProductIds.has(p.id)
+  ).length;
 
   const patchStory = (i: number, patch: Partial<StoreStory>) =>
     setSf((s) => ({
@@ -213,6 +230,32 @@ export default function StoriesPage() {
           </span>
           <span className="block text-xs text-slate-500 dark:text-slate-400">
             Desmarque para esconder a bolinha sem apagar os stories.
+          </span>
+        </span>
+      </label>
+
+      {/* Automáticos: o vídeo que o lojista já enviou no cadastro do produto
+          vira story sozinho — reenviar o mesmo arquivo aqui seria trabalho à toa. */}
+      <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <input
+          type="checkbox"
+          checked={sf.storiesAutoFromProducts}
+          onChange={(e) =>
+            setSf((s) => ({ ...s, storiesAutoFromProducts: e.target.checked }))
+          }
+          className="h-5 w-5 accent-landing-primary"
+        />
+        <span>
+          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+            Mostrar os produtos novos automaticamente
+          </span>
+          <span className="block text-xs text-slate-500 dark:text-slate-400">
+            Todo produto que você cadastrar <strong>com vídeo</strong> vira story
+            sozinho, do mais novo para o mais antigo — sem precisar enviar o vídeo de
+            novo aqui.{" "}
+            {autoCount > 0
+              ? `Hoje isso são ${autoCount} ${autoCount === 1 ? "produto" : "produtos"}.`
+              : "Nenhum produto seu tem vídeo no cadastro ainda."}
           </span>
         </span>
       </label>

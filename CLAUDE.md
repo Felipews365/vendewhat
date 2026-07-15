@@ -301,21 +301,46 @@ Orientações para o Claude Code trabalhar neste repositório.
     saem do catálogo na hora de renderizar (mudou o preço no cadastro, mudou no story) e "Ver produto"
     abre o **detalhe da própria loja** (`setSelectedProduct`), sem mandar o cliente para fora. Produto
     apagado / `productId` vazio = story **sem card** (a mídia continua tocando).
+  - **Produto novo com vídeo vira story SOZINHO (`storiesAutoFromProducts`, default `true`):**
+    `buildStoryList(stories, auto, products)` (em [StoreStories.tsx](src/components/storefront/StoreStories.tsx))
+    junta os stories criados na mão com os produtos que já têm `products.video_url` — o lojista grava o
+    vídeo **no cadastro do produto**, então obrigá-lo a reenviar o mesmo arquivo em `/dashboard/stories`
+    seria trabalho repetido. Os **manuais vêm primeiro** (curadoria); os automáticos seguem a ordem do
+    catálogo (`order by created_at desc` na [page.tsx](src/app/loja/[slug]/page.tsx) = mais novos
+    primeiro) e **produto que já é story manual não se repete** (`Set` de `productId`). O total respeita
+    `MAX_STORIES` (loja com 50 vídeos não vira player infinito). O `LojaClient` monta a lista num
+    `useMemo` (`storyList`) e é ela — não `storefront.stories` — que decide se a bolinha aparece.
   - **Capa da bolinha (derivada, sem campo novo):** foto do produto do 1º story → a própria mídia (se
     for foto) → a logo da loja. Vídeo não vira miniatura sem canvas, daí a cascata.
+  - **A bolinha é ARRASTÁVEL (o cliente gruda no lado que quiser):** pointer events no botão
+    (`onPointerDown/Move/Up` + `setPointerCapture`); passado `DRAG_THRESHOLD_PX` (6px) vira arrasto e a
+    bolinha segue o ponteiro, e no `pointerup` ela **gruda no lado mais próximo** (`clientX <
+    innerWidth/2`) na altura escolhida (clamp 8%–92%). Abaixo do limiar é **toque = abrir** — por isso
+    não há `onClick`. A posição (`{side, topPct}`) fica no **localStorage do cliente**
+    (`vw-story-bubble-pos`, restaurado num `useEffect` no mount p/ não quebrar hidratação), **não** no
+    `storefront`: quem tira a bolinha da frente é o visitante, e isso não deve valer para os outros.
+    O botão precisa de **`touch-action: none`**, senão o celular rola a página em vez de arrastar.
   - **Ritmo:** foto dura `STORY_IMAGE_MS` (5s, `setInterval` que alimenta a barrinha); **vídeo dura o
     que durar** (`onTimeUpdate` → progresso, `onEnded` → próximo). O último story fecha o player.
     Autoplay começa **mudo** (política dos browsers); o cliente liga o som no botão. Toque no **terço
     esquerdo** volta, no resto avança; Esc/setas no desktop; a rolagem do fundo trava enquanto aberto.
   - **Editor:** página dedicada [/dashboard/stories](src/app/dashboard/stories/page.tsx) — upload de
     vídeo (≤50MB) ou foto (≤8MB) para `product-images/{storeId}/stories/`, `<select>` do produto,
-    reordenar ▲▼, remover e "Salvar alterações" (grava o `storefront` inteiro). **Como se chega lá:**
-    item **"🎬 Stories da loja"** no menu "⚙️ Configurações da loja" do
-    [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (`openStoriesEditor`).
+    reordenar ▲▼, remover, os **dois interruptores** (mostrar na loja / produtos novos automáticos, com
+    a contagem real de quantos produtos têm vídeo) e "Salvar alterações" (grava o `storefront` inteiro).
+  - **Como se chega lá (dois caminhos):** o item **"🎬 Stories da loja"** no menu "⚙️ Configurações da
+    loja" **e** um **mostruário** no canvas do "Monte a sua loja" (faixa clicável abaixo dos cards
+    promo, `id="passo-stories"`, com as bolinhas das capas) — ambos em
+    [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (`openStoriesEditor`). O
+    mostruário aparece **SEMPRE**, inclusive sem story nenhum e com a bolinha escondida: ele existe para
+    o lojista **descobrir** o recurso; se só aparecesse quando já existisse story, ninguém acharia. ⚠️ As
+    capas saem do `catalogPreview`, que **não tem `videoUrl`** — então os stories **automáticos** não
+    rendem miniatura ali (só o rótulo os menciona); é cosmético e só na prévia do painel.
   - **Interruptor `storiesEnabled`** (default `true`): esconde a bolinha **sem apagar** os stories.
     Diferente dos cards promo, **lista vazia já esconde** a bolinha (não há modelo pronto para
     repovoar), então `storiesFromDb` devolve `[]` mesmo — o interruptor é só o "esconder sem perder".
-  - Teto `MAX_STORIES` (6). Story sem `mediaUrl` é descartado na leitura (a bolinha abriria vazia).
+  - Teto `MAX_STORIES` (6, vale para manuais + automáticos juntos). Story sem `mediaUrl` é descartado na
+    leitura (a bolinha abriria vazia).
 - **Menu de categorias no topo (`storefront.showCategoryNav`, default `true`):** barra horizontal
   (`CategoryNavBar` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)) abaixo do cabeçalho,
   reaproveita os `categoryStripItems` e o `categoryFilter`. Estilo **igual ao `sitederoupa`**: fundo

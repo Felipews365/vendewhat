@@ -12,7 +12,17 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { STORY_IMAGE_MS, formatBRL, type StoreStory } from "@/lib/storefront";
+import {
+  MAX_STORIES,
+  STORY_IMAGE_MS,
+  formatBRL,
+  type StoreStory,
+} from "@/lib/storefront";
+
+/** Onde o cliente largou a bolinha (por navegador dele, não por loja). */
+const BUBBLE_POS_KEY = "vw-story-bubble-pos";
+/** Arrasto só começa a valer depois disso — abaixo, é toque para abrir. */
+const DRAG_THRESHOLD_PX = 6;
 
 /** O mínimo que o player precisa de um produto (o catálogo tem muito mais). */
 export type StoryProduct = {
@@ -20,7 +30,36 @@ export type StoryProduct = {
   name: string;
   price: number;
   image: string | null;
+  /** Vídeo do cadastro (`products.video_url`); vira story sozinho, ver `buildStoryList`. */
+  videoUrl?: string | null;
 };
+
+/**
+ * Lista final de stories da loja = os criados na mão + (opcional) os produtos
+ * novos que já têm vídeo no cadastro.
+ *
+ * O lojista grava o vídeo ao cadastrar o produto; obrigá-lo a reenviar o mesmo
+ * arquivo em /dashboard/stories seria trabalho repetido, então `products` chega
+ * aqui **na ordem do catálogo** (mais novos primeiro) e vira story sozinho.
+ *
+ * Os manuais vêm primeiro (são curadoria do lojista) e um produto que já é
+ * story manual não se repete no automático. O total respeita `MAX_STORIES` —
+ * uma loja com 50 vídeos não vira um player infinito.
+ */
+export function buildStoryList(
+  stories: StoreStory[],
+  autoFromProducts: boolean,
+  products: StoryProduct[]
+): StoreStory[] {
+  if (!autoFromProducts) return stories.slice(0, MAX_STORIES);
+  const used = new Set(stories.map((s) => s.productId).filter(Boolean));
+  const auto: StoreStory[] = [];
+  for (const p of products) {
+    if (!p.videoUrl || used.has(p.id)) continue;
+    auto.push({ mediaUrl: p.videoUrl, mediaType: "video", productId: p.id });
+  }
+  return [...stories, ...auto].slice(0, MAX_STORIES);
+}
 
 export function StoreStories({
   stories,
@@ -39,6 +78,73 @@ export function StoreStories({
   onOpenProduct: (productId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  /**
+   * Posição da bolinha: lado + altura em % da tela. Fica no localStorage do
+   * CLIENTE (não no `storefront`) — é ele quem tira a bolinha da frente do que
+   * quer ver, e a escolha não deve valer para os outros visitantes.
+   */
+  const [side, setSide] = useState<"left" | "right">("left");
+  const [topPct, setTopPct] = useState(0.5);
+  /** Enquanto arrasta, a bolinha segue o ponteiro (coordenadas cruas). */
+  const [dragXY, setDragXY] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ x0: number; y0: number; moved: boolean } | null>(null);
+
+  // Restaura no mount (e não no primeiro render) para não quebrar a hidratação.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(BUBBLE_POS_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { side?: unknown; topPct?: unknown };
+      if (saved.side === "left" || saved.side === "right") setSide(saved.side);
+      if (typeof saved.topPct === "number" && saved.topPct >= 0 && saved.topPct <= 1) {
+        setTopPct(saved.topPct);
+      }
+    } catch {
+      // localStorage bloqueado / JSON velho: fica no padrão.
+    }
+  }, []);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    dragRef.current = { x0: e.clientX, y0: e.clientY, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    if (
+      !d.moved &&
+      Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < DRAG_THRESHOLD_PX
+    ) {
+      return; // ainda pode ser um toque para abrir
+    }
+    d.moved = true;
+    setDragXY({ x: e.clientX, y: e.clientY });
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    setDragXY(null);
+    if (!d) return;
+    if (!d.moved) {
+      setOpen(true); // foi um toque, não um arrasto
+      return;
+    }
+    // Gruda no lado mais próximo e guarda a altura (com folga nas bordas).
+    const nextSide = e.clientX < window.innerWidth / 2 ? "left" : "right";
+    const nextTop = Math.min(0.92, Math.max(0.08, e.clientY / window.innerHeight));
+    setSide(nextSide);
+    setTopPct(nextTop);
+    try {
+      window.localStorage.setItem(
+        BUBBLE_POS_KEY,
+        JSON.stringify({ side: nextSide, topPct: nextTop })
+      );
+    } catch {
+      // Sem localStorage a posição só não sobrevive ao reload.
+    }
+  };
 
   if (stories.length === 0) return null;
 
@@ -57,10 +163,31 @@ export function StoreStories({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        aria-label={`Ver stories de ${storeName}`}
-        className="fixed left-3 top-1/2 z-40 -translate-y-1/2 rounded-full p-[3px] shadow-lg outline-none transition-transform hover:scale-105 focus:outline-none [-webkit-tap-highlight-color:transparent]"
-        style={{ backgroundImage: `linear-gradient(135deg, ${accent}, #f472b6)` }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => {
+          dragRef.current = null;
+          setDragXY(null);
+        }}
+        aria-label={`Ver stories de ${storeName} (arraste para mudar de lado)`}
+        title="Arraste para mudar de lado"
+        className={`fixed z-40 rounded-full p-[3px] shadow-lg outline-none focus:outline-none [-webkit-tap-highlight-color:transparent] ${
+          dragXY ? "cursor-grabbing" : "cursor-grab transition-transform hover:scale-105"
+        }`}
+        style={{
+          backgroundImage: `linear-gradient(135deg, ${accent}, #f472b6)`,
+          // Arrastando: segue o ponteiro. Parada: gruda no lado escolhido.
+          ...(dragXY
+            ? { left: dragXY.x, top: dragXY.y, transform: "translate(-50%, -50%)" }
+            : {
+                top: `${topPct * 100}%`,
+                transform: "translateY(-50%)",
+                ...(side === "left" ? { left: 12 } : { right: 12 }),
+              }),
+          // Sem isso o navegador rola a página em vez de deixar arrastar.
+          touchAction: "none",
+        }}
       >
         <span className="block rounded-full bg-white p-[2px]">
           {cover ? (

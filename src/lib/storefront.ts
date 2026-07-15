@@ -502,6 +502,14 @@ export type StorefrontSettings = {
    * interruptor serve para esconder sem perder os stories já gravados.
    */
   storiesEnabled: boolean;
+  /**
+   * Vira story sozinho todo produto novo que tem vídeo no cadastro
+   * (`products.video_url`) — o lojista já grava o vídeo ao cadastrar, então não
+   * precisa reenviar nada aqui. Os automáticos entram **depois** dos stories
+   * criados na mão (que são curadoria), do mais novo para o mais antigo, e
+   * produto que já é story manual não se repete. Ver `buildStoryList`.
+   */
+  storiesAutoFromProducts: boolean;
   /** Mostra a barra de menu de categorias no topo (abaixo do cabeçalho). */
   showCategoryNav: boolean;
   /** Formato da foto dos cards de produto na loja: "1:1" (quadrado) ou "3:4" (retrato). */
@@ -735,6 +743,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   promoCardsEnabled: true,
   stories: [],
   storiesEnabled: true,
+  storiesAutoFromProducts: true,
   showCategoryNav: true,
   productCardRatio: "3:4",
   flashSaleEndsAt: "",
@@ -1187,6 +1196,10 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     ),
     stories: storiesFromDb(o.stories),
     storiesEnabled: boolFromDb(o.storiesEnabled, DEFAULT_STOREFRONT.storiesEnabled),
+    storiesAutoFromProducts: boolFromDb(
+      o.storiesAutoFromProducts,
+      DEFAULT_STOREFRONT.storiesAutoFromProducts
+    ),
     showCategoryNav: boolFromDb(o.showCategoryNav, DEFAULT_STOREFRONT.showCategoryNav),
     productCardRatio: productCardRatioFromDb(o.productCardRatio),
     flashSaleEndsAt: isoDateFromDb(o.flashSaleEndsAt),
@@ -1316,6 +1329,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     promoCardsEnabled: s.promoCardsEnabled,
     stories: storiesFromDb(s.stories),
     storiesEnabled: s.storiesEnabled,
+    storiesAutoFromProducts: s.storiesAutoFromProducts,
     showCategoryNav: s.showCategoryNav,
     productCardRatio: productCardRatioFromDb(s.productCardRatio),
     flashSaleEndsAt: isoDateFromDb(s.flashSaleEndsAt),

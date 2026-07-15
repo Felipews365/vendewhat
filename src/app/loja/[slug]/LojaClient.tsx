@@ -22,7 +22,7 @@ import {
 } from "@/lib/storefront";
 import { AnnouncementBar, AnnouncementText } from "@/components/storefront/AnnouncementBar";
 import { TabAttention } from "@/components/storefront/TabAttention";
-import { StoreStories } from "@/components/storefront/StoreStories";
+import { StoreStories, buildStoryList } from "@/components/storefront/StoreStories";
 import { discountPercent } from "@/lib/productCardMeta";
 import {
   HeroTemplateSlide,
@@ -2285,6 +2285,21 @@ export function LojaClient({
       variantStock: [],
     }));
   }, [rawProducts, storefront.stockControlEnabled]);
+  /**
+   * Stories = os criados na mão + os produtos novos que já têm vídeo (quando a
+   * loja liga `storiesAutoFromProducts`). `products` já vem do mais novo para o
+   * mais antigo (order by created_at desc na página), que é a ordem que os
+   * automáticos devem seguir.
+   */
+  const storyList = useMemo(
+    () =>
+      buildStoryList(
+        storefront.stories,
+        storefront.storiesAutoFromProducts,
+        products
+      ),
+    [storefront.stories, storefront.storiesAutoFromProducts, products]
+  );
   const [cart, setCart] = useState<Record<string, number>>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -3606,9 +3621,9 @@ export function LojaClient({
       </nav>
 
       {/* Stories da loja — bolinha flutuante + player (vídeo/foto + produto) */}
-      {storefront.storiesEnabled && storefront.stories.length > 0 && (
+      {storefront.storiesEnabled && storyList.length > 0 && (
         <StoreStories
-          stories={storefront.stories}
+          stories={storyList}
           products={products}
           storeName={store.name}
           storeLogo={store.logo}

@@ -1118,11 +1118,17 @@ export function StoreVisualEditor({
                   Stories da loja
                 </span>
                 <span className="block text-[10px] leading-snug text-slate-500 sm:text-[11px]">
-                  {sf.stories.length === 0
-                    ? "Grave um vídeo do produto — ele vira uma bolinha na sua loja, com o botão “Ver produto”."
-                    : !sf.storiesEnabled
-                      ? `${sf.stories.length} ${sf.stories.length === 1 ? "story" : "stories"} — escondidos na loja no momento.`
-                      : `${sf.stories.length} ${sf.stories.length === 1 ? "story passando" : "stories passando"} numa bolinha na lateral da loja.`}
+                  {!sf.storiesEnabled
+                    ? "Escondidos na loja no momento."
+                    : sf.stories.length === 0
+                      ? sf.storiesAutoFromProducts
+                        ? "Seus produtos com vídeo já aparecem numa bolinha na loja, com o botão “Ver produto”."
+                        : "Grave um vídeo do produto — ele vira uma bolinha na sua loja, com o botão “Ver produto”."
+                      : `${sf.stories.length} ${sf.stories.length === 1 ? "story" : "stories"}${
+                          sf.storiesAutoFromProducts
+                            ? " + os produtos novos com vídeo"
+                            : ""
+                        }, numa bolinha na lateral da loja.`}
                 </span>
               </span>
               <span className="shrink-0 text-[10px] font-semibold text-landing-primary sm:text-[11px]">
