@@ -9,11 +9,13 @@ import {
   HERO_RECOMMENDED_HEIGHT,
   HERO_RECOMMENDED_WIDTH,
   heroImageProportionWarning,
+  announcementMinOrder,
   type HeroLayout,
   type HeroSplitPhotoSide,
   type StorefrontCategoryItem,
   type StorefrontSettings,
 } from "@/lib/storefront";
+import { AnnouncementBar } from "@/components/storefront/AnnouncementBar";
 import { BlockRenderer } from "@/components/storefront/blocks";
 import { createBlock } from "@/components/storefront/blocks/registry";
 import {
@@ -544,6 +546,13 @@ export function StoreVisualEditor({
     sf.heroSubtitle.trim() ||
     "Texto informativo para seus clientes (curto): frete, promoções…";
 
+  // Avisos da barra do topo, montados igual à loja pública: o pedido mínimo
+  // entra automático na frente (ver `announcementMinOrder`) + os do lojista.
+  const announcementPreviewItems = useMemo(() => {
+    const min = announcementMinOrder(sf);
+    return min ? [min, ...sf.announcements] : sf.announcements;
+  }, [sf]);
+
   return (
     <div className="space-y-4">
       {/* Barra estilo “montador” */}
@@ -648,8 +657,38 @@ export function StoreVisualEditor({
 
       {/* Canvas da vitrine — sem overflow-hidden no pai para não recortar os botões + */}
       <div className="rounded-2xl border-2 border-slate-200 bg-[#f5f5f5] shadow-inner">
+        {/* Barra de avisos: é o 1º elemento da loja pública, então é o 1º do canvas.
+            Usa o MESMO componente da loja (rola de verdade, com o pedido mínimo na
+            frente) — o lojista vê aqui exatamente o que o cliente vê. */}
+        <div className="relative" id="passo-avisos">
+          <button
+            type="button"
+            onClick={() => setPanel("avisos")}
+            className="block w-full overflow-hidden rounded-t-2xl text-left ring-inset hover:ring-2 hover:ring-landing-primary/50 transition-shadow"
+            title="Editar barra de avisos"
+          >
+            {sf.announcementBarEnabled && announcementPreviewItems.length > 0 ? (
+              <AnnouncementBar
+                items={announcementPreviewItems}
+                bg={sf.announcementBarBg}
+              />
+            ) : (
+              // Desligada/vazia continua clicável: é daqui que ele liga de volta.
+              <span className="block w-full bg-slate-100 py-2 text-center text-[11px] text-slate-400">
+                Barra de avisos do topo desligada — toque para configurar
+              </span>
+            )}
+          </button>
+          <div className="absolute top-1/2 -translate-y-1/2 right-2">
+            <PlusFab
+              label="Editar barra de avisos"
+              onClick={() => setPanel("avisos")}
+            />
+          </div>
+        </div>
+
         <div
-          className="border-b border-slate-100 px-3 py-3 sm:px-4 rounded-t-2xl"
+          className="border-b border-slate-100 px-3 py-3 sm:px-4"
           style={{ backgroundColor: sf.headerBackground }}
         >
           <div className="flex flex-col sm:flex-row sm:items-start gap-3">
