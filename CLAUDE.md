@@ -49,7 +49,9 @@ Orientações para o Claude Code trabalhar neste repositório.
   (`/dashboard/produtos/novo` e `/dashboard/produtos/[id]`) — o antigo `isImmersiveRoute`/`pb-24` foi
   removido junto com o `BottomNav`. A barra inferior da **loja pública** (LojaClient, Início ·
   WhatsApp · Carrinho · Menu) é outra coisa e **continua** — Carrinho/WhatsApp visíveis ajudam a
-  vender.
+  vender. **Item "Planos"** (`/dashboard/planos`, ícone `planos` = foguete em
+  [DashboardNavIcons.tsx](src/components/icons/DashboardNavIcons.tsx)) fica entre Pagamentos e Conta
+  no `DASH_NAV`, dando acesso direto à página de planos/assinatura.
   - **Sidebar recolhível (`collapsed`):** a lateral encolhe de `w-60` (ícone + texto) para `w-[76px]`
     (só ícones, marca vira "VW", rodapé com tema/sair como ícones) por um **botão flutuante redondo
     centralizado na borda direita** (`‹`/`›`, `ChevronIcon`). A preferência **persiste** em
@@ -863,6 +865,18 @@ de pagamento/vencimento é **manual**.
   e escreve via service role).
 - **Planos editáveis:** os preços/recursos saíram do estático `plans.ts` para a tabela `plans`.
   A landing (`/`) e `/dashboard/planos` leem do banco via `loadPlans()`; `plans.ts` vira fallback.
+- **Plano atual + upgrade (na página do lojista):** [/dashboard/planos](src/app/dashboard/planos/page.tsx)
+  mostra qual é o plano ativo da loja e destaca a opção de upgrade. O server component carrega
+  `loadPlans()` **e** `loadCurrentSubscription()` ([plans.server.ts](src/lib/plans.server.ts)) — esta
+  lê a assinatura da loja do usuário logado (via RLS "dono lê a própria assinatura", tabela
+  `subscriptions`; devolve `{ planId, status, billingCycle, expiresAt }` ou `null`). Em
+  [PlansView.tsx](src/app/dashboard/planos/PlansView.tsx) uma **faixa "Seu plano atual"** no topo traz
+  nome do plano, chip de status (Ativo/Em teste/Pagamento pendente/…), valor/mês, ciclo e data de
+  renovação + botão **"Fazer upgrade"** (âncora `#planos`); sem assinatura, cai num aviso "sem plano
+  ativo". Cada card marca o plano atual (selo "✓ Plano atual", borda destacada, botão desabilitado) e
+  os demais trocam o CTA para **"Fazer upgrade"** (mais caro que o atual) ou **"Mudar para este
+  plano"** (mais barato); sem plano atual mantém "Assinar". `CurrentSubscription` é importado com
+  `import type` para o módulo `server-only` não vazar ao bundle do cliente.
 
 ## Atendimento por IA no WhatsApp (Evolution API)
 

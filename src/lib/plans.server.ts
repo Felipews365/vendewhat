@@ -63,3 +63,53 @@ export async function loadPlans(): Promise<PlanDefinition[]> {
     return PLAN_CATALOG;
   }
 }
+
+export type CurrentSubscription = {
+  planId: string | null;
+  status: string | null;
+  billingCycle: string | null;
+  expiresAt: string | null;
+};
+
+/**
+ * Lê a assinatura da loja do usuário logado (RLS: o dono lê a própria).
+ * Devolve `null` se não houver sessão, loja ou assinatura.
+ */
+export async function loadCurrentSubscription(): Promise<CurrentSubscription | null> {
+  try {
+    const supabase = await createServerSupabase();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: store } = await supabase
+      .from("stores")
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!store) return null;
+
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("plan_id, status, billing_cycle, expires_at")
+      .eq("store_id", (store as { id: string }).id)
+      .maybeSingle();
+    if (!sub) return null;
+
+    const s = sub as {
+      plan_id: string | null;
+      status: string | null;
+      billing_cycle: string | null;
+      expires_at: string | null;
+    };
+    return {
+      planId: s.plan_id,
+      status: s.status,
+      billingCycle: s.billing_cycle,
+      expiresAt: s.expires_at,
+    };
+  } catch {
+    return null;
+  }
+}

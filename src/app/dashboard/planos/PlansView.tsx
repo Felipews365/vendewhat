@@ -7,6 +7,34 @@ import {
   monthlyEquivalentAnnual,
   type PlanDefinition,
 } from "@/lib/plans";
+import type { CurrentSubscription } from "@/lib/plans.server";
+
+/** Rótulo amigável do status da assinatura. */
+function statusLabel(status: string | null): { text: string; tone: "ok" | "warn" | "off" } {
+  switch (status) {
+    case "active":
+      return { text: "Ativo", tone: "ok" };
+    case "vitalicio":
+      return { text: "Vitalício", tone: "ok" };
+    case "trial":
+      return { text: "Em teste", tone: "warn" };
+    case "past_due":
+      return { text: "Pagamento pendente", tone: "warn" };
+    case "expired":
+      return { text: "Expirado", tone: "off" };
+    case "canceled":
+      return { text: "Cancelado", tone: "off" };
+    default:
+      return { text: status ?? "—", tone: "warn" };
+  }
+}
+
+function formatDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+}
 
 function PlanIcon({ kind, className }: { kind: PlanDefinition["icon"]; className: string }) {
   if (kind === "bolt") {
@@ -68,13 +96,27 @@ function uniqueFeaturesOrdered(plans: PlanDefinition[]) {
   return out;
 }
 
-export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
+export default function PlansView({
+  plans,
+  current,
+}: {
+  plans: PlanDefinition[];
+  current: CurrentSubscription | null;
+}) {
   const [annual, setAnnual] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [subscribing, setSubscribing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const matrixRows = useMemo(() => uniqueFeaturesOrdered(plans), [plans]);
+
+  const currentPlan = useMemo(
+    () => (current?.planId ? plans.find((p) => p.id === current.planId) ?? null : null),
+    [plans, current],
+  );
+  const currentMonthly = currentPlan?.monthly ?? null;
+  const subStatus = current ? statusLabel(current.status) : null;
+  const renewLabel = formatDate(current?.expiresAt ?? null);
 
   async function handleSubscribe(planId: string) {
     setError(null);
@@ -126,7 +168,60 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
         Escolha o plano ideal. Todos incluem período para testar — confira na página inicial.
       </p>
 
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+      {/* Plano atual da loja */}
+      <div className="mt-6 rounded-2xl border border-violet-200 bg-violet-50/70 p-5 dark:border-violet-900/60 dark:bg-violet-950/30">
+        {currentPlan ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">
+                Seu plano atual
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                  {currentPlan.title}
+                </span>
+                {subStatus && (
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                      subStatus.tone === "ok"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                        : subStatus.tone === "warn"
+                          ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                          : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
+                    }`}
+                  >
+                    {subStatus.text}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                R$ {formatBRL(currentPlan.monthly)}/mês
+                {current?.billingCycle === "annual" && " (ciclo anual)"}
+                {renewLabel && ` · renova em ${renewLabel}`}
+              </p>
+            </div>
+            <a
+              href="#planos"
+              className="shrink-0 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700"
+            >
+              Fazer upgrade
+            </a>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">
+                Plano atual
+              </p>
+              <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+                Você ainda não tem um plano ativo. Escolha um abaixo para começar.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div id="planos" className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <span
           className={`text-sm font-semibold ${!annual ? "text-slate-900 dark:text-slate-100" : "text-slate-400 dark:text-slate-500"}`}
         >
@@ -162,15 +257,34 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
         {plans.map((plan) => {
           const st = accentStyles[plan.accent];
           const price = annual ? monthlyEquivalentAnnual(plan.monthly) : plan.monthly;
+          const isCurrent = currentPlan?.id === plan.id;
+          const isUpgrade = currentMonthly !== null && plan.monthly > currentMonthly;
+          const ctaLabel = isCurrent
+            ? "Plano atual"
+            : subscribing === plan.id
+              ? "Redirecionando…"
+              : currentMonthly === null
+                ? "Assinar"
+                : isUpgrade
+                  ? "Fazer upgrade"
+                  : "Mudar para este plano";
           return (
             <div
               key={plan.id}
-              className={`relative flex flex-col rounded-2xl border bg-white dark:bg-slate-900 p-6 shadow-md ${st.border}`}
+              className={`relative flex flex-col rounded-2xl border bg-white dark:bg-slate-900 p-6 shadow-md ${
+                isCurrent ? "border-violet-400 ring-2 ring-violet-300/60" : st.border
+              }`}
             >
-              {plan.highlight && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-cyan-500 px-4 py-1 text-xs font-bold uppercase tracking-wide text-white shadow">
-                  Mais escolhido
+              {isCurrent ? (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-4 py-1 text-xs font-bold uppercase tracking-wide text-white shadow">
+                  ✓ Plano atual
                 </div>
+              ) : (
+                plan.highlight && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-cyan-500 px-4 py-1 text-xs font-bold uppercase tracking-wide text-white shadow">
+                    Mais escolhido
+                  </div>
+                )
               )}
               <div
                 className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${st.iconWrap}`}
@@ -207,10 +321,14 @@ export default function PlansView({ plans }: { plans: PlanDefinition[] }) {
               <button
                 type="button"
                 onClick={() => handleSubscribe(plan.id)}
-                disabled={subscribing !== null}
-                className={`block w-full rounded-xl py-3.5 text-center text-sm font-bold transition disabled:opacity-60 disabled:cursor-not-allowed ${st.btn}`}
+                disabled={subscribing !== null || isCurrent}
+                className={`block w-full rounded-xl py-3.5 text-center text-sm font-bold transition disabled:cursor-not-allowed ${
+                  isCurrent
+                    ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                    : `disabled:opacity-60 ${st.btn}`
+                }`}
               >
-                {subscribing === plan.id ? "Redirecionando…" : "Assinar"}
+                {ctaLabel}
               </button>
             </div>
           );

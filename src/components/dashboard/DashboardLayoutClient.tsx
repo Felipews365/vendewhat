@@ -39,6 +39,7 @@ const DASH_NAV: readonly {
     label: "Pagamentos da loja",
     icon: "pagamentos",
   },
+  { href: "/dashboard/planos", short: "Planos", label: "Planos e assinatura", icon: "planos" },
   { href: "/dashboard/conta", short: "Conta", label: "Conta", icon: "conta" },
 ];
 
