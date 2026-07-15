@@ -575,6 +575,27 @@ export function StoreVisualEditor({
     logoPreviewObjectUrl ||
     (!logoRemoved && storeLogoUrl ? storeLogoUrl : null);
 
+  /**
+   * Capas das bolinhas de story no mostruário — mesma cascata da loja
+   * (`StoreStories`): foto do produto anunciado → a própria mídia (se for foto)
+   * → a logo. Vídeo não vira miniatura sem canvas, daí a cascata.
+   */
+  const storyCovers = useMemo(
+    () =>
+      sf.stories.slice(0, 4).map((s) => {
+        const prod = s.productId
+          ? catalogPreview.find((p) => p.id === s.productId)
+          : null;
+        return (
+          prod?.imageUrl ||
+          (s.mediaType === "image" ? s.mediaUrl : null) ||
+          displayLogo ||
+          null
+        );
+      }),
+    [sf.stories, catalogPreview, displayLogo]
+  );
+
   const announcementText =
     sf.heroSubtitle.trim() ||
     "Texto informativo para seus clientes (curto): frete, promoções…";
@@ -1047,6 +1068,68 @@ export function StoreVisualEditor({
               </div>
             </div>
           )}
+
+          {/* Stories — MOSTRUÁRIO. Na loja é uma bolinha flutuante na lateral,
+              não uma faixa; aqui vira uma linha e aparece SEMPRE (inclusive sem
+              story nenhum e com a bolinha escondida), porque o objetivo é o
+              lojista DESCOBRIR o recurso e chegar na aba própria — se só
+              aparecesse quando já existisse story, ninguém acharia. */}
+          <div className="relative mt-3" id="passo-stories">
+            <button
+              type="button"
+              onClick={openStoriesEditor}
+              title="Gerenciar os stories da loja"
+              className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5 text-left shadow-sm transition hover:ring-2 hover:ring-landing-primary/50"
+            >
+              {storyCovers.length > 0 ? (
+                <span className="flex shrink-0 -space-x-2">
+                  {storyCovers.map((cover, i) => (
+                    <span
+                      key={i}
+                      className="rounded-full p-[2px]"
+                      style={{
+                        backgroundImage: `linear-gradient(135deg, ${sf.themePrimary}, #f472b6)`,
+                      }}
+                    >
+                      <span className="block rounded-full bg-white p-[1px]">
+                        {cover ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={cover}
+                            alt=""
+                            className="h-9 w-9 rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm">
+                            🎬
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-base">
+                  🎬
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] font-semibold text-slate-800 sm:text-xs">
+                  Stories da loja
+                </span>
+                <span className="block text-[10px] leading-snug text-slate-500 sm:text-[11px]">
+                  {sf.stories.length === 0
+                    ? "Grave um vídeo do produto — ele vira uma bolinha na sua loja, com o botão “Ver produto”."
+                    : !sf.storiesEnabled
+                      ? `${sf.stories.length} ${sf.stories.length === 1 ? "story" : "stories"} — escondidos na loja no momento.`
+                      : `${sf.stories.length} ${sf.stories.length === 1 ? "story passando" : "stories passando"} numa bolinha na lateral da loja.`}
+                </span>
+              </span>
+              <span className="shrink-0 text-[10px] font-semibold text-landing-primary sm:text-[11px]">
+                {sf.stories.length === 0 ? "Criar →" : "Editar →"}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Categorias — prévia estilo vitrine; na loja pública só aparece o que existir nos produtos */}
