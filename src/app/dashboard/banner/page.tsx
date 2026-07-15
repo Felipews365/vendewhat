@@ -1408,12 +1408,28 @@ export default function BannerEditPage() {
 
       {/* Cards promocionais abaixo do banner */}
       <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-          Cards abaixo do banner
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            Cards abaixo do banner
+          </p>
+          {/* É AQUI que a loja diz "não quero" — apagar os cards não resolve,
+              a lista vazia renasce com os modelos (ver `promoCardsFromDb`). */}
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={sf.promoCardsEnabled}
+              onChange={(e) =>
+                setSf((s) => ({ ...s, promoCardsEnabled: e.target.checked }))
+              }
+              className="h-4 w-4"
+            />
+            Mostrar na loja
+          </label>
+        </div>
         <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-          Faixa de cartões coloridos. Toque num modelo pronto para adicionar (
-          {cards.length}/{MAX_PROMO_CARDS}).
+          {sf.promoCardsEnabled
+            ? `Faixa de cartões coloridos. Toque num modelo pronto para adicionar (${cards.length}/${MAX_PROMO_CARDS}).`
+            : "A faixa está escondida na loja. Marque “Mostrar na loja” para exibi-la."}
         </p>
 
         <div className="mb-4 flex flex-wrap gap-2">

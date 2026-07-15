@@ -949,6 +949,53 @@ export function StoreVisualEditor({
               </span>
             )}
           </div>
+
+          {/* Cards promo — faixa logo abaixo do banner, como na loja. Editados na
+              página do banner, então o clique leva para lá (igual ao banner). */}
+          {sf.promoCardsEnabled && sf.promoCards.length > 0 && (
+            <div className="relative mt-3" id="passo-promo-cards">
+              <button
+                type="button"
+                onClick={openBannerEditor}
+                title="Editar os cards abaixo do banner"
+                className="grid w-full grid-cols-3 gap-2 rounded-xl p-1 text-left ring-offset-2 transition hover:ring-2 hover:ring-landing-primary/50"
+              >
+                {sf.promoCards.map((c, i) => (
+                  <span
+                    key={i}
+                    className="flex min-h-[64px] flex-col justify-end overflow-hidden rounded-xl p-2 shadow-sm sm:min-h-[80px] sm:p-3"
+                    style={{
+                      // Mesma regra da loja: com tema escolhido o card segue as
+                      // cores da loja; sem tema, as cores do próprio card.
+                      backgroundImage: sf.themeId
+                        ? `linear-gradient(135deg, ${sf.themeSecondary}, ${sf.themePrimary})`
+                        : `linear-gradient(135deg, ${c.from}, ${c.to})`,
+                    }}
+                  >
+                    {c.eyebrow && (
+                      <span className="truncate text-[0.5rem] font-bold uppercase tracking-widest text-white/75 sm:text-[0.6rem]">
+                        {c.eyebrow}
+                      </span>
+                    )}
+                    <span className="truncate text-[11px] font-bold leading-snug text-white sm:text-sm">
+                      {c.title}
+                    </span>
+                    {c.subtitle && (
+                      <span className="truncate text-[9px] text-white/85 sm:text-[11px]">
+                        {c.subtitle}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </button>
+              <div className="absolute -top-1 right-0">
+                <PlusFab
+                  label="Editar os cards abaixo do banner"
+                  onClick={openBannerEditor}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Categorias — prévia estilo vitrine; na loja pública só aparece o que existir nos produtos */}

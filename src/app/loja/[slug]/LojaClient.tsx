@@ -3138,7 +3138,7 @@ export function LojaClient({
 
       {/* Cards promocionais coloridos — FORA do banner, faixa própria abaixo, na
           mesma largura. 3 colunas em TODAS as telas (igual à referência). */}
-      {storefront.promoCards.length > 0 && (
+      {storefront.promoCardsEnabled && storefront.promoCards.length > 0 && (
         <section className="max-w-[1260px] mx-auto w-full px-4 mt-4">
           <div className="grid grid-cols-3 gap-2 sm:gap-4">
             {storefront.promoCards.map((c, i) => (

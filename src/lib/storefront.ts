@@ -359,8 +359,22 @@ export const PROMO_CARD_COLORS = PROMO_CARD_PRESETS.map((p) => ({
   to: p.card.to,
 }));
 
+/** Os 3 modelos que toda loja recebe pronta (`DEFAULT_PROMO_CARDS`). */
+export const DEFAULT_PROMO_CARDS: PromoCard[] = PROMO_CARD_PRESETS.slice(0, 3).map(
+  (p) => ({ ...p.card })
+);
+
+/**
+ * Lê os cards promo do JSONB. **Loja sem card nenhum nasce com os 3 modelos**
+ * (Imperdível/Destaque/Oferta) — o lojista leigo vê a faixa pronta e só troca os
+ * textos, em vez de encarar um espaço vazio e ter que imaginar o que cabe ali.
+ *
+ * Por isso "não quero cards" **não** é lista vazia (ela seria repovoada na
+ * próxima leitura): é o interruptor `promoCardsEnabled`. Lista vazia = "ainda
+ * não configurei" = mostra os modelos.
+ */
 function promoCardsFromDb(v: unknown): PromoCard[] {
-  if (!Array.isArray(v)) return [];
+  if (!Array.isArray(v)) return DEFAULT_PROMO_CARDS.map((c) => ({ ...c }));
   const out: PromoCard[] = [];
   for (const raw of v) {
     if (!raw || typeof raw !== "object") continue;
@@ -381,7 +395,7 @@ function promoCardsFromDb(v: unknown): PromoCard[] {
     out.push(card);
     if (out.length >= MAX_PROMO_CARDS) break;
   }
-  return out;
+  return out.length > 0 ? out : DEFAULT_PROMO_CARDS.map((c) => ({ ...c }));
 }
 
 /** Bolinha “Categorias” abaixo do banner (estilo stories). */
@@ -422,6 +436,12 @@ export type StorefrontSettings = {
   heroCouponCode: string;
   /** Cards promocionais coloridos exibidos abaixo do banner (faixa de 3). */
   promoCards: PromoCard[];
+  /**
+   * Mostrar a faixa de cards abaixo do banner. É assim que a loja diz "não
+   * quero" — esvaziar a lista não serve, ela renasce com os modelos (ver
+   * `promoCardsFromDb`).
+   */
+  promoCardsEnabled: boolean;
   /** Mostra a barra de menu de categorias no topo (abaixo do cabeçalho). */
   showCategoryNav: boolean;
   /** Formato da foto dos cards de produto na loja: "1:1" (quadrado) ou "3:4" (retrato). */
@@ -651,7 +671,8 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroLayout: "overlay",
   heroSplitPhotoSide: "right",
   heroCouponCode: "",
-  promoCards: PROMO_CARD_PRESETS.slice(0, 3).map((p) => ({ ...p.card })),
+  promoCards: DEFAULT_PROMO_CARDS.map((c) => ({ ...c })),
+  promoCardsEnabled: true,
   showCategoryNav: true,
   productCardRatio: "3:4",
   flashSaleEndsAt: "",
@@ -1098,6 +1119,10 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     heroSplitPhotoSide: heroSplitPhotoSideFromDb(o.heroSplitPhotoSide),
     heroCouponCode: strOrEmpty(o.heroCouponCode),
     promoCards: promoCardsFromDb(o.promoCards),
+    promoCardsEnabled: boolFromDb(
+      o.promoCardsEnabled,
+      DEFAULT_STOREFRONT.promoCardsEnabled
+    ),
     showCategoryNav: boolFromDb(o.showCategoryNav, DEFAULT_STOREFRONT.showCategoryNav),
     productCardRatio: productCardRatioFromDb(o.productCardRatio),
     flashSaleEndsAt: isoDateFromDb(o.flashSaleEndsAt),
@@ -1224,6 +1249,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     heroSplitPhotoSide: heroSplitPhotoSideFromDb(s.heroSplitPhotoSide),
     heroCouponCode: s.heroCouponCode.trim(),
     promoCards: promoCardsFromDb(s.promoCards),
+    promoCardsEnabled: s.promoCardsEnabled,
     showCategoryNav: s.showCategoryNav,
     productCardRatio: productCardRatioFromDb(s.productCardRatio),
     flashSaleEndsAt: isoDateFromDb(s.flashSaleEndsAt),

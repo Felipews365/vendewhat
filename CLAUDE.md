@@ -248,13 +248,27 @@ Orientações para o Claude Code trabalhar neste repositório.
       banner — `replaceIndex` na sessão de recorte), Foto 2/3 (strips/duo), gradiente/cor do
       botão/altura/lado, textos por banner. `applyTemplate` define os padrões ao trocar de estilo
       (strips/duo/gradient/magazine nascem com foto à direita).
-- **Cards promocionais abaixo do banner (`storefront.promoCards: PromoCard[]`):** faixa de até
+- **Cards promocionais abaixo do banner (`storefront.promoCards: PromoCard[]` +
+  `promoCardsEnabled`):** faixa de até
   `MAX_PROMO_CARDS` (6) cartões coloridos (gradiente `from`→`to`) com etiqueta/título/frase/link.
+  - **Vêm prontos (`DEFAULT_PROMO_CARDS` = os 3 primeiros `PROMO_CARD_PRESETS`):** loja **sem card
+    nenhum** — campo **ausente OU lista vazia** — nasce com Imperdível/Destaque/Oferta
+    (`promoCardsFromDb`), para o lojista leigo achar a faixa pronta e só trocar os textos, em vez de
+    encarar um vazio. **Como "vazio = mostra os modelos", esvaziar a lista NÃO esconde a faixa** (ela
+    renasce na próxima leitura): quem não quer usa o **interruptor `promoCardsEnabled`** (default
+    `true`, checkbox "Mostrar na loja" no card "Cards abaixo do banner" da
+    [/dashboard/banner](src/app/dashboard/banner/page.tsx)) — a loja pública checa
+    `promoCardsEnabled && promoCards.length > 0`. Lojas que **já têm** cards salvos não são tocadas
+    (a de 1 card continua com 1; para chegar aos 3 é só clicar nos modelos prontos).
   Renderizados em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) logo **abaixo do banner**
   (grid `sm:grid-cols-3`); link usa `handleHeroCta`. Editados na página
   [/dashboard/banner](src/app/dashboard/banner/page.tsx) com **modelos prontos** (`PROMO_CARD_PRESETS`
   em [storefront.ts](src/lib/storefront.ts) — Imperdível/Destaque/Oferta/Frete/Novidade/Premium),
   seletor de cor (`PROMO_CARD_COLORS`), reordenar/remover. Sem migration (JSONB).
+  - **Na prévia do editor:** o [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
+    desenha a faixa **logo abaixo do banner** no canvas (mesma regra de cor da loja: com `themeId`,
+    gradiente do tema; sem tema, as cores do card). Como eles são editados na página do banner, o
+    clique no card ou no **+** leva para lá (`openBannerEditor`, igual ao banner).
 - **Menu de categorias no topo (`storefront.showCategoryNav`, default `true`):** barra horizontal
   (`CategoryNavBar` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)) abaixo do cabeçalho,
   reaproveita os `categoryStripItems` e o `categoryFilter`. Estilo **igual ao `sitederoupa`**: fundo
