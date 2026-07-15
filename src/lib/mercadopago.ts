@@ -1,27 +1,47 @@
 /**
  * Wrapper REST do Mercado Pago — usado só no servidor.
  *
- * Recebe o `accessToken` como argumento para servir tanto à SUA conta (cobrança
- * da mensalidade, via `MP_ACCESS_TOKEN`) quanto à conta de cada LOJISTA (gateway
- * da loja, token guardado em `store_payment_gateway`).
+ * Recebe o `accessToken` como argumento para servir tanto à SUA conta (créditos
+ * da IA e mensalidade) quanto à conta de cada LOJISTA (gateway da loja, token
+ * guardado em `store_payment_gateway`).
  *
  * Configurar no ambiente (só a sua conta):
- *   MP_ACCESS_TOKEN  -> Access Token da sua conta MP (use o `TEST-...` para testar)
+ *   MP_ACCESS_TOKEN               -> app de Checkout Pro (recarga de créditos)
+ *   MP_SUBSCRIPTION_ACCESS_TOKEN  -> app de Assinaturas (mensalidade/preapproval)
+ *
+ * São DOIS tokens porque o produto é escolha única por aplicação no MP: um app de
+ * Checkout Pro responde UNAUTHORIZED em /preapproval, e vice-versa. Use `TEST-...`
+ * para testar.
  */
 import "server-only";
 
 const API_BASE = "https://api.mercadopago.com";
 
-/** Token da SUA conta (mensalidade). Lança se ausente. */
+/** Token da SUA conta para Checkout Pro (créditos). Lança se ausente. */
 export function platformAccessToken(): string {
   const token = process.env.MP_ACCESS_TOKEN;
   if (!token) throw new Error("MP_ACCESS_TOKEN não configurada.");
   return token;
 }
 
-/** Indica se a sua conta MP está configurada (sem lançar). */
+/** Indica se a sua conta MP está configurada para Checkout Pro (sem lançar). */
 export function isMercadoPagoConfigured(): boolean {
   return Boolean(process.env.MP_ACCESS_TOKEN);
+}
+
+/** Token da SUA conta para assinaturas (preapproval). Lança se ausente. */
+export function subscriptionAccessToken(): string {
+  const token =
+    process.env.MP_SUBSCRIPTION_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN;
+  if (!token) throw new Error("MP_SUBSCRIPTION_ACCESS_TOKEN não configurada.");
+  return token;
+}
+
+/** Indica se a assinatura automática está configurada (sem lançar). */
+export function isSubscriptionConfigured(): boolean {
+  return Boolean(
+    process.env.MP_SUBSCRIPTION_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN
+  );
 }
 
 /** Um token de teste do MP começa com "TEST-". */

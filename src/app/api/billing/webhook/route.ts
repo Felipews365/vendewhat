@@ -3,8 +3,8 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import {
   getPayment,
   getPreapproval,
-  isMercadoPagoConfigured,
-  platformAccessToken,
+  isSubscriptionConfigured,
+  subscriptionAccessToken,
 } from "@/lib/mercadopago";
 
 export const runtime = "nodejs";
@@ -16,7 +16,7 @@ export const runtime = "nodejs";
  */
 export async function POST(req: Request) {
   // Responde 200 mesmo sem config para o MP não ficar reenviando indefinidamente.
-  if (!isMercadoPagoConfigured()) {
+  if (!isSubscriptionConfigured()) {
     return NextResponse.json({ ok: true });
   }
 
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   if (!dataId) return NextResponse.json({ ok: true });
 
   try {
-    const token = platformAccessToken();
+    const token = subscriptionAccessToken();
 
     if (type.includes("preapproval")) {
       const pre = await getPreapproval(token, dataId);

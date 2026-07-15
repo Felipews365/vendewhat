@@ -1552,8 +1552,28 @@ Duas integrações distintas, ambas via wrapper REST [src/lib/mercadopago.ts](sr
    "Assinar" em [PlansView.tsx](src/app/dashboard/planos/PlansView.tsx) chama
    `POST /api/billing/subscribe`, que cria o preapproval na **sua** conta MP e redireciona ao
    checkout. O `POST /api/billing/webhook` confirma os pagamentos, ativa a `subscription`, estende
-   `expires_at` (+1 mês) e grava em `payments` (`method='mercadopago'`). Usa `MP_ACCESS_TOKEN`.
-   O registro **manual** no admin continua existindo como fallback.
+   `expires_at` (+1 mês) e grava em `payments` (`method='mercadopago'`). Usa
+   **`MP_SUBSCRIPTION_ACCESS_TOKEN`** (`subscriptionAccessToken()`), que precisa vir de uma aplicação
+   MP do produto **Assinaturas** — o app de Checkout Pro dos créditos responde `UNAUTHORIZED` em
+   `/preapproval` (ver "Créditos da IA"), por isso são **dois tokens**. Sem a variável, o
+   `subscribe` devolve **503 "Mercado Pago não configurado no servidor."** e o botão "Fazer upgrade"
+   mostra isso em vermelho. Há **fallback para `MP_ACCESS_TOKEN`** (retrocompat, para quem já tinha
+   um app de Assinaturas ali). O registro **manual** no admin continua existindo como fallback.
+   - **Pagar SEM recorrência (avulso):** cada card de plano tem um 2º botão que chama
+     [/api/billing/checkout](src/app/api/billing/checkout/route.ts) — uma **preference de Checkout
+     Pro** na sua conta (**`MP_ACCESS_TOKEN`**, o mesmo dos créditos), então **funciona sem a
+     aplicação de Assinaturas** e aceita Pix/boleto/cartão. Mensal = 1 mês; anual = **12 meses à
+     vista** com os mesmos 16% (`PLAN_ANNUAL_DISCOUNT`). **Nada é gravado ao criar** o checkout:
+     quem paga o quê viaja no `external_reference` (**`storeId|planId|cycle`**), e o
+     [/api/billing/checkout/webhook](src/app/api/billing/checkout/webhook/route.ts) (rota **própria**,
+     pois o token é o de Checkout Pro, não o de Assinaturas) reconsulta o pagamento, grava em
+     `payments` e ativa a `subscription` estendendo `expires_at` em 1/12 meses. **Renovação
+     antecipada soma ao saldo** (se `expires_at` é futuro, conta a partir dele, não de hoje).
+     **Idempotência:** o índice único `payments.payment_id_external` — se o insert falhar, o webhook
+     desiste sem estender de novo. **Sem migration** (usa `payments`/`subscriptions` que já existem).
+   - **⚠️ Assimetria do "anual":** no **recorrente** o preapproval cobra **todo mês** o valor já com
+     16% off (sem fidelidade real — dá para cancelar no 2º mês e ter levado o desconto); no **avulso**
+     o anual cobra os 12 meses de uma vez. Consciente, mas vale rever se virar problema comercial.
 2. **Gateway da loja (clientes → lojista)** — cada lojista cola o **Access Token** dele em
    `/dashboard/pagamentos` (`POST /api/store/payment-gateway`, validado via `/users/me` e guardado
    em `store_payment_gateway`; o token **nunca** vai ao browser). Na loja pública, o botão "Pagar com
@@ -1580,8 +1600,11 @@ Duas integrações distintas, ambas via wrapper REST [src/lib/mercadopago.ts](sr
 - **Segurança:** access tokens só no servidor; `store_payment_gateway` não tem policy de select
   (só service role). Os webhooks **sempre reconsultam** o status na API do MP antes de confirmar e
   são idempotentes (checam `payment_id`/`payment_id_external`).
-- **Variáveis de ambiente extras** (`.env` local / Vercel):
-  - `MP_ACCESS_TOKEN` — Access Token da **sua** conta MP (use `TEST-...` para testar). Só servidor.
+- **Variáveis de ambiente extras** (`.env` local / Vercel — **não** vão no painel admin nem no banco):
+  - `MP_ACCESS_TOKEN` — Access Token da **sua** conta MP, app de **Checkout Pro** (recarga de
+    créditos da IA). Use `TEST-...` para testar. Só servidor.
+  - `MP_SUBSCRIPTION_ACCESS_TOKEN` — Access Token da **sua** conta MP, app de **Assinaturas**
+    (mensalidade/preapproval). Só servidor; cai em `MP_ACCESS_TOKEN` se ausente.
   - `APP_BASE_URL` — reaproveitada para `back_url`/`notification_url` (o MP precisa alcançar os
     webhooks; em dev, use um túnel cloudflared/ngrok).
 - **Modo teste:** comece com credenciais `TEST-...` (tanto a sua quanto a do lojista). A UI mostra um
@@ -1627,12 +1650,13 @@ mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.
   devolve o `init_point`). O [/api/credits/webhook](src/app/api/credits/webhook/route.ts) reconsulta o
   pagamento e **credita uma única vez** (claim atômico `.neq("status","approved")`) + avisa a loja no
   WhatsApp. **Migration:** [supabase-migration-ai-credit-purchases.sql](supabase-migration-ai-credit-purchases.sql).
-  - **⚠️ App do MP:** a aplicação do MP precisa ser do produto **Checkout Pro** (não "Assinaturas"),
-    senão `createPreference` retorna `At least one policy returned UNAUTHORIZED`. Como o produto é
-    escolha única por aplicação, o mesmo `MP_ACCESS_TOKEN` **não** serve para a assinatura automática da
-    mensalidade (preapproval) enquanto estiver em Checkout Pro — hoje a mensalidade é controlada
-    manualmente no admin, então não afeta. Para usar os dois, criar uma 2ª aplicação MP e um token
-    dedicado.
+  - **⚠️ App do MP (dois tokens):** a aplicação do `MP_ACCESS_TOKEN` precisa ser do produto **Checkout
+    Pro** (não "Assinaturas"), senão `createPreference` retorna `At least one policy returned
+    UNAUTHORIZED`. Como o produto é **escolha única por aplicação**, esse mesmo token **não** serve
+    para a mensalidade automática (preapproval) — por isso a assinatura usa uma **2ª aplicação MP**
+    (produto Assinaturas) num token dedicado, `MP_SUBSCRIPTION_ACCESS_TOKEN` (ver "Pagamentos"). Os
+    dois convivem: `platformAccessToken()` para créditos, `subscriptionAccessToken()` para
+    mensalidade.
 - **Crédito manual (só admin do SaaS):** card **"Créditos da IA"**
   ([AiCreditsCard.tsx](src/app/admin/(panel)/clientes/[storeId]/AiCreditsCard.tsx)) na página do cliente
   [/admin/clientes/[storeId]](src/app/admin/(panel)/clientes/[storeId]/page.tsx) — vê o saldo e credita

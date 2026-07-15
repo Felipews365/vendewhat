@@ -2,29 +2,34 @@ import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import {
-  createPreapproval,
-  isSubscriptionConfigured,
-  subscriptionAccessToken,
+  createPreference,
+  isMercadoPagoConfigured,
+  platformAccessToken,
 } from "@/lib/mercadopago";
+import { PLAN_ANNUAL_DISCOUNT } from "@/lib/plans";
 
 export const runtime = "nodejs";
 
 type Body = {
   planId?: string;
-  cycle?: string; // monthly | annual (anual aplica 16% off no valor mensal)
+  cycle?: string; // monthly (1 mês) | annual (12 meses à vista, 16% off)
 };
 
-const ANNUAL_DISCOUNT = 0.16;
-
 /**
- * Cria a assinatura recorrente (mensalidade do SaaS) no Mercado Pago e devolve
- * o init_point do checkout. Usa a SUA conta (MP_SUBSCRIPTION_ACCESS_TOKEN — o
- * app precisa ser do produto Assinaturas; ver mercadopago.ts).
+ * Mensalidade AVULSA (sem recorrência): cria uma preference de Checkout Pro na
+ * SUA conta (MP_ACCESS_TOKEN) e devolve o init_point. O lojista paga uma vez e o
+ * vencimento é estendido pelo /api/billing/checkout/webhook; nada renova sozinho.
+ *
+ * Difere do /api/billing/subscribe (preapproval), que cobra o cartão todo mês e
+ * exige a aplicação MP do produto "Assinaturas".
+ *
+ * Nada é gravado aqui: quem paga o quê viaja no external_reference
+ * (`storeId|planId|cycle`) e o webhook confirma contra a API do MP.
  */
 export async function POST(req: Request) {
-  if (!isSubscriptionConfigured()) {
+  if (!isMercadoPagoConfigured()) {
     return NextResponse.json(
-      { ok: false, error: "Mercado Pago não configurado no servidor." },
+      { ok: false, error: "Pagamento não configurado no servidor." },
       { status: 503 }
     );
   }
@@ -47,7 +52,7 @@ export async function POST(req: Request) {
 
   const { data: store } = await supabase
     .from("stores")
-    .select("id")
+    .select("id, name")
     .eq("user_id", user.id)
     .maybeSingle();
   if (!store?.id) {
@@ -72,6 +77,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Servidor sem service role." }, { status: 503 });
   }
 
+  // O preço vem sempre do banco — nunca do cliente.
   const { data: plan } = await admin
     .from("plans")
     .select("id, title, monthly")
@@ -84,56 +90,52 @@ export async function POST(req: Request) {
   const baseMonthly = Number(plan.monthly) || 0;
   if (baseMonthly <= 0) {
     return NextResponse.json(
-      { ok: false, error: "Este plano não pode ser assinado online." },
+      { ok: false, error: "Este plano não pode ser pago online." },
       { status: 400 }
     );
   }
-  // O preapproval cobra todo mês; no ciclo anual aplicamos o desconto no valor mensal.
+
+  // Mensal = 1 mês; anual = 12 meses à vista com o mesmo desconto do recorrente.
+  const months = annual ? 12 : 1;
   const amount = Number(
-    (annual ? baseMonthly * (1 - ANNUAL_DISCOUNT) : baseMonthly).toFixed(2)
+    (annual ? baseMonthly * (1 - PLAN_ANNUAL_DISCOUNT) * 12 : baseMonthly).toFixed(2)
   );
 
+  const storeName = (store.name as string) ?? "Loja";
   const base = baseUrl.replace(/\/+$/, "");
   try {
-    const pre = await createPreapproval(subscriptionAccessToken(), {
-      reason: `VendeWhat — ${plan.title}`,
-      amount,
-      payerEmail: user.email ?? "",
-      backUrl: `${base}/dashboard/planos?assinatura=ok`,
-      notificationUrl: `${base}/api/billing/webhook`,
-      externalReference: store.id as string,
+    const pref = await createPreference(platformAccessToken(), {
+      items: [
+        {
+          title: `VendeWhat — ${plan.title} (${months} ${months === 1 ? "mês" : "meses"})`,
+          quantity: 1,
+          unitPrice: amount,
+        },
+      ],
+      externalReference: `${store.id}|${planId}|${annual ? "annual" : "monthly"}`,
+      notificationUrl: `${base}/api/billing/checkout/webhook`,
+      backUrls: {
+        success: `${base}/dashboard/planos?pagamento=ok`,
+        pending: `${base}/dashboard/planos?pagamento=pendente`,
+        failure: `${base}/dashboard/planos?pagamento=falhou`,
+      },
+      payerName: storeName,
     });
 
-    await admin.from("subscriptions").upsert(
-      {
-        store_id: store.id as string,
-        plan_id: planId,
-        amount,
-        billing_cycle: annual ? "annual" : "monthly",
-        status: "past_due", // vira 'active' quando o webhook confirmar o 1º pagamento
-        gateway: "mercadopago",
-        gateway_subscription_id: pre.id,
-        gateway_status: pre.status,
-        payer_email: user.email ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "store_id" }
-    );
-
-    if (!pre.init_point) {
+    const initPoint = pref.init_point ?? pref.sandbox_init_point;
+    if (!initPoint) {
       return NextResponse.json(
         { ok: false, error: "Mercado Pago não retornou o link de pagamento." },
         { status: 502 }
       );
     }
-
-    return NextResponse.json({ ok: true, initPoint: pre.init_point });
+    return NextResponse.json({ ok: true, initPoint });
   } catch (err) {
-    console.error("[billing/subscribe]", err);
+    console.error("[billing/checkout]", err);
     return NextResponse.json(
       {
         ok: false,
-        error: err instanceof Error ? err.message : "Falha ao criar a assinatura.",
+        error: err instanceof Error ? err.message : "Falha ao criar o pagamento.",
       },
       { status: 502 }
     );

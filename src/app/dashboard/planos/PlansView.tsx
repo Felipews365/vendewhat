@@ -82,6 +82,9 @@ const accentStyles: Record<
   },
 };
 
+/** Como o lojista paga: assinatura que renova sozinha ou pagamento único. */
+type PayMode = "recurring" | "oneoff";
+
 function uniqueFeaturesOrdered(plans: PlanDefinition[]) {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -105,7 +108,7 @@ export default function PlansView({
 }) {
   const [annual, setAnnual] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
-  const [subscribing, setSubscribing] = useState<string | null>(null);
+  const [busy, setBusy] = useState<{ planId: string; mode: PayMode } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const matrixRows = useMemo(() => uniqueFeaturesOrdered(plans), [plans]);
@@ -118,29 +121,38 @@ export default function PlansView({
   const subStatus = current ? statusLabel(current.status) : null;
   const renewLabel = formatDate(current?.expiresAt ?? null);
 
-  async function handleSubscribe(planId: string) {
+  /** Leva ao checkout do Mercado Pago: assinatura que renova ou pagamento avulso. */
+  async function handlePay(planId: string, mode: PayMode) {
     setError(null);
-    setSubscribing(planId);
+    setBusy({ planId, mode });
     try {
-      const res = await fetch("/api/billing/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId, cycle: annual ? "annual" : "monthly" }),
-      });
+      const res = await fetch(
+        mode === "recurring" ? "/api/billing/subscribe" : "/api/billing/checkout",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planId, cycle: annual ? "annual" : "monthly" }),
+        },
+      );
       const j = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         initPoint?: string;
         error?: string;
       };
       if (!res.ok || !j.ok || !j.initPoint) {
-        setError(j.error ?? "Não foi possível iniciar a assinatura.");
-        setSubscribing(null);
+        setError(
+          j.error ??
+            (mode === "recurring"
+              ? "Não foi possível iniciar a assinatura."
+              : "Não foi possível iniciar o pagamento."),
+        );
+        setBusy(null);
         return;
       }
       window.location.href = j.initPoint;
     } catch {
       setError("Erro de conexão. Tente novamente.");
-      setSubscribing(null);
+      setBusy(null);
     }
   }
 
@@ -257,17 +269,25 @@ export default function PlansView({
         {plans.map((plan) => {
           const st = accentStyles[plan.accent];
           const price = annual ? monthlyEquivalentAnnual(plan.monthly) : plan.monthly;
+          const annualTotal = monthlyEquivalentAnnual(plan.monthly) * 12;
+          const annualSavings = plan.monthly * 12 - annualTotal;
           const isCurrent = currentPlan?.id === plan.id;
           const isUpgrade = currentMonthly !== null && plan.monthly > currentMonthly;
           const ctaLabel = isCurrent
             ? "Plano atual"
-            : subscribing === plan.id
+            : busy?.planId === plan.id && busy.mode === "recurring"
               ? "Redirecionando…"
               : currentMonthly === null
                 ? "Assinar"
                 : isUpgrade
                   ? "Fazer upgrade"
                   : "Mudar para este plano";
+          const oneOffLabel =
+            busy?.planId === plan.id && busy.mode === "oneoff"
+              ? "Redirecionando…"
+              : annual
+                ? `Pagar 12 meses à vista — R$ ${formatBRL(annualTotal)}`
+                : `Pagar 1 mês avulso — R$ ${formatBRL(plan.monthly)}`;
           return (
             <div
               key={plan.id}
@@ -301,9 +321,21 @@ export default function PlansView({
                 </span>
                 <span className="text-slate-500 dark:text-slate-400 text-sm">/mês</span>
                 {annual && (
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    equivalente no plano anual (16% off)
-                  </p>
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      equivalente no plano anual (16% off)
+                    </p>
+                    <p className="text-sm text-slate-700 dark:text-slate-200">
+                      Total do ano:{" "}
+                      <span className="font-bold">R$ {formatBRL(annualTotal)}</span>{" "}
+                      <span className="text-slate-400 line-through dark:text-slate-500">
+                        R$ {formatBRL(plan.monthly * 12)}
+                      </span>
+                    </p>
+                    <p className="inline-block rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                      Você economiza R$ {formatBRL(annualSavings)} por ano
+                    </p>
+                  </div>
                 )}
               </div>
               <ul className="mb-8 flex-1 space-y-3">
@@ -320,8 +352,8 @@ export default function PlansView({
               </ul>
               <button
                 type="button"
-                onClick={() => handleSubscribe(plan.id)}
-                disabled={subscribing !== null || isCurrent}
+                onClick={() => handlePay(plan.id, "recurring")}
+                disabled={busy !== null || isCurrent}
                 className={`block w-full rounded-xl py-3.5 text-center text-sm font-bold transition disabled:cursor-not-allowed ${
                   isCurrent
                     ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
@@ -330,6 +362,24 @@ export default function PlansView({
               >
                 {ctaLabel}
               </button>
+              {!isCurrent && (
+                <>
+                  <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+                    Cobrança mensal automática no cartão. Cancele quando quiser.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handlePay(plan.id, "oneoff")}
+                    disabled={busy !== null}
+                    className="mt-3 block w-full rounded-xl border border-slate-300 py-3 text-center text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    {oneOffLabel}
+                  </button>
+                  <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+                    Paga uma vez, sem renovação automática. Pix, boleto ou cartão.
+                  </p>
+                </>
+              )}
             </div>
           );
         })}
