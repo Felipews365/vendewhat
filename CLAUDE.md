@@ -290,6 +290,32 @@ Orientações para o Claude Code trabalhar neste repositório.
     o **clique na faixa** desenhada no canvas (ou no **+** dela) e um link no fim da página do banner.
   - **Na prévia do editor:** o [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
     desenha a faixa **logo abaixo do banner** no canvas, com a mesma regra de cor.
+- **Stories da loja (`storefront.stories: StoreStory[]` + `storiesEnabled`, JSONB — sem migration):**
+  bolinha flutuante na **lateral esquerda** da loja (`fixed left-3 top-1/2`, anel em degradê
+  `--store-primary`→rosa) que abre um **player em tela cheia** estilo Instagram — vídeo/foto 9:16,
+  barrinhas de progresso (uma por story), marca da loja no topo, botão de **som** e ✕, e o **card do
+  produto anunciado** embaixo com "Ver produto". Componente
+  [StoreStories.tsx](src/components/storefront/StoreStories.tsx) (bolinha + `StoryViewer`),
+  renderizado em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) ao lado do `ProductDetailModal`.
+  - **O produto é REFERÊNCIA, não cópia:** `StoreStory.productId` = `products.id`; foto/nome/preço
+    saem do catálogo na hora de renderizar (mudou o preço no cadastro, mudou no story) e "Ver produto"
+    abre o **detalhe da própria loja** (`setSelectedProduct`), sem mandar o cliente para fora. Produto
+    apagado / `productId` vazio = story **sem card** (a mídia continua tocando).
+  - **Capa da bolinha (derivada, sem campo novo):** foto do produto do 1º story → a própria mídia (se
+    for foto) → a logo da loja. Vídeo não vira miniatura sem canvas, daí a cascata.
+  - **Ritmo:** foto dura `STORY_IMAGE_MS` (5s, `setInterval` que alimenta a barrinha); **vídeo dura o
+    que durar** (`onTimeUpdate` → progresso, `onEnded` → próximo). O último story fecha o player.
+    Autoplay começa **mudo** (política dos browsers); o cliente liga o som no botão. Toque no **terço
+    esquerdo** volta, no resto avança; Esc/setas no desktop; a rolagem do fundo trava enquanto aberto.
+  - **Editor:** página dedicada [/dashboard/stories](src/app/dashboard/stories/page.tsx) — upload de
+    vídeo (≤50MB) ou foto (≤8MB) para `product-images/{storeId}/stories/`, `<select>` do produto,
+    reordenar ▲▼, remover e "Salvar alterações" (grava o `storefront` inteiro). **Como se chega lá:**
+    item **"🎬 Stories da loja"** no menu "⚙️ Configurações da loja" do
+    [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) (`openStoriesEditor`).
+  - **Interruptor `storiesEnabled`** (default `true`): esconde a bolinha **sem apagar** os stories.
+    Diferente dos cards promo, **lista vazia já esconde** a bolinha (não há modelo pronto para
+    repovoar), então `storiesFromDb` devolve `[]` mesmo — o interruptor é só o "esconder sem perder".
+  - Teto `MAX_STORIES` (6). Story sem `mediaUrl` é descartado na leitura (a bolinha abriria vazia).
 - **Menu de categorias no topo (`storefront.showCategoryNav`, default `true`):** barra horizontal
   (`CategoryNavBar` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)) abaixo do cabeçalho,
   reaproveita os `categoryStripItems` e o `categoryFilter`. Estilo **igual ao `sitederoupa`**: fundo

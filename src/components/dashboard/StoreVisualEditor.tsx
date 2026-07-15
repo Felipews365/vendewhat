@@ -388,6 +388,8 @@ export function StoreVisualEditor({
   const openBannerEditor = () => router.push("/dashboard/banner");
   /** Abre a página dedicada dos cards promo (aba própria, fora do banner). */
   const openPromoCardsEditor = () => router.push("/dashboard/cards");
+  /** Abre a página dedicada dos stories (bolinha flutuante da loja). */
+  const openStoriesEditor = () => router.push("/dashboard/stories");
   /** Abre uma seção do editor pelo menu de configurações (fecha o menu antes). */
   const openSection = (p: EditorPanel) => {
     setSettingsMenuOpen(false);
@@ -661,6 +663,7 @@ export function StoreVisualEditor({
                     { emoji: "🖼️", label: "Logo da loja", onClick: () => openSection("logo") },
                     { emoji: "🎞️", label: "Banner da loja", onClick: () => { setSettingsMenuOpen(false); openBannerEditor(); } },
                     { emoji: "🏷️", label: "Cards abaixo do banner", onClick: () => { setSettingsMenuOpen(false); openPromoCardsEditor(); } },
+                    { emoji: "🎬", label: "Stories da loja", onClick: () => { setSettingsMenuOpen(false); openStoriesEditor(); } },
                     { emoji: "✍️", label: "Textos do banner", onClick: () => openSection("texts") },
                     { emoji: "🎨", label: "Aparência da loja", onClick: () => { setSettingsMenuOpen(false); router.push("/dashboard/aparencia"); } },
                     { emoji: "📢", label: "Barra de avisos do topo", onClick: () => openSection("avisos") },

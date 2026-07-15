@@ -22,6 +22,7 @@ import {
 } from "@/lib/storefront";
 import { AnnouncementBar, AnnouncementText } from "@/components/storefront/AnnouncementBar";
 import { TabAttention } from "@/components/storefront/TabAttention";
+import { StoreStories } from "@/components/storefront/StoreStories";
 import { discountPercent } from "@/lib/productCardMeta";
 import {
   HeroTemplateSlide,
@@ -3603,6 +3604,21 @@ export function LojaClient({
           <span className="text-[10px] font-medium">Menu</span>
         </button>
       </nav>
+
+      {/* Stories da loja — bolinha flutuante + player (vídeo/foto + produto) */}
+      {storefront.storiesEnabled && storefront.stories.length > 0 && (
+        <StoreStories
+          stories={storefront.stories}
+          products={products}
+          storeName={store.name}
+          storeLogo={store.logo}
+          accent={themedAccent}
+          onOpenProduct={(id) => {
+            const p = products.find((x) => x.id === id);
+            if (p) setSelectedProduct(p);
+          }}
+        />
+      )}
 
       {/* Detalhe do produto */}
       {selectedProduct && (

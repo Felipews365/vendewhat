@@ -402,6 +402,51 @@ function promoCardsFromDb(v: unknown): PromoCard[] {
   return out.length > 0 ? out : DEFAULT_PROMO_CARDS.map((c) => ({ ...c }));
 }
 
+/**
+ * Story da loja (estilo Instagram): um vídeo ou foto em tela cheia com o card
+ * de um produto do catálogo embaixo. A bolinha flutuante na lateral da loja
+ * abre o player.
+ *
+ * O produto é uma **referência** (`productId` = `products.id`), não uma cópia:
+ * foto/nome/preço saem do cadastro na hora de renderizar, então mexer no
+ * produto não deixa o story desatualizado. Produto apagado = story sem card
+ * (o vídeo continua tocando).
+ */
+export type StoreStory = {
+  /** URL pública do vídeo (MP4) ou da foto, no bucket `product-images`. */
+  mediaUrl: string;
+  mediaType: StoryMediaType;
+  /** `products.id` do produto anunciado; vazio = story sem card de produto. */
+  productId: string;
+};
+
+export type StoryMediaType = "video" | "image";
+
+/** Máximo de stories por loja. */
+export const MAX_STORIES = 6;
+
+/** Quanto tempo um story de FOTO fica na tela (vídeo dura o que durar). */
+export const STORY_IMAGE_MS = 5000;
+
+function storiesFromDb(v: unknown): StoreStory[] {
+  if (!Array.isArray(v)) return [];
+  const out: StoreStory[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== "object") continue;
+    const o = raw as Record<string, unknown>;
+    const mediaUrl = typeof o.mediaUrl === "string" ? o.mediaUrl.trim() : "";
+    // Sem mídia não há story — a bolinha ficaria abrindo um player vazio.
+    if (!mediaUrl) continue;
+    out.push({
+      mediaUrl: mediaUrl.slice(0, 500),
+      mediaType: o.mediaType === "image" ? "image" : "video",
+      productId: typeof o.productId === "string" ? o.productId.trim() : "",
+    });
+    if (out.length >= MAX_STORIES) break;
+  }
+  return out;
+}
+
 /** Bolinha “Categorias” abaixo do banner (estilo stories). */
 export type StorefrontCategoryItem = {
   label: string;
@@ -446,6 +491,17 @@ export type StorefrontSettings = {
    * `promoCardsFromDb`).
    */
   promoCardsEnabled: boolean;
+  /**
+   * Stories da loja (vídeo/foto + card de produto), abertos pela bolinha
+   * flutuante na lateral. Lista vazia = sem bolinha.
+   */
+  stories: StoreStory[];
+  /**
+   * Mostra a bolinha de stories na loja. Diferente dos cards promo, lista
+   * vazia JÁ esconde a bolinha (não há modelo pronto para repovoar) — o
+   * interruptor serve para esconder sem perder os stories já gravados.
+   */
+  storiesEnabled: boolean;
   /** Mostra a barra de menu de categorias no topo (abaixo do cabeçalho). */
   showCategoryNav: boolean;
   /** Formato da foto dos cards de produto na loja: "1:1" (quadrado) ou "3:4" (retrato). */
@@ -677,6 +733,8 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroCouponCode: "",
   promoCards: DEFAULT_PROMO_CARDS.map((c) => ({ ...c })),
   promoCardsEnabled: true,
+  stories: [],
+  storiesEnabled: true,
   showCategoryNav: true,
   productCardRatio: "3:4",
   flashSaleEndsAt: "",
@@ -1127,6 +1185,8 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       o.promoCardsEnabled,
       DEFAULT_STOREFRONT.promoCardsEnabled
     ),
+    stories: storiesFromDb(o.stories),
+    storiesEnabled: boolFromDb(o.storiesEnabled, DEFAULT_STOREFRONT.storiesEnabled),
     showCategoryNav: boolFromDb(o.showCategoryNav, DEFAULT_STOREFRONT.showCategoryNav),
     productCardRatio: productCardRatioFromDb(o.productCardRatio),
     flashSaleEndsAt: isoDateFromDb(o.flashSaleEndsAt),
@@ -1254,6 +1314,8 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     heroCouponCode: s.heroCouponCode.trim(),
     promoCards: promoCardsFromDb(s.promoCards),
     promoCardsEnabled: s.promoCardsEnabled,
+    stories: storiesFromDb(s.stories),
+    storiesEnabled: s.storiesEnabled,
     showCategoryNav: s.showCategoryNav,
     productCardRatio: productCardRatioFromDb(s.productCardRatio),
     flashSaleEndsAt: isoDateFromDb(s.flashSaleEndsAt),
