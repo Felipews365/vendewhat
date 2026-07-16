@@ -1459,14 +1459,14 @@ function ProductDetailModal({
   return (
     <div
       ref={sheetScrollRef}
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-y-contain bg-black/40 md:px-10 md:py-20"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-y-contain bg-black/40 md:px-6 md:py-8 lg:px-8 lg:py-10"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
         ref={cardRef}
-        className="relative bg-white shadow-2xl w-full min-h-full overflow-hidden will-change-transform md:min-h-0 md:my-auto md:max-w-4xl md:rounded-2xl md:ring-1 md:ring-stone-200/60"
+        className="relative bg-white shadow-2xl w-full min-h-full overflow-hidden will-change-transform md:min-h-0 md:my-auto md:max-w-5xl lg:max-w-6xl md:rounded-2xl md:ring-1 md:ring-stone-200/60"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Alça de arrastar (celular): puxar para baixo fecha e volta ao catálogo */}
@@ -1487,7 +1487,7 @@ function ProductDetailModal({
           <div className="w-full md:w-[55%] flex flex-col bg-stone-50 md:pl-2 md:pr-1 max-md:pt-0">
             <div className="flex flex-col-reverse sm:flex-row min-w-0">
             {media.length > 1 && (
-              <div className="flex sm:flex-col gap-2 p-3 sm:w-[80px] sm:min-w-[80px] overflow-x-auto sm:overflow-y-auto sm:overflow-x-hidden sm:max-h-[min(28rem,70vh)] [scrollbar-width:thin] snap-x snap-mandatory sm:snap-none max-sm:pb-1">
+              <div className="flex sm:flex-col gap-2 p-3 sm:w-[92px] sm:min-w-[92px] overflow-x-auto sm:overflow-y-auto sm:overflow-x-hidden sm:max-h-[min(38rem,80vh)] [scrollbar-width:thin] snap-x snap-mandatory sm:snap-none max-sm:pb-1">
                 {media.map((item, i) => (
                   <button
                     key={`${item.url}-${i}`}
@@ -1496,7 +1496,7 @@ function ProductDetailModal({
                       setImgIdx(i);
                       scrollCarouselToIndex(i, "smooth");
                     }}
-                    className={`relative shrink-0 w-14 aspect-[2/3] sm:w-full sm:max-w-[80px] sm:mx-auto rounded-lg overflow-hidden ring-2 transition-all snap-start ${
+                    className={`relative shrink-0 w-14 aspect-[2/3] sm:w-full sm:max-w-[92px] sm:mx-auto rounded-lg overflow-hidden ring-2 transition-all snap-start ${
                       i === safeImgIdx
                         ? "ring-stone-800 opacity-100 shadow-md"
                         : "ring-transparent opacity-60 hover:opacity-100 hover:ring-stone-300"
@@ -1533,7 +1533,7 @@ function ProductDetailModal({
             )}
             {/* Galeria principal: deslize horizontal (snap) no mobile; toque sem arrastar abre zoom */}
             <div
-              className={`relative w-full min-w-0 mx-0 shrink-0 max-sm:flex-none sm:flex-1 sm:min-h-0 aspect-[3/4] max-h-[86vh] md:max-h-[80vh] bg-stone-200 shadow-sm [touch-action:pan-x_pan-y] max-sm:rounded-t-2xl sm:rounded-2xl ${
+              className={`relative w-full min-w-0 mx-0 shrink-0 max-sm:flex-none sm:flex-1 sm:min-h-0 aspect-[3/4] max-h-[86vh] md:max-h-[88vh] bg-stone-200 shadow-sm [touch-action:pan-x_pan-y] max-sm:rounded-t-2xl sm:rounded-2xl ${
                 media.length > 1 ? "max-sm:rounded-b-none" : "max-sm:rounded-b-2xl"
               }`}
             >
@@ -1672,7 +1672,7 @@ function ProductDetailModal({
           </div>
 
           {/* Info do produto */}
-          <div className="md:w-[45%] p-6 pb-8 md:p-8 md:pb-10 md:pl-9 flex flex-col md:overflow-y-auto md:max-h-[min(640px,85vh)]">
+          <div className="md:w-[45%] p-6 pb-8 md:p-8 md:pb-10 md:pl-9 flex flex-col md:overflow-y-auto md:max-h-[min(820px,88vh)]">
             <h2 className="text-xl md:text-2xl font-semibold text-stone-900 tracking-tight">
               {product.name}
             </h2>

@@ -584,6 +584,13 @@ imagens ao bucket `product-images` e guarda a ordem em `products.images` + o foc
     wrapper (`sheetScrollRef`) usa **`items-start`** + card `min-h-full` para o card **crescer com o
     conteúdo** e gerar rolagem (era `items-stretch`, que esticava o card à altura da tela e **cortava** o
     excesso, sem rolar — corrigido em `aaf443d`); no desktop o card centra com `md:my-auto` + `md:min-h-0`.
+  - **O tamanho no desktop sai de TRÊS limites, que precisam andar juntos:** a **folga do overlay**
+    (`md:px-6 md:py-8 lg:px-8 lg:py-10` no `sheetScrollRef` — é ela que define o quanto sobra em cima e
+    embaixo), a **largura do card** (`md:max-w-5xl lg:max-w-6xl`) e os **tetos internos** (a coluna de
+    dados em `md:max-h-[min(820px,88vh)]` e a galeria em `md:max-h-[88vh]`). Mexer só na `max-w` **não
+    aumenta o modal**: os tetos internos seguram a altura e o card só ganha mais branco em volta. As
+    miniaturas (`sm:w-[92px]`) acompanham a foto — com a galeria maior e elas no tamanho antigo, a
+    proporção fica torta. No **celular nada disso vale** (tela cheia + o gesto de arrastar para baixo).
   - **Arrastar para baixo fecha (gesto de "folha", só celular):** com a galeria no topo
     (`scroller.scrollTop <= 0`), **puxar o dedo para baixo** faz o card acompanhar o dedo
     (`translateY`, cantos arredondando) e, passado o limite (**`curY > 110`px**), ele desliza para fora
