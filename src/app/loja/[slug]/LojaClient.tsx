@@ -2287,13 +2287,29 @@ function StorefrontCategoriesStrip({
                 className={`${tileBase} ${active ? tileActive : tileIdle}`}
               >
                 {cat.imageUrl ? (
-                  <span className="w-12 h-12 rounded-full overflow-hidden ring-1 ring-[#DCE3EC] flex items-center justify-center bg-stone-100">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={cat.imageUrl}
-                      alt=""
-                      className="h-full w-full object-cover object-center transition-transform group-hover:scale-110"
-                    />
+                  <span className="relative w-12 h-12 rounded-full overflow-hidden ring-1 ring-[#DCE3EC] flex items-center justify-center bg-stone-100">
+                    {cat.imageUrl.startsWith("data:") ? (
+                      /* Preset de emoji = SVG data URI (leve); next/image não
+                         otimiza data: URL, então segue como <img> cru mesmo. */
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={cat.imageUrl}
+                        alt=""
+                        className="h-full w-full object-cover object-center transition-transform group-hover:scale-110"
+                      />
+                    ) : (
+                      /* Imagem enviada pelo lojista: via next/image (AVIF/WebP no
+                         tamanho do tile ~48px). O lojista às vezes sobe um PNG de
+                         >1 MB — o <img> cru baixava tudo; agora entrega poucos KB e
+                         ainda carrega lazy (fora do payload inicial). */
+                      <Image
+                        src={cat.imageUrl}
+                        alt=""
+                        fill
+                        sizes="48px"
+                        className="object-cover object-center transition-transform group-hover:scale-110"
+                      />
+                    )}
                   </span>
                 ) : (
                   <span className="text-3xl leading-none select-none transition-transform group-hover:scale-110">

@@ -43,6 +43,17 @@ export async function generateMetadata({ params }: Props) {
 
   const logo = typeof store.logo === "string" ? store.logo.trim() : "";
 
+  /* O favicon é a logo da loja, mas o lojista às vezes sobe um PNG de >1 MB — e o
+     navegador baixa esse arquivo INTEIRO só pra desenhar o ícone da aba (peso puro
+     no PageSpeed/payload). Servimos a logo pelo next/image (redimensionada +
+     AVIF/WebP conforme o Accept do navegador), então o favicon vira poucos KB em
+     qualquer loja. Larguras precisam estar na lista do next.config (64 e 256 estão
+     em imageSizes). Só otimiza URL http(s) do nosso storage; data:/vazio passa direto. */
+  const optimizedIcon = (w: number) =>
+    logo.startsWith("http")
+      ? `/_next/image?url=${encodeURIComponent(logo)}&w=${w}&q=75`
+      : logo;
+
   return {
     title: `${store.name} | Catálogo VendeWhat`,
     description:
@@ -50,7 +61,13 @@ export async function generateMetadata({ params }: Props) {
       `Confira os produtos de ${store.name}. Compre pelo WhatsApp.`,
     /* Sem logo, cai no ícone padrão do VendeWhat (o do layout raiz). */
     ...(logo
-      ? { icons: { icon: logo, shortcut: logo, apple: logo } }
+      ? {
+          icons: {
+            icon: optimizedIcon(64),
+            shortcut: optimizedIcon(64),
+            apple: optimizedIcon(256),
+          },
+        }
       : null),
   };
 }
