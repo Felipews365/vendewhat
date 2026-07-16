@@ -280,7 +280,7 @@ Orientações para o Claude Code trabalhar neste repositório.
   - **Aba própria [/dashboard/cards](src/app/dashboard/cards/page.tsx)** (não é mais uma seção da
     página do banner — banner é a vitrine, os cards são atalhos de oferta; misturados, o lojista
     leigo não achava onde trocar o texto). A página traz **prévia "Como fica na loja"** (mesma regra
-    de cor da loja: com `themeId`, gradiente do tema; sem tema, as cores do card), o interruptor
+    de cor da loja: a cor escolhida no card sempre manda, com ou sem tema), o interruptor
     "Mostrar os cards na loja", os **modelos prontos** (`PROMO_CARD_PRESETS` em
     [storefront.ts](src/lib/storefront.ts) — Imperdível/Destaque/Oferta/Frete/Novidade/Premium),
     seletor de cor (`PROMO_CARD_COLORS`), reordenar/remover e um "Salvar alterações" no rodapé
@@ -457,10 +457,11 @@ Orientações para o Claude Code trabalhar neste repositório.
     carrinho** (mobile + `HeaderAction` "Sacola"), **cards de produto** (props `accent`/`accentDeep`
     do `ProductCatalogCard`: preço + selo `-X%` do preço = `accent`; selos "Novo"/"Frete grátis" +
     botão **"Adicionar ao carrinho"** + `BorderBeam` = `accentDeep`), **títulos** "⚡ Ofertas
-    Relâmpago"/"Mais Produtos" e o **contador** `FlashSaleCountdown` (prop `accent`), além do
-    **gradiente dos cards promo** (que usa `themedDeep`→`themedAccent`). **Sem tema** (`themeId`
-    vazio / loja "personalizado"), tudo cai de volta na paleta fixa `EC` (default das props), então
-    lojas antigas não mudam. Exceções mantidas de propósito: o **selo vermelho de desconto**
+    Relâmpago"/"Mais Produtos" e o **contador** `FlashSaleCountdown` (prop `accent`). **Sem tema**
+    (`themeId` vazio / loja "personalizado"), tudo cai de volta na paleta fixa `EC` (default das
+    props), então lojas antigas não mudam. Exceções de propósito: os **cards promo abaixo do banner**
+    (têm seletor de cor **por card** em `/dashboard/cards` — o tema sobrescrevê-los fazia o seletor
+    não surtir efeito nenhum nas lojas com aparência pronta), o **selo vermelho de desconto**
     (`EC.sale`, convenção universal de promoção), as **estrelas douradas** e os cinzas neutros
     (`EC.muted`/`border`/`imgBg`). O **detalhe do produto** (modal) já usava as CSS vars
     `--store-primary`/`--store-secondary`, então sempre acompanhou o tema.

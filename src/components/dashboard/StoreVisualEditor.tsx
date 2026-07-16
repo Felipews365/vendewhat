@@ -1037,11 +1037,8 @@ export function StoreVisualEditor({
                     key={i}
                     className="flex min-h-[64px] flex-col justify-end overflow-hidden rounded-xl p-2 shadow-sm sm:min-h-[80px] sm:p-3"
                     style={{
-                      // Mesma regra da loja: com tema escolhido o card segue as
-                      // cores da loja; sem tema, as cores do próprio card.
-                      backgroundImage: sf.themeId
-                        ? `linear-gradient(135deg, ${sf.themeSecondary}, ${sf.themePrimary})`
-                        : `linear-gradient(135deg, ${c.from}, ${c.to})`,
+                      // Mesma regra da loja: a cor escolhida no card sempre vale.
+                      backgroundImage: `linear-gradient(135deg, ${c.from}, ${c.to})`,
                     }}
                   >
                     {c.eyebrow && (

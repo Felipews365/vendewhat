@@ -129,7 +129,7 @@ export default function PromoCardsPage() {
         </p>
       </div>
 
-      {/* Prévia — mesma regra de cor da loja (com tema, gradiente do tema). */}
+      {/* Prévia — mesma regra de cor da loja (a cor do card manda, com ou sem tema). */}
       <div className="rounded-2xl border border-slate-200 bg-slate-100 p-4 dark:border-slate-700 dark:bg-slate-800/60">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           Como fica na loja
@@ -141,9 +141,7 @@ export default function PromoCardsPage() {
                 key={i}
                 className="relative flex min-h-[90px] flex-col justify-end overflow-hidden rounded-2xl p-3 sm:min-h-[110px] sm:p-5"
                 style={{
-                  backgroundImage: sf.themeId
-                    ? `linear-gradient(135deg, ${sf.themeSecondary}, ${sf.themePrimary})`
-                    : `linear-gradient(135deg, ${c.from}, ${c.to})`,
+                  backgroundImage: `linear-gradient(135deg, ${c.from}, ${c.to})`,
                 }}
               >
                 <span className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.15)_0%,transparent_50%)]" />

@@ -3274,11 +3274,9 @@ export function LojaClient({
                 onClick={(e) => handleHeroCta(e, c.href || "#catalogo")}
                 className="group relative flex h-full flex-col justify-end p-3 sm:p-5 rounded-2xl overflow-hidden min-h-[90px] sm:min-h-[110px] transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
                 style={{
-                  // Com um tema escolhido, o cartão segue as cores da loja
-                  // (escura → destaque); sem tema, usa as cores do próprio cartão.
-                  backgroundImage: storefront.themeId
-                    ? `linear-gradient(135deg, ${themedDeep}, ${themedAccent})`
-                    : `linear-gradient(135deg, ${c.from}, ${c.to})`,
+                  // A cor escolhida no card manda, com ou sem tema: o seletor de
+                  // cor da aba /dashboard/cards é por card e precisa valer aqui.
+                  backgroundImage: `linear-gradient(135deg, ${c.from}, ${c.to})`,
                 }}
               >
                 <BorderBeam
