@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import Image from "next/image";
 import {
   MAX_STORIES,
   STORY_IMAGE_MS,
@@ -350,8 +351,13 @@ export function StoreStories({
         >
           <span className="flex h-full w-full items-center justify-center rounded-full bg-white p-[2px]">
             {cover ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              /* next/image (não <img> cru): a capa é a foto do produto (~1200px),
+                 mas a bolinha exibe 76px — o <img> cru baixava o arquivo inteiro
+                 (~133 KiB) só pra encolher. O next/image entrega uma versão do
+                 tamanho da bolinha (AVIF/WebP), poucos KiB. `draggable=false` +
+                 user-drag none continuam para o arrasto da bolinha não virar o
+                 drag-and-drop nativo da imagem no desktop. */
+              <Image
                 src={cover}
                 alt=""
                 draggable={false}

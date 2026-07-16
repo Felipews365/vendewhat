@@ -2254,11 +2254,9 @@ function StorefrontCategoriesStrip({
         </h2>
         <div
           className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden snap-x sm:grid sm:grid-cols-4 md:grid-cols-8 sm:overflow-visible sm:mx-0 sm:px-0"
-          role="list"
         >
           <button
             type="button"
-            role="listitem"
             onClick={() => {
               onSelectCategory(null);
               scrollToCatalogo();
@@ -2282,7 +2280,6 @@ function StorefrontCategoriesStrip({
               <button
                 key={`${cat.label}-${i}`}
                 type="button"
-                role="listitem"
                 onClick={() => {
                   onSelectCategory(cat.label);
                   scrollToCatalogo();
@@ -3141,6 +3138,7 @@ export function LojaClient({
                 />
                 <button
                   type="submit"
+                  aria-label="Buscar"
                   className="flex items-center gap-1.5 px-4 sm:px-5 text-white text-sm font-semibold hover:brightness-95 transition"
                   style={{ backgroundColor: themedAccent }}
                 >

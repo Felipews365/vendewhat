@@ -354,14 +354,28 @@ html {
   animation: vw-blur-fade 0.4s ease-out backwards;
 }
 
-/* Revela os filhos em cascata (banner: selo → título → destaque → texto → botão).
-   Cada filho herda o mesmo blur-fade com um atraso crescente. Re-dispara junto do
-   slide porque o container do banner remonta por `key`. */
+/* Cascata do texto do banner (selo → título → destaque → texto → botão): sobe +
+   sai do desfoque, MAS SEM fade de opacidade — de propósito. O título é o elemento
+   LCP da loja; começar em `opacity:0` fazia o Chrome só contá-lo como "pintado" ao
+   fim da animação (atraso de renderização de ~2,5s no LCP). Mantendo `opacity` no
+   valor base (1) e animando só `transform`+`blur`, o texto é pintado no 1º frame
+   (mesmo borrado, ainda conta como paint) e o LCP dispara cedo — o efeito visual de
+   "subir saindo do desfoque" continua igual. */
+@keyframes vw-rise-deblur {
+  from {
+    transform: translateY(var(--vw-bf-y, 8px));
+    filter: blur(var(--vw-bf-blur, 6px));
+  }
+  to {
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
 .vw-reveal-stagger > * {
   /* `backwards` (ver `.vw-blur-fade` acima): sem o `filter: blur(0)` residual do
      `both`, o texto do banner deixa de ficar borrado no celular depois da
      animação. */
-  animation: vw-blur-fade 0.5s ease-out backwards;
+  animation: vw-rise-deblur 0.5s ease-out backwards;
 }
 .vw-reveal-stagger > *:nth-child(1) {
   animation-delay: 0.08s;
