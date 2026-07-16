@@ -95,11 +95,19 @@ Orientações para o Claude Code trabalhar neste repositório.
     banner "borrado" — a foto, por ser bitmap, não sofria). `backwards` segura o estado inicial
     durante o atraso e, ao terminar, **reverte ao estado base sem `filter`/`transform` residual**
     (opacity/filter base já são 1/none, sem flicker).
-  - **Cascata de texto (`vw-reveal-stagger`):** revela os filhos diretos em cascata (blur-fade
-    com atrasos por `nth-child`) — usado no **texto do banner** (selo → título → destaque →
+  - **Cascata de texto (`vw-reveal-stagger`):** revela os filhos diretos em cascata (sobe + sai do
+    desfoque, com atrasos por `nth-child`) — usado no **texto do banner** (selo → título → destaque →
     subtítulo → botão) em todos os formatos (overlay/split em LojaClient e os templates em
     [HeroTemplateSlide.tsx](src/components/storefront/HeroTemplateSlide.tsx)). Re-dispara a cada
     troca de slide porque o container do banner remonta por `key`.
+    - **SEM fade de opacidade (keyframe próprio `vw-rise-deblur`, não o `vw-blur-fade`) — por causa
+      do LCP:** o título do banner é o **elemento LCP** da loja. Começar em `opacity:0` fazia o Chrome
+      só contá-lo como "pintado" ao **fim** da animação (na prática ~2540ms de "atraso de renderização"
+      no LCP → nota de Desempenho ~88, LCP ~3,8s). O `vw-rise-deblur` anima **só `transform` + `blur`**
+      e mantém `opacity` no valor base (1), então o texto é pintado no 1º frame (mesmo saindo do
+      desfoque, ainda conta como paint) e o LCP dispara cedo — o efeito visual "subir saindo do
+      desfoque" fica **idêntico**. Só o `vw-reveal-stagger` (banner) mudou; os reveals ao rolar
+      (`.vw-blur-fade`/`BlurFade`) **mantêm** o fade de opacidade (estão abaixo da dobra, não são LCP).
   - **Foto surgindo:** `vw-photo-in` (leve zoom-out + fade na entrada, fotos recortadas dos
     templates) e `vw-ken-burns` (zoom lento contínuo nas fotos de fundo overlay/split, deixa a
     foto "viva"). A **prévia do editor de banner**
@@ -311,7 +319,11 @@ Orientações para o Claude Code trabalhar neste repositório.
     `MAX_STORIES` (loja com 50 vídeos não vira player infinito). O `LojaClient` monta a lista num
     `useMemo` (`storyList`) e é ela — não `storefront.stories` — que decide se a bolinha aparece.
   - **Capa da bolinha (derivada, sem campo novo):** foto do produto do 1º story → a própria mídia (se
-    for foto) → a logo da loja. Vídeo não vira miniatura sem canvas, daí a cascata.
+    for foto) → a logo da loja. Vídeo não vira miniatura sem canvas, daí a cascata. A capa é
+    renderizada com **`next/image`** (não `<img>` cru): a foto do produto tem ~1200px e a bolinha
+    exibe 76px — o `<img>` cru baixava o arquivo inteiro (~130 KiB) só pra encolher; o `next/image`
+    entrega no tamanho da bolinha (AVIF/WebP), poucos KB. Mantém `draggable={false}` + `user-drag none`
+    para o arrasto da bolinha não virar o drag-and-drop nativo da imagem no desktop.
   - **Selo curvado GIRANDO em volta (`ringLabel`, decorativo):** **"NOVIDADES"** (ou "NOVIDADE" com um
     story só) curvado num `<textPath>` SVG sobre um círculo de raio `RING_R`. É um **selo fixo, e não
     o nome do produto**, de propósito: a bolinha abre a **fila inteira** de stories, então anunciar um
@@ -462,6 +474,14 @@ Orientações para o Claude Code trabalhar neste repositório.
   (scroll horizontal no celular), cada tile com **emoji** (`categoryEmoji`) ou a `imageUrl` da
   categoria + rótulo; 1º tile "🛍️ Todos" limpa o filtro. Paleta fixa da referência (borda `#DCE3EC`,
   ativo azul `#0062B8`/`#F0F6FC`). Mesma prop/comportamento de filtro de antes.
+  - **`imageUrl` enviada pelo lojista vai por `next/image` (não `<img>` cru):** o lojista às vezes sobe
+    um PNG de **>1 MB** como imagem de categoria — o `<img>` cru baixava tudo **e** era eager, então
+    numa loja com 3 categorias pesadas somavam ~3,6 MB no payload inicial e **saturavam o 4G**,
+    empurrando o LCP (chegou a ~18s numa loja real). Agora o tile usa `next/image` (`fill`,
+    `sizes="48px"`): entrega poucos KB (AVIF/WebP no tamanho do tile) **e carrega lazy** (sai do caminho
+    crítico). O **preset de emoji** é um **SVG data URI** (`emojiCategoryImage`) — como o `next/image`
+    não otimiza `data:` URL, esse caso segue como `<img>` cru (é leve). A checagem é
+    `cat.imageUrl.startsWith("data:")`.
 - **Pixels e rastreamento (por loja):** cada lojista cola o **próprio** Pixel do Facebook/Meta
   (`storefront.facebookPixelId`, só dígitos) e a **tag do Google** (`storefront.googleAnalyticsId` —
   GA4 `G-…`, Google Ads `AW-…` ou Tag Manager `GTM-…`) na página dedicada
@@ -725,10 +745,18 @@ ficar preso** após o toque no celular (senão sobrava um outline/caixa fixa no 
 
 - **Favicon = a logo daquela loja (sem migration):** o `generateMetadata` de
   [loja/[slug]/page.tsx](src/app/loja/[slug]/page.tsx) lê também a coluna `stores.logo` e devolve
-  `icons: { icon, shortcut, apple }` com a URL pública dela — a aba do navegador (e o atalho na tela
+  `icons: { icon, shortcut, apple }` — a aba do navegador (e o atalho na tela
   inicial do celular, via `apple`) mostra a marca do lojista, não a do VendeWhat. Como é metadata de
   **página**, sobrescreve o ícone do layout raiz **só** dentro de `/loja/[slug]`; painel e landing não
-  mudam. Loja **sem logo** não emite `<link>` nenhum e cai no ícone padrão. ⚠️ Hoje **não existe** um
+  mudam. Loja **sem logo** não emite `<link>` nenhum e cai no ícone padrão.
+  - **O favicon passa pelo `next/image`, não pela URL crua da logo:** o lojista às vezes sobe uma logo
+    de **~1,9 MB** e o navegador baixava esse PNG **inteiro** só pra desenhar o ícone da aba (peso puro
+    no payload/PageSpeed). O `optimizedIcon(w)` monta `/_next/image?url=<logo>&w=<w>&q=75` (`w=64` para
+    icon/shortcut, `w=256` para apple) — o `next/image` redimensiona + entrega AVIF/WebP conforme o
+    `Accept` do navegador, então o favicon vira poucos KB em qualquer loja. As larguras precisam estar
+    na lista do [next.config.mjs](next.config.mjs) (64 e 256 estão no `imageSizes` padrão). Só otimiza
+    URL `http(s)` do nosso storage; `data:`/vazio passa direto.
+  - ⚠️ Hoje **não existe** um
   favicon padrão no projeto (`/favicon.ico` dá 404, sem `public/favicon.ico` nem `src/app/icon.*`),
   então essas lojas ficam com o ícone genérico do navegador.
 - **Título que chama de volta ([TabAttention.tsx](src/components/storefront/TabAttention.tsx)):**
