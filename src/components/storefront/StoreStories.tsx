@@ -63,63 +63,42 @@ const MID = WIDGET_PX / 2;
  * canto para a bolinha sair da tela, inclusive ao girar o celular.
  */
 const BUBBLE_EDGE_PX = BUBBLE_PX / 2 + 14;
-/**
- * Faixa do topo/base (em % da altura) onde a bolinha aceita grudar em cima ou
- * embaixo. Fora dela — ou seja, **largada no meio da tela** — ela vai para a
- * ESQUERDA ou a DIREITA, nunca para o topo/base: no meio da altura, o lado é o
- * canto natural, e cima/baixo é para quem mirou cima/baixo.
- */
-const TOP_BOTTOM_BAND = 0.18;
-
-/** Em qual borda da tela a bolinha está grudada. */
-type BubbleEdge = "left" | "right" | "top" | "bottom";
-/** Posição: a borda + onde ela está AO LONGO dessa borda (0..1 da tela). */
-type BubblePos = { edge: BubbleEdge; pct: number };
-
-const isEdge = (v: unknown): v is BubbleEdge =>
-  v === "left" || v === "right" || v === "top" || v === "bottom";
 
 /**
- * Decide em qual borda a bolinha gruda quando o cliente solta. Ela nunca fica
- * solta no meio da tela — só encostada num dos lados, no topo ou embaixo.
- *
- * **Topo/base só valem se ele MIROU o topo/base** (soltou dentro da faixa
- * `TOP_BOTTOM_BAND`). Largada em qualquer outra altura — o meio da tela — ela
- * vai para a **esquerda ou a direita**, a que estiver mais perto. Não é a borda
- * "mais próxima das quatro" à toa: numa tela alta, soltar no meio ficava perto
- * demais do topo/base e ela subia/descia sem ninguém ter pedido.
- *
- * O que sobra guardar é a posição ao longo da borda escolhida (a altura, se
- * grudou na esquerda/direita; o quanto andou, se grudou no topo/base).
+ * A bolinha só para na ESQUERDA ou na DIREITA — nunca no topo, na base, nem
+ * solta no meio. Sobe e desce à vontade **ao longo** do lado escolhido.
  */
-function snapToEdge(x: number, y: number, w: number, h: number): BubblePos {
-  const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-  const band = h * TOP_BOTTOM_BAND;
-  if (y < band) return { edge: "top", pct: clamp01(x / w) };
-  if (y > h - band) return { edge: "bottom", pct: clamp01(x / w) };
-  return { edge: x < w / 2 ? "left" : "right", pct: clamp01(y / h) };
+type BubbleSide = "left" | "right";
+/** Posição: o lado + a altura nele (0..1 da tela). */
+type BubblePos = { side: BubbleSide; pct: number };
+
+const isSide = (v: unknown): v is BubbleSide => v === "left" || v === "right";
+
+/**
+ * Decide onde a bolinha gruda quando o cliente solta: o lado mais perto, na
+ * altura em que ele largou. Largar no meio da tela manda ela para um dos lados
+ * (o mais próximo) — no meio ela taparia justamente o que ele quer ver.
+ */
+function snapToSide(x: number, y: number, w: number, h: number): BubblePos {
+  return {
+    side: x < w / 2 ? "left" : "right",
+    pct: Math.min(1, Math.max(0, y / h)),
+  };
 }
 
 /**
- * Onde a bolinha fica parada: colada na borda num eixo, livre no outro. O eixo
- * livre passa por um `clamp` para ela não invadir os cantos nem sair da tela
- * quando o cliente gira o celular — como quem calcula é o CSS, isso reajusta
- * sozinho no resize, sem listener.
+ * Onde a bolinha fica parada: colada no lado escolhido, livre na altura. A
+ * altura passa por um `clamp` para ela não escapar da tela quando o cliente
+ * gira o celular — como quem calcula é o CSS, isso reajusta sozinho no resize,
+ * sem listener.
  */
-function edgeStyle({ edge, pct }: BubblePos): React.CSSProperties {
+function sideStyle({ side, pct }: BubblePos): React.CSSProperties {
   const near = `${BUBBLE_EDGE_PX}px`;
   const far = `calc(100% - ${BUBBLE_EDGE_PX}px)`;
-  const along = `clamp(${near}, ${pct * 100}%, ${far})`;
-  switch (edge) {
-    case "left":
-      return { left: near, top: along };
-    case "right":
-      return { left: far, top: along };
-    case "top":
-      return { top: near, left: along };
-    case "bottom":
-      return { top: far, left: along };
-  }
+  return {
+    left: side === "left" ? near : far,
+    top: `clamp(${near}, ${pct * 100}%, ${far})`,
+  };
 }
 
 /** O mínimo que o player precisa de um produto (o catálogo tem muito mais). */
@@ -177,16 +156,16 @@ export function StoreStories({
 }) {
   const [open, setOpen] = useState(false);
   /**
-   * Onde a bolinha ficou: a borda + a posição ao longo dela. O cliente pode
-   * mudar A QUALQUER MOMENTO, quantas vezes quiser (todo arrasto vale), mas ela
-   * sempre gruda numa das quatro bordas — nunca fica solta no meio da tela, por
-   * cima do que ele quer ver. Em % (e não px) para sobreviver a girar o celular
-   * e a telas de tamanhos diferentes.
+   * Onde a bolinha ficou: o lado + a altura nele. O cliente pode mudar A
+   * QUALQUER MOMENTO, quantas vezes quiser (todo arrasto vale), mas ela só para
+   * na esquerda ou na direita — nunca no meio, no topo ou na base. Em % (e não
+   * px) para sobreviver a girar o celular e a telas de tamanhos diferentes.
+   * Começa na esquerda, a meia altura.
    *
    * Fica no localStorage do CLIENTE (não no `storefront`) — é ele quem tira a
    * bolinha da frente do que quer ver, e a escolha não vale para os outros.
    */
-  const [pos, setPos] = useState<BubblePos>({ edge: "left", pct: 0.5 });
+  const [pos, setPos] = useState<BubblePos>({ side: "left", pct: 0.5 });
   /**
    * O ✕ tira a bolinha da tela — mas SÓ nesta visita: é `useState` puro, de
    * propósito, **sem localStorage**. Recarregou a página, ela volta. Quem
@@ -209,10 +188,11 @@ export function StoreStories({
     try {
       const raw = window.localStorage.getItem(BUBBLE_POS_KEY);
       if (!raw) return;
-      const saved = JSON.parse(raw) as { edge?: unknown; pct?: unknown };
-      // Formatos antigos não casam aqui e caem no padrão, de graça.
-      if (isEdge(saved.edge) && typeof saved.pct === "number" && saved.pct >= 0 && saved.pct <= 1) {
-        setPos({ edge: saved.edge, pct: saved.pct });
+      const saved = JSON.parse(raw) as { side?: unknown; pct?: unknown };
+      // Formatos antigos (e o `top`/`bottom` que já existiu) não casam aqui e
+      // caem no padrão, de graça.
+      if (isSide(saved.side) && typeof saved.pct === "number" && saved.pct >= 0 && saved.pct <= 1) {
+        setPos({ side: saved.side, pct: saved.pct });
       }
     } catch {
       // localStorage bloqueado / JSON velho: fica no padrão.
@@ -246,8 +226,8 @@ export function StoreStories({
       setOpen(true); // foi um toque, não um arrasto
       return;
     }
-    // Gruda na borda mais próxima das quatro (nunca fica solta no meio).
-    const next = snapToEdge(
+    // Gruda no lado mais próximo (nunca fica solta no meio).
+    const next = snapToSide(
       e.clientX,
       e.clientY,
       window.innerWidth,
@@ -290,10 +270,10 @@ export function StoreStories({
           height: WIDGET_PX,
           transform: "translate(-50%, -50%)",
           // Arrastando: segue o ponteiro livremente (é o dedo/cursor dele).
-          // Largada: colada na borda escolhida, com o `clamp` prendendo o eixo
-          // livre dentro da tela — a conta é do CSS, então girar o celular ou
+          // Largada: colada no lado escolhido, com o `clamp` prendendo a altura
+          // dentro da tela — a conta é do CSS, então girar o celular ou
           // redimensionar reajusta sozinho, sem listener de resize.
-          ...(dragXY ? { left: dragXY.x, top: dragXY.y } : edgeStyle(pos)),
+          ...(dragXY ? { left: dragXY.x, top: dragXY.y } : sideStyle(pos)),
         }}
       >
         {/* Nome curvado dando a volta na bolinha. Decorativo (o nome real está

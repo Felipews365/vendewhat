@@ -342,10 +342,6 @@ Orientações para o Claude Code trabalhar neste repositório.
     pequeno às ~10h, **encostado no anel** e não jogado no canto da caixa, como na referência) e
     `WIDGET_PX` (= cabe o círculo do selo + a letra). Mexer no `PHOTO_PX` reajusta o resto junto — as
     proporções foram tiradas a olho dos prints da referência, então ajuste fino é esperado.
-  - **Topo/base só se o cliente MIROU o topo/base (`TOP_BOTTOM_BAND` = 18% da altura):** soltou fora
-    dessa faixa — ou seja, **no meio da tela** — a bolinha vai para a **esquerda ou a direita**, a
-    mais perto. A regra **não** é a "borda mais próxima das quatro": numa tela alta, soltar no meio
-    caía perto demais do topo/base e ela subia/descia sem ninguém pedir.
   - **`BUBBLE_EDGE_PX` (folga da borda da tela) sai da BOLINHA, não do `WIDGET_PX`:** a caixa do
     widget inclui o vão do selo girando, então medir por ela **parava a bolinha ~20px antes da
     beirada** e ela parecia *boiando* em vez de colada no canto. A folga é um **respiro pequeno** —
@@ -355,21 +351,22 @@ Orientações para o Claude Code trabalhar neste repositório.
     (`img { max-width: 100% }`) deixa a foto encolher junto, enquanto a altura fica presa — o
     `rounded-full` numa caixa não-quadrada vira **elipse**. Foi o "achatado" que sobreviveu a dar
     tamanho fixo só ao widget.
-  - **A bolinha é ARRASTÁVEL e gruda numa das QUATRO bordas:** pointer events no botão
+  - **A bolinha é ARRASTÁVEL e gruda SÓ na esquerda ou na direita:** pointer events no botão
     (`onPointerDown/Move/Up` + `setPointerCapture`); passado `DRAG_THRESHOLD_PX` (6px) vira arrasto e a
-    bolinha segue o ponteiro, e no `pointerup` o `snapToEdge` a **cola numa das quatro bordas**
-    (esquerda/direita/topo/base). Ela **nunca fica solta no meio da tela**: no
-    meio taparia justamente o que o cliente quer ver. O cliente pode mudar **a qualquer momento,
-    quantas vezes quiser** (todo arrasto vale; não há "modo de mover" para ligar). Abaixo do limiar é
-    **toque = abrir** — por isso não há `onClick`. A posição (`{edge, pct}` = a borda + onde ela está
-    **ao longo** dessa borda) fica no **localStorage do cliente** (`vw-story-bubble-pos`, restaurado num
-    `useEffect` no mount p/ não quebrar hidratação), **não** no `storefront`: quem tira a bolinha da
-    frente é o visitante, e isso não deve valer para os outros. O `pct` é **% e não px** para sobreviver
-    a girar o celular e a telas de tamanhos diferentes; o `edgeStyle` cola o eixo preso na borda e passa
-    o **eixo livre** por um **`clamp` no CSS** (`clamp(BUBBLE_EDGE_PX, pct%, calc(100% -
-    BUBBLE_EDGE_PX))`, metade da bolinha + folga), que a impede de invadir os cantos — como a conta é do
-    navegador, redimensionar reajusta **sozinho**, sem listener de resize. `localStorage` em formato
-    antigo não casa e cai no padrão (esquerda, meia altura), sem quebrar.
+    bolinha segue o ponteiro, e no `pointerup` o `snapToSide` a **cola no lado mais perto** (`x <
+    innerWidth/2`), na altura em que foi largada. **Nunca** para no meio, no topo nem na base — no meio
+    taparia justamente o que o cliente quer ver, e topo/base foram **removidos por decisão do dono**
+    (chegaram a existir; não os traga de volta sem pedido). Sobe e desce à vontade **ao longo** do lado.
+    O cliente pode mudar **a qualquer momento, quantas vezes quiser** (todo arrasto vale; não há "modo
+    de mover" para ligar). Abaixo do limiar é **toque = abrir** — por isso não há `onClick`. A posição
+    (`{side, pct}` = o lado + a altura nele) fica no **localStorage do cliente** (`vw-story-bubble-pos`,
+    restaurado num `useEffect` no mount p/ não quebrar hidratação), **não** no `storefront`: quem tira a
+    bolinha da frente é o visitante, e isso não deve valer para os outros. O `pct` é **% e não px** para
+    sobreviver a girar o celular e a telas de tamanhos diferentes; o `sideStyle` cola o lado e passa a
+    **altura** por um **`clamp` no CSS** (`clamp(BUBBLE_EDGE_PX, pct%, calc(100% - BUBBLE_EDGE_PX))`),
+    que a impede de escapar da tela — como a conta é do navegador, redimensionar reajusta **sozinho**,
+    sem listener de resize. `localStorage` em formato antigo (incluindo o `top`/`bottom` que já existiu)
+    não casa e cai no padrão (esquerda, meia altura), sem quebrar.
     - **Dois detalhes sem os quais o arrasto não funciona, um por plataforma:** no **celular** o botão
       precisa de **`touch-action: none`**, senão o navegador rola a página em vez de arrastar; no **PC**
       a imagem da capa precisa de **`draggable={false}`** (+ `onDragStart` com `preventDefault` e
