@@ -678,6 +678,15 @@ seguem o formato escolhido (3:4 recorta em retrato). Na loja, o card usa
   **escolher o formato no recorte sincroniza o `card_ratio` do produto** e vale para as **fotos
   seguintes** (o `cropAspect` do picker deriva de `form.cardRatio`). O modal do variant `editor` do
   picker passou a receber `aspect={cropAspect}` também (antes ia sempre 1:1).
+- **"Usar foto inteira (sem recorte)" também RE-CODIFICA (nunca sobe o arquivo cru):** o botão de pular
+  o recorte no [ProductImageCropModal.tsx](src/components/ProductImageCropModal.tsx) desenha a imagem
+  inteira num canvas e a re-encoda no mesmo formato/limite do recorte (`getWholeImageFile` → WebP,
+  `outputMaxWidth` — 1920 no banner, 1600 nos produtos), em vez de devolver o `originalFile`. Sem isso,
+  um banner enviado como **SVG de ~21 MB** (com raster embutido) — ou qualquer JPEG/PNG gigante —
+  subia cru e virava o **LCP** da loja: o `next/image` **não otimiza SVG**, então os 21 MB iam crus ao
+  celular e o PageSpeed mobile despencava (LCP ~10,9s). Agora todo upload de imagem sai leve, com ou
+  sem recorte. Só cai no `originalFile` como último recurso se o navegador não conseguir ler as
+  dimensões (`naturalWidth/Height` = 0). Vale para banner **e** produtos (o modal é compartilhado).
 
 O `ProductCatalogCard` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) recebe `imageRatio` e
 troca `aspect-square` ↔ `aspect-[3/4]`; a foto é `object-cover` com ponto de foco, então **não

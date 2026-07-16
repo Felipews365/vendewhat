@@ -95,6 +95,43 @@ async function getCroppedImageFile(
   });
 }
 
+/**
+ * Re-codifica a imagem INTEIRA (sem recorte) pelo canvas, no formato/limite de
+ * saída — igual ao recorte, só sem cortar. É o que alimenta o botão "Usar foto
+ * inteira": sem isso, o arquivo original subia cru, e um SVG/JPEG gigante (ex.:
+ * um SVG de 21 MB com raster embutido) virava o banner e destruía o LCP, pois o
+ * next/image não otimiza SVG. Aqui sempre sai um WebP/JPEG leve e dimensionado.
+ */
+async function getWholeImageFile(
+  imageSrc: string,
+  outName: string,
+  outputType: OutputType,
+  outputMaxWidth: number
+): Promise<File> {
+  const image = await createImage(imageSrc);
+  const natW = image.naturalWidth || image.width;
+  const natH = image.naturalHeight || image.height;
+  if (!natW || !natH) throw new Error("Dimensões da imagem indisponíveis");
+  const scale = Math.min(1, outputMaxWidth / Math.max(natW, natH));
+  const w = Math.max(1, Math.round(natW * scale));
+  const h = Math.max(1, Math.round(natH * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas não disponível");
+  ctx.drawImage(image, 0, 0, w, h);
+
+  const quality = outputType === "image/webp" ? 0.85 : 0.92;
+  const { blob, type } = await canvasToBlob(canvas, outputType, quality);
+  const ext = type === "image/webp" ? ".webp" : ".jpg";
+  return new File([blob], outName.replace(/\.[^.]+$/i, "") + ext, {
+    type,
+    lastModified: Date.now(),
+  });
+}
+
 type Props = {
   imageSrc: string;
   sourceFileName: string;
@@ -209,6 +246,31 @@ export function ProductImageCropModal({
     }
   }
 
+  /**
+   * "Usar foto inteira (sem recorte)": re-codifica a imagem toda pelo canvas
+   * (WebP/limite de largura) em vez de subir o arquivo original cru — evita
+   * banners/fotos de dezenas de MB (e SVGs, que o next/image não otimiza).
+   * Só cai no `originalFile` se o navegador não conseguir ler as dimensões.
+   */
+  async function useWholeImage() {
+    setBusy(true);
+    try {
+      const base =
+        sourceFileName.replace(/\.[^.]+$/i, "").trim() || "foto-produto";
+      const file = await getWholeImageFile(
+        imageSrc,
+        base,
+        outputType,
+        outputMaxWidth
+      );
+      onComplete(file);
+    } catch {
+      onComplete(originalFile);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const wide = activeAspect > 1.6;
 
   return (
@@ -284,7 +346,7 @@ export function ProductImageCropModal({
         <div className="px-4 pb-4 pt-1 flex flex-col gap-2">
           <button
             type="button"
-            onClick={() => onComplete(originalFile)}
+            onClick={useWholeImage}
             disabled={busy}
             className="w-full py-2 text-sm text-slate-600 underline-offset-2 hover:underline disabled:opacity-50"
           >
