@@ -342,10 +342,14 @@ Orientações para o Claude Code trabalhar neste repositório.
     pequeno às ~10h, **encostado no anel** e não jogado no canto da caixa, como na referência) e
     `WIDGET_PX` (= cabe o círculo do selo + a letra). Mexer no `PHOTO_PX` reajusta o resto junto — as
     proporções foram tiradas a olho dos prints da referência, então ajuste fino é esperado.
+  - **Topo/base só se o cliente MIROU o topo/base (`TOP_BOTTOM_BAND` = 18% da altura):** soltou fora
+    dessa faixa — ou seja, **no meio da tela** — a bolinha vai para a **esquerda ou a direita**, a
+    mais perto. A regra **não** é a "borda mais próxima das quatro": numa tela alta, soltar no meio
+    caía perto demais do topo/base e ela subia/descia sem ninguém pedir.
   - **`BUBBLE_EDGE_PX` (folga da borda da tela) sai da BOLINHA, não do `WIDGET_PX`:** a caixa do
     widget inclui o vão do selo girando, então medir por ela **parava a bolinha ~20px antes da
-    beirada** e ela parecia *boiando* em vez de colada no canto. O preço aceito é o **selo raspar a
-    borda** no lado em que ela está encostada.
+    beirada** e ela parecia *boiando* em vez de colada no canto. A folga é um **respiro pequeno** —
+    nem colada na ponta, nem flutuando.
   - **A bolinha e a foto precisam de tamanho EXPLÍCITO (e não só o widget):** `absolute left-1/2` sem
     largura cai no shrink-to-fit (sobra metade da caixa de espaço) e o **preflight do Tailwind**
     (`img { max-width: 100% }`) deixa a foto encolher junto, enquanto a altura fica presa — o
@@ -353,8 +357,8 @@ Orientações para o Claude Code trabalhar neste repositório.
     tamanho fixo só ao widget.
   - **A bolinha é ARRASTÁVEL e gruda numa das QUATRO bordas:** pointer events no botão
     (`onPointerDown/Move/Up` + `setPointerCapture`); passado `DRAG_THRESHOLD_PX` (6px) vira arrasto e a
-    bolinha segue o ponteiro, e no `pointerup` o `snapToEdge` a **cola na borda mais perto das quatro**
-    (esquerda/direita/topo/base — a de menor distância). Ela **nunca fica solta no meio da tela**: no
+    bolinha segue o ponteiro, e no `pointerup` o `snapToEdge` a **cola numa das quatro bordas**
+    (esquerda/direita/topo/base). Ela **nunca fica solta no meio da tela**: no
     meio taparia justamente o que o cliente quer ver. O cliente pode mudar **a qualquer momento,
     quantas vezes quiser** (todo arrasto vale; não há "modo de mover" para ligar). Abaixo do limiar é
     **toque = abrir** — por isso não há `onClick`. A posição (`{edge, pct}` = a borda + onde ela está

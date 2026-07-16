@@ -57,13 +57,19 @@ const MID = WIDGET_PX / 2;
 /**
  * Distância do centro à borda em que ele gruda. Sai da **BOLINHA**, não do
  * `WIDGET_PX`: a caixa do widget inclui o vão do selo girando, então medir por
- * ela parava a bolinha ~20px antes da beirada e ela parecia **boiando** em vez
- * de colada no canto. O preço é o selo **raspar a borda** no lado em que ela
- * está encostada — trocado de propósito por uma bolinha que cola de verdade.
+ * ela parava a bolinha ~20px antes da beirada e ela parecia **boiando**. A
+ * folga é um respiro pequeno — nem colada na ponta, nem flutuando.
  * Também é o trilho do `clamp` do CSS: o centro nunca chega perto o bastante do
  * canto para a bolinha sair da tela, inclusive ao girar o celular.
  */
-const BUBBLE_EDGE_PX = BUBBLE_PX / 2 + 9;
+const BUBBLE_EDGE_PX = BUBBLE_PX / 2 + 14;
+/**
+ * Faixa do topo/base (em % da altura) onde a bolinha aceita grudar em cima ou
+ * embaixo. Fora dela — ou seja, **largada no meio da tela** — ela vai para a
+ * ESQUERDA ou a DIREITA, nunca para o topo/base: no meio da altura, o lado é o
+ * canto natural, e cima/baixo é para quem mirou cima/baixo.
+ */
+const TOP_BOTTOM_BAND = 0.18;
 
 /** Em qual borda da tela a bolinha está grudada. */
 type BubbleEdge = "left" | "right" | "top" | "bottom";
@@ -74,25 +80,24 @@ const isEdge = (v: unknown): v is BubbleEdge =>
   v === "left" || v === "right" || v === "top" || v === "bottom";
 
 /**
- * Decide em qual borda a bolinha gruda quando o cliente solta: a MAIS PERTO das
- * quatro. Ela nunca fica solta no meio da tela — só encostada num dos lados, no
- * topo ou embaixo —, então o que sobra guardar é a posição ao longo da borda
- * escolhida (a altura, se grudou na esquerda/direita; o quanto andou, se grudou
- * no topo/base).
+ * Decide em qual borda a bolinha gruda quando o cliente solta. Ela nunca fica
+ * solta no meio da tela — só encostada num dos lados, no topo ou embaixo.
+ *
+ * **Topo/base só valem se ele MIROU o topo/base** (soltou dentro da faixa
+ * `TOP_BOTTOM_BAND`). Largada em qualquer outra altura — o meio da tela — ela
+ * vai para a **esquerda ou a direita**, a que estiver mais perto. Não é a borda
+ * "mais próxima das quatro" à toa: numa tela alta, soltar no meio ficava perto
+ * demais do topo/base e ela subia/descia sem ninguém ter pedido.
+ *
+ * O que sobra guardar é a posição ao longo da borda escolhida (a altura, se
+ * grudou na esquerda/direita; o quanto andou, se grudou no topo/base).
  */
 function snapToEdge(x: number, y: number, w: number, h: number): BubblePos {
-  const dist: Record<BubbleEdge, number> = {
-    left: x,
-    right: w - x,
-    top: y,
-    bottom: h - y,
-  };
-  const edge = (Object.keys(dist) as BubbleEdge[]).reduce((a, b) =>
-    dist[b] < dist[a] ? b : a
-  );
-  // Nas bordas verticais o que varia é a altura; nas horizontais, o horizontal.
-  const along = edge === "left" || edge === "right" ? y / h : x / w;
-  return { edge, pct: Math.min(1, Math.max(0, along)) };
+  const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+  const band = h * TOP_BOTTOM_BAND;
+  if (y < band) return { edge: "top", pct: clamp01(x / w) };
+  if (y > h - band) return { edge: "bottom", pct: clamp01(x / w) };
+  return { edge: x < w / 2 ? "left" : "right", pct: clamp01(y / h) };
 }
 
 /**
