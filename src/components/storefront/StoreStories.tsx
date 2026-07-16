@@ -23,6 +23,13 @@ import {
 const BUBBLE_POS_KEY = "vw-story-bubble-pos";
 /** Arrasto só começa a valer depois disso — abaixo, é toque para abrir. */
 const DRAG_THRESHOLD_PX = 6;
+/**
+ * Metade da bolinha + folga da borda. A bolinha tem tamanho fixo (h-14 + as duas
+ * molduras = ~66px), então dá para calcular sem medir o DOM. Serve de trilho no
+ * `clamp` do CSS: o centro nunca chega perto o bastante da borda para a bolinha
+ * sair da tela — inclusive quando o cliente gira o celular depois de largá-la.
+ */
+const BUBBLE_EDGE_PX = 41;
 
 /** O mínimo que o player precisa de um produto (o catálogo tem muito mais). */
 export type StoryProduct = {
@@ -79,12 +86,15 @@ export function StoreStories({
 }) {
   const [open, setOpen] = useState(false);
   /**
-   * Posição da bolinha: lado + altura em % da tela. Fica no localStorage do
-   * CLIENTE (não no `storefront`) — é ele quem tira a bolinha da frente do que
-   * quer ver, e a escolha não deve valer para os outros visitantes.
+   * Onde a bolinha ficou: centro dela em % da tela, nos DOIS eixos — o cliente
+   * larga onde quiser (qualquer lado, qualquer altura), sem grudar nas bordas.
+   * Guardado em % (e não em px) para a posição sobreviver a girar o celular e a
+   * telas de tamanhos diferentes. `null` = ainda não arrastou → canto padrão.
+   *
+   * Fica no localStorage do CLIENTE (não no `storefront`) — é ele quem tira a
+   * bolinha da frente do que quer ver, e a escolha não vale para os outros.
    */
-  const [side, setSide] = useState<"left" | "right">("left");
-  const [topPct, setTopPct] = useState(0.5);
+  const [pos, setPos] = useState<{ xPct: number; yPct: number } | null>(null);
   /** Enquanto arrasta, a bolinha segue o ponteiro (coordenadas cruas). */
   const [dragXY, setDragXY] = useState<{ x: number; y: number } | null>(null);
   const dragRef = useRef<{ x0: number; y0: number; moved: boolean } | null>(null);
@@ -94,10 +104,12 @@ export function StoreStories({
     try {
       const raw = window.localStorage.getItem(BUBBLE_POS_KEY);
       if (!raw) return;
-      const saved = JSON.parse(raw) as { side?: unknown; topPct?: unknown };
-      if (saved.side === "left" || saved.side === "right") setSide(saved.side);
-      if (typeof saved.topPct === "number" && saved.topPct >= 0 && saved.topPct <= 1) {
-        setTopPct(saved.topPct);
+      const saved = JSON.parse(raw) as { xPct?: unknown; yPct?: unknown };
+      const inside = (v: unknown): v is number =>
+        typeof v === "number" && v >= 0 && v <= 1;
+      // Formato antigo (lado + altura) não casa aqui e cai no padrão, de graça.
+      if (inside(saved.xPct) && inside(saved.yPct)) {
+        setPos({ xPct: saved.xPct, yPct: saved.yPct });
       }
     } catch {
       // localStorage bloqueado / JSON velho: fica no padrão.
@@ -131,16 +143,15 @@ export function StoreStories({
       setOpen(true); // foi um toque, não um arrasto
       return;
     }
-    // Gruda no lado mais próximo e guarda a altura (com folga nas bordas).
-    const nextSide = e.clientX < window.innerWidth / 2 ? "left" : "right";
-    const nextTop = Math.min(0.92, Math.max(0.08, e.clientY / window.innerHeight));
-    setSide(nextSide);
-    setTopPct(nextTop);
+    // Fica exatamente onde foi largada (sem grudar em lado nenhum). O `clamp`
+    // do CSS é quem segura a bolinha dentro da tela, então aqui é só converter.
+    const next = {
+      xPct: Math.min(1, Math.max(0, e.clientX / window.innerWidth)),
+      yPct: Math.min(1, Math.max(0, e.clientY / window.innerHeight)),
+    };
+    setPos(next);
     try {
-      window.localStorage.setItem(
-        BUBBLE_POS_KEY,
-        JSON.stringify({ side: nextSide, topPct: nextTop })
-      );
+      window.localStorage.setItem(BUBBLE_POS_KEY, JSON.stringify(next));
     } catch {
       // Sem localStorage a posição só não sobrevive ao reload.
     }
@@ -170,21 +181,26 @@ export function StoreStories({
           dragRef.current = null;
           setDragXY(null);
         }}
-        aria-label={`Ver stories de ${storeName} (arraste para mudar de lado)`}
-        title="Arraste para mudar de lado"
+        aria-label={`Ver stories de ${storeName} (arraste para mover)`}
+        title="Arraste para mover"
         className={`fixed z-40 rounded-full p-[3px] shadow-lg outline-none focus:outline-none [-webkit-tap-highlight-color:transparent] ${
           dragXY ? "cursor-grabbing" : "cursor-grab transition-transform hover:scale-105"
         }`}
         style={{
           backgroundImage: `linear-gradient(135deg, ${accent}, #f472b6)`,
-          // Arrastando: segue o ponteiro. Parada: gruda no lado escolhido.
+          transform: "translate(-50%, -50%)",
+          // Arrastando: segue o ponteiro. Largada: fica no ponto escolhido, com
+          // o `clamp` prendendo o centro dentro da tela (a conta é do CSS, então
+          // girar o celular/redimensionar reajusta sozinho, sem listener).
           ...(dragXY
-            ? { left: dragXY.x, top: dragXY.y, transform: "translate(-50%, -50%)" }
-            : {
-                top: `${topPct * 100}%`,
-                transform: "translateY(-50%)",
-                ...(side === "left" ? { left: 12 } : { right: 12 }),
-              }),
+            ? { left: dragXY.x, top: dragXY.y }
+            : pos
+            ? {
+                left: `clamp(${BUBBLE_EDGE_PX}px, ${pos.xPct * 100}%, calc(100% - ${BUBBLE_EDGE_PX}px))`,
+                top: `clamp(${BUBBLE_EDGE_PX}px, ${pos.yPct * 100}%, calc(100% - ${BUBBLE_EDGE_PX}px))`,
+              }
+            : // Padrão de quem nunca arrastou: canto esquerdo, meia altura.
+              { left: BUBBLE_EDGE_PX, top: "50%" }),
           // Sem isso o navegador rola a página em vez de deixar arrastar.
           touchAction: "none",
         }}

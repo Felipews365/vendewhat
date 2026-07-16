@@ -312,14 +312,20 @@ Orientações para o Claude Code trabalhar neste repositório.
     `useMemo` (`storyList`) e é ela — não `storefront.stories` — que decide se a bolinha aparece.
   - **Capa da bolinha (derivada, sem campo novo):** foto do produto do 1º story → a própria mídia (se
     for foto) → a logo da loja. Vídeo não vira miniatura sem canvas, daí a cascata.
-  - **A bolinha é ARRASTÁVEL (o cliente gruda no lado que quiser):** pointer events no botão
+  - **A bolinha é ARRASTÁVEL para QUALQUER ponto da tela:** pointer events no botão
     (`onPointerDown/Move/Up` + `setPointerCapture`); passado `DRAG_THRESHOLD_PX` (6px) vira arrasto e a
-    bolinha segue o ponteiro, e no `pointerup` ela **gruda no lado mais próximo** (`clientX <
-    innerWidth/2`) na altura escolhida (clamp 8%–92%). Abaixo do limiar é **toque = abrir** — por isso
-    não há `onClick`. A posição (`{side, topPct}`) fica no **localStorage do cliente**
-    (`vw-story-bubble-pos`, restaurado num `useEffect` no mount p/ não quebrar hidratação), **não** no
-    `storefront`: quem tira a bolinha da frente é o visitante, e isso não deve valer para os outros.
-    O botão precisa de **`touch-action: none`**, senão o celular rola a página em vez de arrastar.
+    bolinha segue o ponteiro, e no `pointerup` ela **fica exatamente onde foi largada** — livre nos dois
+    eixos (esquerda/direita **e** cima/baixo), **sem grudar** em lado nenhum (o antigo snap em `clientX <
+    innerWidth/2`, que prendia o horizontal às bordas e só guardava a altura, foi removido). Abaixo do
+    limiar é **toque = abrir** — por isso não há `onClick`. A posição (`{xPct, yPct}` = o centro em % da
+    tela) fica no **localStorage do cliente** (`vw-story-bubble-pos`, restaurado num `useEffect` no mount
+    p/ não quebrar hidratação), **não** no `storefront`: quem tira a bolinha da frente é o visitante, e
+    isso não deve valer para os outros. **Em % e não em px** para a posição sobreviver a girar o celular
+    e a telas de tamanhos diferentes; quem segura a bolinha dentro da tela é um **`clamp` no CSS**
+    (`clamp(BUBBLE_EDGE_PX, X%, calc(100% - BUBBLE_EDGE_PX))`, metade da bolinha + folga) — como a conta
+    é do navegador, redimensionar reajusta **sozinho**, sem listener de resize. Um `localStorage` no
+    formato antigo (`{side, topPct}`) não casa com o novo e cai no padrão, sem quebrar. O botão precisa
+    de **`touch-action: none`**, senão o celular rola a página em vez de arrastar.
   - **Ritmo:** foto dura `STORY_IMAGE_MS` (5s, `setInterval` que alimenta a barrinha); **vídeo dura o
     que durar** (`onTimeUpdate` → progresso, `onEnded` → próximo). O último story fecha o player.
     Autoplay começa **mudo** (política dos browsers); o cliente liga o som no botão. Toque no **terço
