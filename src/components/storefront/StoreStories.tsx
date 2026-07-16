@@ -11,7 +11,7 @@
  * Sem migration: os stories moram no JSONB `storefront.stories`.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   MAX_STORIES,
   STORY_IMAGE_MS,
@@ -24,12 +24,98 @@ const BUBBLE_POS_KEY = "vw-story-bubble-pos";
 /** Arrasto só começa a valer depois disso — abaixo, é toque para abrir. */
 const DRAG_THRESHOLD_PX = 6;
 /**
- * Metade da bolinha + folga da borda. A bolinha tem tamanho fixo (h-14 + as duas
- * molduras = ~66px), então dá para calcular sem medir o DOM. Serve de trilho no
- * `clamp` do CSS: o centro nunca chega perto o bastante da borda para a bolinha
- * sair da tela — inclusive quando o cliente gira o celular depois de largá-la.
+ * Medidas do widget, todas derivadas da foto — mexer no `PHOTO_PX` reajusta o
+ * resto junto. As proporções saem da referência (o anel fino, o nome passando
+ * rente a ele e o ✕ pequeno encostado no anel, não jogado no canto).
  */
-const BUBBLE_EDGE_PX = 41;
+/** Diâmetro da foto. É daqui que sai todo o resto. */
+const PHOTO_PX = 76;
+/** A bolinha = foto + as duas molduras (o anel colorido e o aro branco). */
+const BUBBLE_PX = PHOTO_PX + 10;
+/**
+ * Raio do círculo em que o selo corre. A folga é pequena de propósito: o texto
+ * corre RENTE ao anel (as letras crescem para fora da linha de base, então este
+ * raio é o vão até a borda da bolinha).
+ */
+const RING_R = BUBBLE_PX / 2 + 6;
+/** Tamanho da letra do nome girando. */
+const RING_FONT_PX = 10;
+/** O ✕ é pequeno e fica às ~10h, encostado no anel. */
+const CLOSE_PX = 20;
+const CLOSE_ANGLE_DEG = 205;
+const CLOSE_DIST = BUBBLE_PX / 2 + 6;
+/**
+ * Lado do widget inteiro: cabe o círculo do nome + a letra dele. Tamanho
+ * **explícito** (e não deixado ao "shrink-to-fit") de propósito: encostada na
+ * direita, a caixa só teria os poucos px que sobram até a borda como largura
+ * disponível e o navegador **espremia a bolinha numa pílula** — era o bug do
+ * "achatado no lado direito".
+ */
+const WIDGET_PX = (RING_R + RING_FONT_PX) * 2;
+/** Centro do widget — origem de tudo que é posicionado dentro dele. */
+const MID = WIDGET_PX / 2;
+/**
+ * Distância do centro à borda em que ele gruda. Sai da **BOLINHA**, não do
+ * `WIDGET_PX`: a caixa do widget inclui o vão do selo girando, então medir por
+ * ela parava a bolinha ~20px antes da beirada e ela parecia **boiando** em vez
+ * de colada no canto. O preço é o selo **raspar a borda** no lado em que ela
+ * está encostada — trocado de propósito por uma bolinha que cola de verdade.
+ * Também é o trilho do `clamp` do CSS: o centro nunca chega perto o bastante do
+ * canto para a bolinha sair da tela, inclusive ao girar o celular.
+ */
+const BUBBLE_EDGE_PX = BUBBLE_PX / 2 + 9;
+
+/** Em qual borda da tela a bolinha está grudada. */
+type BubbleEdge = "left" | "right" | "top" | "bottom";
+/** Posição: a borda + onde ela está AO LONGO dessa borda (0..1 da tela). */
+type BubblePos = { edge: BubbleEdge; pct: number };
+
+const isEdge = (v: unknown): v is BubbleEdge =>
+  v === "left" || v === "right" || v === "top" || v === "bottom";
+
+/**
+ * Decide em qual borda a bolinha gruda quando o cliente solta: a MAIS PERTO das
+ * quatro. Ela nunca fica solta no meio da tela — só encostada num dos lados, no
+ * topo ou embaixo —, então o que sobra guardar é a posição ao longo da borda
+ * escolhida (a altura, se grudou na esquerda/direita; o quanto andou, se grudou
+ * no topo/base).
+ */
+function snapToEdge(x: number, y: number, w: number, h: number): BubblePos {
+  const dist: Record<BubbleEdge, number> = {
+    left: x,
+    right: w - x,
+    top: y,
+    bottom: h - y,
+  };
+  const edge = (Object.keys(dist) as BubbleEdge[]).reduce((a, b) =>
+    dist[b] < dist[a] ? b : a
+  );
+  // Nas bordas verticais o que varia é a altura; nas horizontais, o horizontal.
+  const along = edge === "left" || edge === "right" ? y / h : x / w;
+  return { edge, pct: Math.min(1, Math.max(0, along)) };
+}
+
+/**
+ * Onde a bolinha fica parada: colada na borda num eixo, livre no outro. O eixo
+ * livre passa por um `clamp` para ela não invadir os cantos nem sair da tela
+ * quando o cliente gira o celular — como quem calcula é o CSS, isso reajusta
+ * sozinho no resize, sem listener.
+ */
+function edgeStyle({ edge, pct }: BubblePos): React.CSSProperties {
+  const near = `${BUBBLE_EDGE_PX}px`;
+  const far = `calc(100% - ${BUBBLE_EDGE_PX}px)`;
+  const along = `clamp(${near}, ${pct * 100}%, ${far})`;
+  switch (edge) {
+    case "left":
+      return { left: near, top: along };
+    case "right":
+      return { left: far, top: along };
+    case "top":
+      return { top: near, left: along };
+    case "bottom":
+      return { top: far, left: along };
+  }
+}
 
 /** O mínimo que o player precisa de um produto (o catálogo tem muito mais). */
 export type StoryProduct = {
@@ -86,30 +172,42 @@ export function StoreStories({
 }) {
   const [open, setOpen] = useState(false);
   /**
-   * Onde a bolinha ficou: centro dela em % da tela, nos DOIS eixos — o cliente
-   * larga onde quiser (qualquer lado, qualquer altura), sem grudar nas bordas.
-   * Guardado em % (e não em px) para a posição sobreviver a girar o celular e a
-   * telas de tamanhos diferentes. `null` = ainda não arrastou → canto padrão.
+   * Onde a bolinha ficou: a borda + a posição ao longo dela. O cliente pode
+   * mudar A QUALQUER MOMENTO, quantas vezes quiser (todo arrasto vale), mas ela
+   * sempre gruda numa das quatro bordas — nunca fica solta no meio da tela, por
+   * cima do que ele quer ver. Em % (e não px) para sobreviver a girar o celular
+   * e a telas de tamanhos diferentes.
    *
    * Fica no localStorage do CLIENTE (não no `storefront`) — é ele quem tira a
    * bolinha da frente do que quer ver, e a escolha não vale para os outros.
    */
-  const [pos, setPos] = useState<{ xPct: number; yPct: number } | null>(null);
+  const [pos, setPos] = useState<BubblePos>({ edge: "left", pct: 0.5 });
+  /**
+   * O ✕ tira a bolinha da tela — mas SÓ nesta visita: é `useState` puro, de
+   * propósito, **sem localStorage**. Recarregou a página, ela volta. Quem
+   * dispensa quer só ver a tela agora, não desistir dos stories para sempre; e
+   * é a loja anunciando, então o sumiço não deve ser permanente por um toque.
+   */
+  const [dismissed, setDismissed] = useState(false);
   /** Enquanto arrasta, a bolinha segue o ponteiro (coordenadas cruas). */
   const [dragXY, setDragXY] = useState<{ x: number; y: number } | null>(null);
   const dragRef = useRef<{ x0: number; y0: number; moved: boolean } | null>(null);
+  /**
+   * `<textPath>` precisa casar com um id único (dá para ter 2 lojas na tela).
+   * Sem os `:` do `useId` — dois-pontos vale como id em HTML, mas quebra quem
+   * resolve a referência como seletor CSS.
+   */
+  const pathId = `vw-story-ring-${useId().replace(/:/g, "")}`;
 
   // Restaura no mount (e não no primeiro render) para não quebrar a hidratação.
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(BUBBLE_POS_KEY);
       if (!raw) return;
-      const saved = JSON.parse(raw) as { xPct?: unknown; yPct?: unknown };
-      const inside = (v: unknown): v is number =>
-        typeof v === "number" && v >= 0 && v <= 1;
-      // Formato antigo (lado + altura) não casa aqui e cai no padrão, de graça.
-      if (inside(saved.xPct) && inside(saved.yPct)) {
-        setPos({ xPct: saved.xPct, yPct: saved.yPct });
+      const saved = JSON.parse(raw) as { edge?: unknown; pct?: unknown };
+      // Formatos antigos não casam aqui e caem no padrão, de graça.
+      if (isEdge(saved.edge) && typeof saved.pct === "number" && saved.pct >= 0 && saved.pct <= 1) {
+        setPos({ edge: saved.edge, pct: saved.pct });
       }
     } catch {
       // localStorage bloqueado / JSON velho: fica no padrão.
@@ -143,12 +241,13 @@ export function StoreStories({
       setOpen(true); // foi um toque, não um arrasto
       return;
     }
-    // Fica exatamente onde foi largada (sem grudar em lado nenhum). O `clamp`
-    // do CSS é quem segura a bolinha dentro da tela, então aqui é só converter.
-    const next = {
-      xPct: Math.min(1, Math.max(0, e.clientX / window.innerWidth)),
-      yPct: Math.min(1, Math.max(0, e.clientY / window.innerHeight)),
-    };
+    // Gruda na borda mais próxima das quatro (nunca fica solta no meio).
+    const next = snapToEdge(
+      e.clientX,
+      e.clientY,
+      window.innerWidth,
+      window.innerHeight
+    );
     setPos(next);
     try {
       window.localStorage.setItem(BUBBLE_POS_KEY, JSON.stringify(next));
@@ -157,7 +256,7 @@ export function StoreStories({
     }
   };
 
-  if (stories.length === 0) return null;
+  if (stories.length === 0 || dismissed) return null;
 
   const productFor = (s: StoreStory) =>
     s.productId ? products.find((p) => p.id === s.productId) ?? null : null;
@@ -169,57 +268,153 @@ export function StoreStories({
     productFor(first)?.image ||
     (first.mediaType === "image" ? first.mediaUrl : null) ||
     storeLogo;
+  // O que gira em volta é um SELO fixo, não o nome do produto: a bolinha abre a
+  // fila INTEIRA de stories, então anunciar um produto só mentiria sobre o resto
+  // (e o 1º da fila muda sozinho quando entra produto novo com vídeo).
+  const ringLabel = stories.length > 1 ? "NOVIDADES" : "NOVIDADE";
 
   return (
     <>
-      <button
-        type="button"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={() => {
-          dragRef.current = null;
-          setDragXY(null);
-        }}
-        aria-label={`Ver stories de ${storeName} (arraste para mover)`}
-        title="Arraste para mover"
-        className={`fixed z-40 rounded-full p-[3px] shadow-lg outline-none focus:outline-none [-webkit-tap-highlight-color:transparent] ${
-          dragXY ? "cursor-grabbing" : "cursor-grab transition-transform hover:scale-105"
-        }`}
+      {/* Widget = nome girando + bolinha + ✕. O tamanho é FIXO (WIDGET_PX) e o
+          posicionamento é dele, não da bolinha: assim nenhuma borda espreme a
+          caixa (o "achatado" da direita) e o ✕/nome andam junto com ela. */}
+      <div
+        className="fixed z-40 select-none"
         style={{
-          backgroundImage: `linear-gradient(135deg, ${accent}, #f472b6)`,
+          width: WIDGET_PX,
+          height: WIDGET_PX,
           transform: "translate(-50%, -50%)",
-          // Arrastando: segue o ponteiro. Largada: fica no ponto escolhido, com
-          // o `clamp` prendendo o centro dentro da tela (a conta é do CSS, então
-          // girar o celular/redimensionar reajusta sozinho, sem listener).
-          ...(dragXY
-            ? { left: dragXY.x, top: dragXY.y }
-            : pos
-            ? {
-                left: `clamp(${BUBBLE_EDGE_PX}px, ${pos.xPct * 100}%, calc(100% - ${BUBBLE_EDGE_PX}px))`,
-                top: `clamp(${BUBBLE_EDGE_PX}px, ${pos.yPct * 100}%, calc(100% - ${BUBBLE_EDGE_PX}px))`,
-              }
-            : // Padrão de quem nunca arrastou: canto esquerdo, meia altura.
-              { left: BUBBLE_EDGE_PX, top: "50%" }),
-          // Sem isso o navegador rola a página em vez de deixar arrastar.
-          touchAction: "none",
+          // Arrastando: segue o ponteiro livremente (é o dedo/cursor dele).
+          // Largada: colada na borda escolhida, com o `clamp` prendendo o eixo
+          // livre dentro da tela — a conta é do CSS, então girar o celular ou
+          // redimensionar reajusta sozinho, sem listener de resize.
+          ...(dragXY ? { left: dragXY.x, top: dragXY.y } : edgeStyle(pos)),
         }}
       >
-        <span className="block rounded-full bg-white p-[2px]">
-          {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={cover}
-              alt=""
-              className="h-14 w-14 rounded-full object-cover"
+        {/* Nome curvado dando a volta na bolinha. Decorativo (o nome real está
+            no aria-label do botão), então `aria-hidden` + sem captar toque —
+            senão roubaria o clique da bolinha. A `.vw-story-ring` é dele e roda
+            mesmo com `prefers-reduced-motion` (ver globals.css) — com o
+            `.vw-spin-slow` genérico o anel ficava PARADO nesse modo. */}
+        <svg
+          viewBox={`0 0 ${WIDGET_PX} ${WIDGET_PX}`}
+          className="vw-story-ring pointer-events-none absolute inset-0 h-full w-full"
+          aria-hidden
+        >
+          <defs>
+            {/* Círculo começando às 9h e subindo (sweep=1): a 25% do caminho
+                cai bem no topo, que é onde o nome fica centrado. */}
+            <path
+              id={pathId}
+              fill="none"
+              d={`M ${MID},${MID} m -${RING_R},0 a ${RING_R},${RING_R} 0 1,1 ${RING_R * 2},0 a ${RING_R},${RING_R} 0 1,1 -${RING_R * 2},0`}
             />
-          ) : (
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-xl">
-              🎬
-            </span>
-          )}
-        </span>
-      </button>
+          </defs>
+          <text
+            // Contorno branco por baixo (`paint-order: stroke`) para o nome ser
+            // legível sobre QUALQUER fundo de loja — claro, escuro ou foto.
+            style={{
+              fontSize: RING_FONT_PX,
+              fontWeight: 700,
+              letterSpacing: 1.2,
+              paintOrder: "stroke",
+              stroke: "#fff",
+              strokeWidth: 2.5,
+              strokeLinejoin: "round",
+            }}
+            fill="#0f172a"
+          >
+            <textPath href={`#${pathId}`} startOffset="25%" textAnchor="middle">
+              {ringLabel}
+            </textPath>
+          </text>
+        </svg>
+
+        <button
+          type="button"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={() => {
+            dragRef.current = null;
+            setDragXY(null);
+          }}
+          // NO PC a bolinha não saía do lugar: o navegador de desktop arrasta
+          // imagem/seleção nativamente (drag-and-drop do HTML5), o que dispara
+          // `pointercancel` e mata o nosso arrasto no primeiro movimento. No
+          // celular não existe esse gesto nativo, por isso só lá funcionava.
+          onDragStart={(e) => e.preventDefault()}
+          aria-label={`Ver stories de ${storeName} (arraste para mover)`}
+          title="Arraste para mover"
+          className={`absolute left-1/2 top-1/2 rounded-full p-[3px] shadow-lg outline-none focus:outline-none [-webkit-tap-highlight-color:transparent] ${
+            dragXY ? "cursor-grabbing" : "cursor-grab transition-transform hover:scale-105"
+          }`}
+          style={{
+            // Tamanho EXPLÍCITO, senão vira elipse: `absolute left-1/2` sem
+            // largura cai no shrink-to-fit (sobra metade da caixa de espaço) e
+            // o preflight do Tailwind (`img { max-width: 100% }`) deixa a foto
+            // encolher junto, enquanto a altura fica presa — era o resto do
+            // "achatado", que o tamanho fixo só do widget não resolveu.
+            width: BUBBLE_PX,
+            height: BUBBLE_PX,
+            backgroundImage: `linear-gradient(135deg, ${accent}, #f472b6)`,
+            transform: "translate(-50%, -50%)",
+            // Sem isso o navegador rola a página em vez de deixar arrastar.
+            touchAction: "none",
+          }}
+        >
+          <span className="flex h-full w-full items-center justify-center rounded-full bg-white p-[2px]">
+            {cover ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={cover}
+                alt=""
+                draggable={false}
+                width={PHOTO_PX}
+                height={PHOTO_PX}
+                className="rounded-full object-cover [-webkit-user-drag:none]"
+                style={{ width: PHOTO_PX, height: PHOTO_PX, maxWidth: "none" }}
+              />
+            ) : (
+              <span
+                className="flex items-center justify-center rounded-full bg-slate-100 text-xl"
+                style={{ width: PHOTO_PX, height: PHOTO_PX }}
+              >
+                🎬
+              </span>
+            )}
+          </span>
+        </button>
+
+        {/* ✕ — tira a bolinha só desta visita (volta no F5). Fica às ~10h,
+            encostado no anel (como na referência), e não no canto da caixa. */}
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          aria-label="Esconder os stories"
+          title="Esconder (volta ao atualizar a página)"
+          className="absolute flex items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-md outline-none transition hover:text-slate-900 focus:outline-none [-webkit-tap-highlight-color:transparent]"
+          style={{
+            width: CLOSE_PX,
+            height: CLOSE_PX,
+            left: MID + CLOSE_DIST * Math.cos((CLOSE_ANGLE_DEG * Math.PI) / 180),
+            top: MID + CLOSE_DIST * Math.sin((CLOSE_ANGLE_DEG * Math.PI) / 180),
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <svg
+            className="h-2.5 w-2.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            aria-hidden
+          >
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
 
       {open && (
         <StoryViewer

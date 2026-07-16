@@ -176,6 +176,20 @@ html {
   }
 }
 
+/* Nome curvado girando em volta da bolinha de stories (StoreStories.tsx).
+   Classe PRÓPRIA em vez do `.vw-spin-slow` acima porque ela precisa rodar
+   MESMO com `prefers-reduced-motion: reduce` — mesma exceção consciente da
+   barra de avisos (`.vw-marquee-always`) e pelo mesmo motivo: é a loja
+   anunciando o produto e, parado, o anel não cumpre o papel (foi assim que o
+   "o nome não está girando" apareceu — o `.vw-spin-slow` some nesse modo).
+   `transform-origin` explícito porque em SVG ele não é 50% 50% por toda parte.
+   NÃO copie para animações novas: o padrão do projeto segue sendo respeitar a
+   preferência do cliente. */
+.vw-story-ring {
+  animation: vw-spin-slow 16s linear infinite;
+  transform-origin: 50% 50%;
+}
+
 /* Transição entre slides do banner (desliza + aparece), estilo do carrossel da
    referência. Re-dispara a cada troca de slide via `key`. */
 @keyframes vw-banner-in {

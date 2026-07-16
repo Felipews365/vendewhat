@@ -312,20 +312,66 @@ Orientações para o Claude Code trabalhar neste repositório.
     `useMemo` (`storyList`) e é ela — não `storefront.stories` — que decide se a bolinha aparece.
   - **Capa da bolinha (derivada, sem campo novo):** foto do produto do 1º story → a própria mídia (se
     for foto) → a logo da loja. Vídeo não vira miniatura sem canvas, daí a cascata.
-  - **A bolinha é ARRASTÁVEL para QUALQUER ponto da tela:** pointer events no botão
+  - **Selo curvado GIRANDO em volta (`ringLabel`, decorativo):** **"NOVIDADES"** (ou "NOVIDADE" com um
+    story só) curvado num `<textPath>` SVG sobre um círculo de raio `RING_R`. É um **selo fixo, e não
+    o nome do produto**, de propósito: a bolinha abre a **fila inteira** de stories, então anunciar um
+    produto só mentiria sobre o resto — e o 1º da fila muda sozinho quando entra produto novo com
+    vídeo (`buildStoryList`). O id do path vem do **`useId`** (duas lojas na mesma tela não podem
+    colidir), **sem os `:`** — dois-pontos vale como id em HTML mas quebra quem resolve a referência
+    como seletor CSS. É `aria-hidden` + `pointer-events-none` (captar toque roubaria o clique da
+    bolinha) e leva **contorno branco** (`paint-order: stroke`) para ser legível sobre qualquer fundo
+    de loja (claro, escuro ou foto).
+    - **`.vw-story-ring` roda MESMO com `prefers-reduced-motion` — exceção consciente** (a 2ª do
+      projeto, junto do `.vw-marquee-always` da barra de avisos, e pelo mesmo motivo: é a loja
+      anunciando e, parado, o anel não cumpre o papel). Classe **própria** em
+      [globals.css](src/app/globals.css) porque o `.vw-spin-slow` genérico é zerado nesse modo — foi
+      exatamente esse o bug de **"o nome não está girando"**, num Windows com efeitos de animação
+      desligados. Leva `transform-origin` explícito (em SVG ele nem sempre é 50% 50%). **Não copie**
+      para animações novas: o padrão do projeto segue sendo respeitar a preferência.
+  - **✕ esconde só NESTA visita (volta no F5):** `useState` puro, **sem localStorage** de propósito —
+    quem dispensa quer ver a tela agora, não desistir dos stories para sempre; é a loja anunciando,
+    então um toque não deve sumir com ela em definitivo. (Contraste com a **posição**, essa sim
+    persistida: mudar de canto é preferência, dispensar é momentâneo.)
+  - **O widget tem tamanho FIXO (`WIDGET_PX`) e é ELE que é posicionado, não a bolinha:** a
+    bolinha, o nome girando e o ✕ vivem dentro dele. Sem largura explícita, encostado na direita
+    (`left: calc(100% - Npx)`) o navegador só tinha os poucos px restantes até a borda como largura
+    disponível e usava **shrink-to-fit**, **espremendo a bolinha numa pílula** — era o bug do
+    "achatado no lado direito".
+  - **As medidas descem todas do `PHOTO_PX` (76):** `BUBBLE_PX` (foto + as duas molduras), `RING_R`
+    (raio do selo, rente ao anel), `RING_FONT_PX`, `CLOSE_PX`/`CLOSE_DIST`/`CLOSE_ANGLE_DEG` (o ✕
+    pequeno às ~10h, **encostado no anel** e não jogado no canto da caixa, como na referência) e
+    `WIDGET_PX` (= cabe o círculo do selo + a letra). Mexer no `PHOTO_PX` reajusta o resto junto — as
+    proporções foram tiradas a olho dos prints da referência, então ajuste fino é esperado.
+  - **`BUBBLE_EDGE_PX` (folga da borda da tela) sai da BOLINHA, não do `WIDGET_PX`:** a caixa do
+    widget inclui o vão do selo girando, então medir por ela **parava a bolinha ~20px antes da
+    beirada** e ela parecia *boiando* em vez de colada no canto. O preço aceito é o **selo raspar a
+    borda** no lado em que ela está encostada.
+  - **A bolinha e a foto precisam de tamanho EXPLÍCITO (e não só o widget):** `absolute left-1/2` sem
+    largura cai no shrink-to-fit (sobra metade da caixa de espaço) e o **preflight do Tailwind**
+    (`img { max-width: 100% }`) deixa a foto encolher junto, enquanto a altura fica presa — o
+    `rounded-full` numa caixa não-quadrada vira **elipse**. Foi o "achatado" que sobreviveu a dar
+    tamanho fixo só ao widget.
+  - **A bolinha é ARRASTÁVEL e gruda numa das QUATRO bordas:** pointer events no botão
     (`onPointerDown/Move/Up` + `setPointerCapture`); passado `DRAG_THRESHOLD_PX` (6px) vira arrasto e a
-    bolinha segue o ponteiro, e no `pointerup` ela **fica exatamente onde foi largada** — livre nos dois
-    eixos (esquerda/direita **e** cima/baixo), **sem grudar** em lado nenhum (o antigo snap em `clientX <
-    innerWidth/2`, que prendia o horizontal às bordas e só guardava a altura, foi removido). Abaixo do
-    limiar é **toque = abrir** — por isso não há `onClick`. A posição (`{xPct, yPct}` = o centro em % da
-    tela) fica no **localStorage do cliente** (`vw-story-bubble-pos`, restaurado num `useEffect` no mount
-    p/ não quebrar hidratação), **não** no `storefront`: quem tira a bolinha da frente é o visitante, e
-    isso não deve valer para os outros. **Em % e não em px** para a posição sobreviver a girar o celular
-    e a telas de tamanhos diferentes; quem segura a bolinha dentro da tela é um **`clamp` no CSS**
-    (`clamp(BUBBLE_EDGE_PX, X%, calc(100% - BUBBLE_EDGE_PX))`, metade da bolinha + folga) — como a conta
-    é do navegador, redimensionar reajusta **sozinho**, sem listener de resize. Um `localStorage` no
-    formato antigo (`{side, topPct}`) não casa com o novo e cai no padrão, sem quebrar. O botão precisa
-    de **`touch-action: none`**, senão o celular rola a página em vez de arrastar.
+    bolinha segue o ponteiro, e no `pointerup` o `snapToEdge` a **cola na borda mais perto das quatro**
+    (esquerda/direita/topo/base — a de menor distância). Ela **nunca fica solta no meio da tela**: no
+    meio taparia justamente o que o cliente quer ver. O cliente pode mudar **a qualquer momento,
+    quantas vezes quiser** (todo arrasto vale; não há "modo de mover" para ligar). Abaixo do limiar é
+    **toque = abrir** — por isso não há `onClick`. A posição (`{edge, pct}` = a borda + onde ela está
+    **ao longo** dessa borda) fica no **localStorage do cliente** (`vw-story-bubble-pos`, restaurado num
+    `useEffect` no mount p/ não quebrar hidratação), **não** no `storefront`: quem tira a bolinha da
+    frente é o visitante, e isso não deve valer para os outros. O `pct` é **% e não px** para sobreviver
+    a girar o celular e a telas de tamanhos diferentes; o `edgeStyle` cola o eixo preso na borda e passa
+    o **eixo livre** por um **`clamp` no CSS** (`clamp(BUBBLE_EDGE_PX, pct%, calc(100% -
+    BUBBLE_EDGE_PX))`, metade da bolinha + folga), que a impede de invadir os cantos — como a conta é do
+    navegador, redimensionar reajusta **sozinho**, sem listener de resize. `localStorage` em formato
+    antigo não casa e cai no padrão (esquerda, meia altura), sem quebrar.
+    - **Dois detalhes sem os quais o arrasto não funciona, um por plataforma:** no **celular** o botão
+      precisa de **`touch-action: none`**, senão o navegador rola a página em vez de arrastar; no **PC**
+      a imagem da capa precisa de **`draggable={false}`** (+ `onDragStart` com `preventDefault` e
+      `select-none`), senão o desktop inicia o **drag-and-drop nativo** da imagem, que dispara
+      `pointercancel` e mata o arrasto no primeiro movimento — a bolinha só andava no celular, onde
+      esse gesto nativo não existe.
   - **Ritmo:** foto dura `STORY_IMAGE_MS` (5s, `setInterval` que alimenta a barrinha); **vídeo dura o
     que durar** (`onTimeUpdate` → progresso, `onEnded` → próximo). O último story fecha o player.
     Autoplay começa **mudo** (política dos browsers); o cliente liga o som no botão. Toque no **terço
