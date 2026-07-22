@@ -2,6 +2,54 @@
 
 Orientações para o Claude Code trabalhar neste repositório.
 
+## Padrões de qualidade (seguir SEMPRE, em toda alteração)
+
+O foco não é só "fazer funcionar" — é entregar **polido, consistente, leve e com cara de
+produto premium**. Pense como um engenheiro de produto sênior: não faça só o pedido literal,
+faça da melhor forma dentro do padrão atual do projeto, **sem exagerar, sem reinventar e sem
+quebrar o que já existe**.
+
+> ⚠️ **Stack real:** este projeto usa **Tailwind CSS puro + componentes próprios** (Magic UI
+> portados, tokens `--store-primary`/`--store-secondary`, temas em `storeThemes.ts`). **NÃO usa
+> shadcn/ui.** Onde estas regras falarem em "design system", vale o idioma visual **existente**
+> do repo — não introduza shadcn nem bibliotecas de UI novas.
+
+**Ordem de prioridade em cada mudança:**
+1. Não quebrar funcionalidades existentes.
+2. Manter o padrão visual atual.
+3. Melhorar clareza, usabilidade e velocidade.
+4. Diff mínimo, reaproveitando código existente.
+5. Nada de gambiarra, duplicação ou solução pesada.
+
+**Antes de alterar:** analise a estrutura, procure componentes/hooks/utils/padrões já existentes
+e **reutilize**; mapeie o impacto (frontend, backend, banco, fluxos); só então implemente. Nunca
+reescreva uma área inteira se um ajuste local resolve.
+
+**UI/UX:** interface simples, clara e elegante; sem poluição visual, sem cards/blocos exagerados,
+sem excesso de cores/texto/botões. Destaque só a ação principal; leitura escaneável. Pergunte-se
+"isso parece produto profissional ou só código que funciona?" — se parecer cru, refine.
+
+**Responsividade (mobile-first):** funcionar bem em mobile, tablet e desktop; sem overflow
+horizontal; sem quebra de layout; áreas de toque boas; nada "mais ou menos" no celular.
+
+**Performance:** evitar re-render e queries desnecessárias; nada de libs novas sem necessidade;
+lazy load quando fizer sentido; **imagens sempre via `next/image`** (o repo já cuida de LCP/CLS —
+ver notas de banner/favicon/categorias); não piorar o carregamento inicial.
+
+**Acessibilidade:** contraste bom, foco visível (`focus-visible`), navegação por teclado quando
+aplicável, labels corretos, HTML semântico, `aria` só quando necessário.
+
+**Código:** claro, organizado, sem duplicação nem abstração excessiva; nomes claros;
+responsabilidade separada; baixo acoplamento; comentários só quando agregam.
+
+**Banco/regras de negócio:** respeitar multi-tenant (`store_id`/tenant) em toda operação; nunca
+vazar dados entre lojas; validar permissão no back **e** no front; respeitar limites por plano em
+todas as camadas; reaproveitar guards/policies/helpers.
+
+**Acabamento:** ao mexer em tela, revisar alinhamento, espaçamento, tipografia, contraste,
+responsividade, estados `hover/focus/active`, e `loading`/`empty`/`error`. Não entregar nada com
+cara de "quase pronto".
+
 ## O que é o projeto
 
 **VendeWhat** (`vendemais` no Supabase) — plataforma de e-commerce para quem vende pelo WhatsApp: catálogo digital, pedidos organizados e um link de loja para compartilhar com clientes.
@@ -627,6 +675,17 @@ imagens ao bucket `product-images` e guarda a ordem em `products.images` + o foc
     (`onTouchStart`, celular — sem precisar clicar para abrir). Um `IntersectionObserver` **pausa** a
     prévia quando o card sai da tela (evita vários vídeos tocando ao rolar). Cards com vídeo mostram um
     selo **▶ Vídeo** (canto inferior direito), escondido enquanto a prévia toca.
+  - **Compartilhar o produto ([ProductShare](src/components/storefront/StoreShare.tsx)):** ícone de
+    compartilhar na **linha do título** do `ProductDetailModal` (ao lado do nome, com `md:pr-9` para
+    não encostar no ✕). Abre um menuzinho com **WhatsApp · Facebook · Telegram · Copiar link**; o
+    "Copiar link" usa `navigator.clipboard` (com fallback `execCommand`) + toast "Link copiado!" e um
+    ✓ verde temporário. O link aponta para o **produto específico** — `origin/loja/{slug}?p={id}` — e
+    o `LojaClient` faz o **deep-link**: um `useEffect` lê `?p=<id>` no carregamento e abre o produto (só
+    depois do catálogo carregar, via `deepLinkHandled` ref), e outro **reflete o `?p=` na URL** ao
+    abrir/fechar um produto (`history.replaceState`), então o "Copiar link" sempre leva de volta ao
+    item certo. **Compartilhamento nativo só no toque** (`matchMedia("(pointer: coarse)")` + `navigator.share`):
+    no celular um toque abre a folha do SO; no desktop mantém o menu (senão a folha nativa esconderia
+    o "Copiar link"). Botão e itens têm `focus-visible` e a cor do ícone segue `--store-secondary`.
 
 ### Variações (cores, tamanhos e estoque por combinação)
 

@@ -23,6 +23,7 @@ import {
 import { AnnouncementBar, AnnouncementText } from "@/components/storefront/AnnouncementBar";
 import { TabAttention } from "@/components/storefront/TabAttention";
 import { StoreStories, buildStoryList } from "@/components/storefront/StoreStories";
+import { ProductShare } from "@/components/storefront/StoreShare";
 import { discountPercent } from "@/lib/productCardMeta";
 import {
   HeroTemplateSlide,
@@ -1199,12 +1200,16 @@ function ProductDetailModal({
   onSetQty,
   onClose,
   contactHref,
+  storeSlug,
+  storeName,
 }: {
   product: CatalogProduct;
   cart: Record<string, number>;
   onSetQty: (cartKey: string, qty: number) => void;
   onClose: () => void;
   contactHref: string | null;
+  storeSlug: string;
+  storeName: string;
 }) {
   const [imgIdx, setImgIdx] = useState(0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -1673,9 +1678,17 @@ function ProductDetailModal({
 
           {/* Info do produto */}
           <div className="md:w-[45%] p-6 pb-8 md:p-8 md:pb-10 md:pl-9 flex flex-col md:overflow-y-auto md:max-h-[min(820px,88vh)]">
-            <h2 className="text-xl md:text-2xl font-semibold text-stone-900 tracking-tight">
-              {product.name}
-            </h2>
+            <div className="flex items-start gap-3 md:pr-9">
+              <h2 className="flex-1 text-xl md:text-2xl font-semibold text-stone-900 tracking-tight">
+                {product.name}
+              </h2>
+              <ProductShare
+                slug={storeSlug}
+                productId={product.id}
+                productName={product.name}
+                storeName={storeName}
+              />
+            </div>
 
             {product.category?.trim() && (
               <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
@@ -2430,6 +2443,32 @@ export function LojaClient({
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   /** Filtro "🔥 Promoções" da barra do topo (só produtos em promoção). */
   const [promoOnly, setPromoOnly] = useState(false);
+
+  /**
+   * Deep-link do produto (link compartilhado): ao carregar com `?p=<id>` na URL,
+   * abre direto o detalhe daquele produto; e, ao abrir/fechar um produto, reflete
+   * o `?p=` na URL — assim o "Copiar link" do detalhe leva de volta ao produto.
+   */
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandled.current || typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("p");
+    if (!id) {
+      deepLinkHandled.current = true;
+      return;
+    }
+    if (products.length === 0) return; // espera o catálogo carregar
+    deepLinkHandled.current = true;
+    const p = products.find((x) => x.id === id);
+    if (p) setSelectedProduct(p);
+  }, [products]);
+  useEffect(() => {
+    if (typeof window === "undefined" || !deepLinkHandled.current) return;
+    const url = new URL(window.location.href);
+    if (selectedProduct) url.searchParams.set("p", selectedProduct.id);
+    else url.searchParams.delete("p");
+    window.history.replaceState(null, "", url.toString());
+  }, [selectedProduct]);
 
   /**
    * Frases que ficam passando no título da aba quando o cliente sai da loja.
@@ -3748,6 +3787,8 @@ export function LojaClient({
           onSetQty={setQty}
           onClose={() => setSelectedProduct(null)}
           contactHref={contactHref}
+          storeSlug={store.slug}
+          storeName={store.name}
         />
       )}
 
