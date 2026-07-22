@@ -18,6 +18,7 @@ import {
   minOrderStatus,
   announcementMinOrder,
   enabledShippingModeIds,
+  describeAttendance,
   formatBRL,
 } from "@/lib/storefront";
 import { AnnouncementBar, AnnouncementText } from "@/components/storefront/AnnouncementBar";
@@ -211,21 +212,6 @@ const strokeProps = {
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 };
-function IconUser({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" {...strokeProps} aria-hidden>
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c0-3.6 3.6-6 8-6s8 2.4 8 6" />
-    </svg>
-  );
-}
-function IconHeart({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" {...strokeProps} aria-hidden>
-      <path d="M12 20.5S3.5 15.3 3.5 9.3A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 8.5 1.7c0 6-8.5 11.2-8.5 11.2z" />
-    </svg>
-  );
-}
 function IconBag({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" {...strokeProps} aria-hidden>
@@ -239,6 +225,24 @@ function IconSearch({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" {...strokeProps} aria-hidden>
       <circle cx="11" cy="11" r="7" />
       <path d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+}
+function IconInfo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5" />
+      <path d="M12 8h.01" />
+    </svg>
+  );
+}
+function IconMenu({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
     </svg>
   );
 }
@@ -2321,6 +2325,454 @@ function CategoryNavBar({
   );
 }
 
+/** Miniatura redonda da categoria (foto enviada, preset em SVG ou emoji). */
+function CategoryAvatar({
+  cat,
+  size = 44,
+}: {
+  cat: StorefrontCategoryItem;
+  size?: number;
+}) {
+  const box = { width: size, height: size };
+  if (!cat.imageUrl) {
+    return (
+      <span
+        className="flex shrink-0 items-center justify-center rounded-full bg-stone-100 ring-1 ring-stone-200 text-xl leading-none select-none"
+        style={box}
+      >
+        {categoryEmoji(cat.label)}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-stone-100 ring-1 ring-stone-200"
+      style={box}
+    >
+      {cat.imageUrl.startsWith("data:") ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={cat.imageUrl}
+          alt=""
+          className="h-full w-full object-cover object-center"
+        />
+      ) : (
+        <Image
+          src={cat.imageUrl}
+          alt=""
+          fill
+          sizes={`${size}px`}
+          className="object-cover object-center"
+        />
+      )}
+    </span>
+  );
+}
+
+/**
+ * Gaveta lateral (direita) com todas as categorias, aberta pelo botão ☰ do topo.
+ * Sempre montada (translate para deslizar) — trava a rolagem do fundo e fecha no
+ * Esc, no ✕ ou tocando fora.
+ */
+function CategoryDrawer({
+  open,
+  onClose,
+  items,
+  selectedLabel,
+  promoActive,
+  onSelect,
+  onSelectPromo,
+}: {
+  open: boolean;
+  onClose: () => void;
+  items: StorefrontCategoryItem[];
+  selectedLabel: string | null;
+  promoActive: boolean;
+  onSelect: (label: string | null) => void;
+  onSelectPromo: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  const rowBase =
+    "flex w-full items-center gap-3 px-5 py-2.5 text-left transition-colors";
+  const isAllActive = selectedLabel == null && !promoActive;
+
+  return (
+    <div
+      className={`fixed inset-0 z-[70] ${open ? "" : "pointer-events-none"}`}
+      aria-hidden={!open}
+    >
+      {/* Fundo escurecido */}
+      <div
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${
+          open ? "opacity-100" : "opacity-0"
+        }`}
+        onClick={onClose}
+      />
+      {/* Painel deslizante */}
+      <aside
+        className={`absolute right-0 top-0 flex h-full w-[86%] max-w-sm flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${
+          open ? "translate-x-0" : "translate-x-full"
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Categorias"
+      >
+        <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
+          <h2 className="text-lg font-bold text-stone-900">Categorias</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-300"
+            aria-label="Fechar"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <nav className="flex-1 overflow-y-auto py-2">
+          <button
+            type="button"
+            onClick={() => {
+              onSelect(null);
+              onClose();
+            }}
+            className={`${rowBase} ${
+              isAllActive
+                ? "bg-stone-50 text-stone-900"
+                : "text-stone-700 hover:bg-stone-50"
+            }`}
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-stone-100 ring-1 ring-stone-200 text-xl">
+              ✨
+            </span>
+            <span className="text-sm font-medium">Novidades</span>
+          </button>
+          {items.map((it) => {
+            const active =
+              !promoActive &&
+              selectedLabel != null &&
+              it.label.localeCompare(selectedLabel, "pt", {
+                sensitivity: "base",
+              }) === 0;
+            return (
+              <button
+                key={it.label}
+                type="button"
+                onClick={() => {
+                  onSelect(it.label);
+                  onClose();
+                }}
+                className={`${rowBase} ${
+                  active
+                    ? "bg-stone-50 text-stone-900"
+                    : "text-stone-700 hover:bg-stone-50"
+                }`}
+              >
+                <CategoryAvatar cat={it} />
+                <span className="text-sm font-medium leading-tight">
+                  {it.label}
+                </span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => {
+              onSelectPromo();
+              onClose();
+            }}
+            className={`${rowBase} ${
+              promoActive
+                ? "bg-red-50 text-red-700"
+                : "text-stone-700 hover:bg-stone-50"
+            }`}
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 ring-1 ring-red-100 text-xl">
+              🔥
+            </span>
+            <span className="text-sm font-semibold">Promoções</span>
+          </button>
+        </nav>
+      </aside>
+    </div>
+  );
+}
+
+/**
+ * Gaveta lateral (direita) com as informações da loja, aberta pelo botão "Info"
+ * do topo — atendimento, endereço, contatos e redes (só o que estiver preenchido).
+ */
+function StoreInfoDrawer({
+  open,
+  onClose,
+  store,
+  storefront,
+  contactHref,
+}: {
+  open: boolean;
+  onClose: () => void;
+  store: StoreInfo;
+  storefront: StorefrontSettings;
+  contactHref: string | null;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  const attendance = describeAttendance(storefront);
+  const address = storefront.pickupAddress.trim() || storefront.onlineCity.trim();
+  const phone = (storefront.footerPhone || store.phone || "").trim();
+  const email = storefront.footerEmail.trim();
+  const website = storefront.footerWebsite.trim();
+  const socials: { label: string; url: string }[] = [
+    { label: "Instagram", url: storefront.instagramUrl },
+    { label: "Facebook", url: storefront.facebookUrl },
+    { label: "TikTok", url: storefront.tiktokUrl },
+    { label: "YouTube", url: storefront.youtubeUrl },
+  ].filter((s) => s.url && s.url.trim());
+  const hasAny =
+    attendance ||
+    address ||
+    phone ||
+    email ||
+    website ||
+    contactHref ||
+    socials.length > 0 ||
+    (store.description && store.description.trim());
+
+  const rowIcon =
+    "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500";
+
+  return (
+    <div
+      className={`fixed inset-0 z-[70] ${open ? "" : "pointer-events-none"}`}
+      aria-hidden={!open}
+    >
+      <div
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${
+          open ? "opacity-100" : "opacity-0"
+        }`}
+        onClick={onClose}
+      />
+      <aside
+        className={`absolute right-0 top-0 flex h-full w-[86%] max-w-sm flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${
+          open ? "translate-x-0" : "translate-x-full"
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Informações da loja"
+      >
+        <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
+          <h2 className="text-lg font-bold text-stone-900">Informações</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-300"
+            aria-label="Fechar"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          <div className="flex items-center gap-3">
+            {store.logo ? (
+              <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl ring-1 ring-stone-200">
+                <Image
+                  src={store.logo}
+                  alt={store.name}
+                  fill
+                  sizes="56px"
+                  className="object-cover"
+                />
+              </span>
+            ) : (
+              <span
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-2xl"
+                style={{ backgroundColor: "var(--store-secondary)", color: "#FFDA6C" }}
+              >
+                ✦
+              </span>
+            )}
+            <div className="min-w-0">
+              <p className="text-lg font-bold text-stone-900">{store.name}</p>
+              {storefront.headerTagline && (
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-stone-500">
+                  {storefront.headerTagline}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {store.description && store.description.trim() && (
+            <p className="mt-4 text-sm leading-relaxed text-stone-600">
+              {store.description.trim()}
+            </p>
+          )}
+
+          <div className="mt-5 space-y-4">
+            {attendance && (
+              <div className="flex gap-3">
+                <span className={rowIcon}>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                    Atendimento
+                  </p>
+                  <p className="text-sm text-stone-700">{attendance}</p>
+                </div>
+              </div>
+            )}
+            {address && (
+              <div className="flex gap-3">
+                <span className={rowIcon}>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+                    <path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z" />
+                    <circle cx="12" cy="11" r="2.2" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                    Onde encontrar
+                  </p>
+                  <p className="text-sm text-stone-700">{address}</p>
+                </div>
+              </div>
+            )}
+            {phone && (
+              <div className="flex gap-3">
+                <span className={rowIcon}>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+                    <path d="M5 4h3l1.5 4-2 1.5a11 11 0 0 0 5 5l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A16 16 0 0 1 3 6.2 2 2 0 0 1 5 4z" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                    Telefone
+                  </p>
+                  <p className="text-sm text-stone-700">{phone}</p>
+                </div>
+              </div>
+            )}
+            {email && (
+              <div className="flex gap-3">
+                <span className={rowIcon}>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="m4 7 8 6 8-6" />
+                  </svg>
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                    E-mail
+                  </p>
+                  <a
+                    href={`mailto:${email}`}
+                    className="text-sm text-stone-700 hover:underline break-all"
+                  >
+                    {email}
+                  </a>
+                </div>
+              </div>
+            )}
+            {website && (
+              <div className="flex gap-3">
+                <span className={rowIcon}>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
+                  </svg>
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                    Site
+                  </p>
+                  <a
+                    href={website.startsWith("http") ? website : `https://${website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-stone-700 hover:underline break-all"
+                  >
+                    {website}
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {contactHref && (
+            <a
+              href={contactHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-whatsapp px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-whatsapp-dark"
+            >
+              <WhatsAppGlyph className="h-4 w-4 shrink-0" />
+              Falar no WhatsApp
+            </a>
+          )}
+
+          {socials.length > 0 && (
+            <div className="mt-6">
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                Redes sociais
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {socials.map((s) => (
+                  <a
+                    key={s.label}
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 transition-colors hover:border-stone-300 hover:bg-stone-50"
+                  >
+                    {s.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!hasAny && (
+            <p className="mt-6 text-sm text-stone-500">
+              Fale com a loja pelo WhatsApp para mais informações. 😊
+            </p>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 function StorefrontCategoriesStrip({
   items,
   selectedLabel,
@@ -2527,6 +2979,10 @@ export function LojaClient({
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   /** Filtro "🔥 Promoções" da barra do topo (só produtos em promoção). */
   const [promoOnly, setPromoOnly] = useState(false);
+  /** Gaveta lateral de categorias (botão ☰ do topo). */
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  /** Gaveta lateral com as informações da loja (botão "Info" do topo). */
+  const [infoOpen, setInfoOpen] = useState(false);
 
   /**
    * Deep-link do produto (link compartilhado): ao carregar com `?p=<id>` na URL,
@@ -3241,15 +3697,30 @@ export function LojaClient({
               >
                 <button
                   type="button"
+                  onClick={() => setInfoOpen(true)}
                   className={`p-2 rounded-lg transition-colors shrink-0 ${
                     headerDark
                       ? "text-white/90 hover:bg-white/10"
                       : "text-stone-700 hover:bg-stone-100"
                   }`}
-                  aria-label="Favoritos"
+                  aria-label="Informações da loja"
                 >
-                  <IconHeart className="w-5 h-5" />
+                  <IconInfo className="w-5 h-5" />
                 </button>
+                {categoryStripItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setCategoriesOpen(true)}
+                    className={`p-2 rounded-lg transition-colors shrink-0 ${
+                      headerDark
+                        ? "text-white/90 hover:bg-white/10"
+                        : "text-stone-700 hover:bg-stone-100"
+                    }`}
+                    aria-label="Categorias"
+                  >
+                    <IconMenu className="w-5 h-5" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setCartOpen(true)}
@@ -3314,21 +3785,25 @@ export function LojaClient({
               </div>
             </form>
 
-            {/* Ações (desktop): Entrar · Favoritos · Sacola · WhatsApp */}
+            {/* Ações (desktop): Info · Categorias · Sacola · WhatsApp */}
             <nav
               className="hidden lg:flex items-center gap-1 shrink-0"
               aria-label="Atalhos da loja"
             >
               <HeaderAction
-                icon={<IconUser className="w-5 h-5" />}
-                label="Entrar"
+                icon={<IconInfo className="w-5 h-5" />}
+                label="Informações"
                 dark={headerDark}
+                onClick={() => setInfoOpen(true)}
               />
-              <HeaderAction
-                icon={<IconHeart className="w-5 h-5" />}
-                label="Favoritos"
-                dark={headerDark}
-              />
+              {categoryStripItems.length > 0 && (
+                <HeaderAction
+                  icon={<IconMenu className="w-5 h-5" />}
+                  label="Categorias"
+                  dark={headerDark}
+                  onClick={() => setCategoriesOpen(true)}
+                />
+              )}
               <HeaderAction
                 icon={<IconBag className="w-5 h-5" />}
                 label="Sacola"
@@ -3386,6 +3861,34 @@ export function LojaClient({
           )}
         </div>
       </header>
+
+      {/* Gaveta lateral de categorias (botão ☰ do topo). */}
+      <CategoryDrawer
+        open={categoriesOpen}
+        onClose={() => setCategoriesOpen(false)}
+        items={categoryStripItems}
+        selectedLabel={categoryFilter}
+        promoActive={promoOnly}
+        onSelect={(label) => {
+          setCategoryFilter(label);
+          setPromoOnly(false);
+          scrollToCatalogo();
+        }}
+        onSelectPromo={() => {
+          setPromoOnly(true);
+          setCategoryFilter(null);
+          scrollToCatalogo();
+        }}
+      />
+
+      {/* Gaveta lateral com as informações da loja (botão "Info" do topo). */}
+      <StoreInfoDrawer
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        store={store}
+        storefront={storefront}
+        contactHref={contactHref}
+      />
 
       {/* Menu de categorias no topo (abaixo do cabeçalho). */}
       {storefront.showCategoryNav && categoryStripItems.length > 0 && (

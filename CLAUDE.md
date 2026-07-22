@@ -544,11 +544,29 @@ cara de "quase pronto".
   `headerBackground` (default agora `#11212D`), **dark-aware** (`headerDark = isDarkRgb`). Logo/nome da
   loja em branco + **subtítulo** `storefront.headerTagline` (default `"MODA & ESTILO"`) em
   dourado-uppercase. Busca vira **pílula branca com botão laranja "Buscar"** (`EC.accent`, `IconSearch`;
-  submit rola até o catálogo). Ícones de linha SVG em pilha (`HeaderAction`): **Entrar** (`IconUser`,
-  decorativo — loja é por WhatsApp, sem login), **Favoritos** (`IconHeart`, decorativo), **Sacola**
-  (`IconBag`, abre o carrinho, selo laranja com o total). Mantém Instagram + botão **WhatsApp**. No
-  claro (headerBackground claro) o texto/ícones ficam escuros. Os `infoBullets` continuam opcionais
-  (linha discreta abaixo do logo). Sem migration.
+  submit rola até o catálogo). Ícones de linha SVG em pilha (`HeaderAction`): **Informações**
+  (`IconInfo`, abre a gaveta de infos da loja), **Categorias** (`IconMenu` = ☰, abre a gaveta de
+  categorias — só quando há categorias) e **Sacola** (`IconBag`, abre o carrinho, selo laranja com o
+  total). Mantém Instagram + botão **WhatsApp**. No celular os mesmos dois botões (Info + ☰) ficam na
+  `<nav>` compacta, ao lado da Sacola/WhatsApp. **Substituíram** os antigos **Entrar**/**Favoritos**
+  (que eram decorativos — loja é por WhatsApp, sem login/wishlist); `IconUser`/`IconHeart` foram
+  removidos. No claro (headerBackground claro) o texto/ícones ficam escuros. Os `infoBullets` continuam
+  opcionais (linha discreta abaixo do logo). Sem migration.
+  - **Duas gavetas laterais (direita, deslizam da borda; `LojaClient.tsx`):** sempre montadas
+    (`translate-x-full` fechado → `translate-x-0` aberto, `transition-transform`), com backdrop `bg-black/40`
+    (fecha ao tocar fora), ✕ no cabeçalho e Esc; travam a rolagem do fundo (`body.overflow` no `useEffect`).
+    Estados `categoriesOpen`/`infoOpen` na `LojaClient`.
+    - **`CategoryDrawer`** (botão ☰): painel branco "Categorias" com a lista de **todas** as categorias,
+      cada linha com **miniatura redonda** (`CategoryAvatar`: `imageUrl` do lojista via `next/image`, preset
+      SVG `data:` como `<img>` cru, ou `categoryEmoji`) + rótulo — igual ao print. "✨ Novidades" (limpa o
+      filtro) no topo e "🔥 Promoções" no fim. Ao escolher, aplica `categoryFilter`/`promoOnly`, fecha e
+      rola ao catálogo. Reaproveita os `categoryStripItems` e os mesmos setters da `CategoryNavBar`.
+    - **`StoreInfoDrawer`** (botão Info): painel "Informações" com logo + nome + descrição e, **só quando
+      preenchido**, linhas de atendimento (`describeAttendance`), endereço (`pickupAddress` ou `onlineCity`),
+      telefone (`footerPhone`/`store.phone`), e-mail (`footerEmail`), site (`footerWebsite`), botão "Falar no
+      WhatsApp" (`contactHref`) e redes (Instagram/Facebook/TikTok/YouTube). Sem nada preenchido, mostra um
+      aviso curto para falar pelo WhatsApp. Deriva tudo do `storefront`/`store` que a loja já recebe — sem
+      campo/migration novo.
 - **Grade "Categorias" em tiles (redesenho de `StorefrontCategoriesStrip`):** trocou a faixa circular
   (stories) por **cards brancos retangulares** iguais ao print — grid `sm:grid-cols-4 md:grid-cols-8`
   (scroll horizontal no celular), cada tile com **emoji** (`categoryEmoji`) ou a `imageUrl` da
