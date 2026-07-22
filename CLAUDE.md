@@ -346,6 +346,38 @@ cara de "quase pronto".
     o **clique na faixa** desenhada no canvas (ou no **+** dela) e um link no fim da página do banner.
   - **Na prévia do editor:** o [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)
     desenha a faixa **logo abaixo do banner** no canvas, com a mesma regra de cor.
+- **Produtos em destaque (`storefront.featuredEnabled` + `storefront.featuredProductIds: string[]`,
+  JSONB — sem migration):** faixa **logo abaixo dos cards promocionais** que mostra produtos em
+  destaque como **CARROSSEL contínuo** (entra pela direita, some na esquerda). Componente
+  `FeaturedCarousel` em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx), alimentado pelo useMemo
+  `featuredProducts`. Constante `MAX_FEATURED_PRODUCTS` (12) em [storefront.ts](src/lib/storefront.ts).
+  - **O lojista controla tudo (página dedicada [/dashboard/destaques](src/app/dashboard/destaques/page.tsx)):**
+    (1) **liga/desliga** a faixa (`featuredEnabled`, default `true`); (2) **escolhe quais** produtos
+    entram; (3) define **a ordem** (▲▼/✕, `<select>` para adicionar). Os produtos são **referência**
+    (só o `id`) — foto/nome/preço saem do cadastro na hora de renderizar. Salva o `storefront` inteiro
+    via `storefrontToDb`.
+  - **Escolha manual × automático:** `featuredProductIds` **preenchido** → só esses produtos, **na
+    ordem** escolhida (IDs de produtos apagados são ignorados). **Vazio** → vitrine **automática**
+    (promoções → novidades recentes → demais, teto 10). O toggle desligado esconde a faixa sem perder
+    a escolha. A faixa é **estável** (não reage a busca/filtro, igual aos cards promo). Reusa o mesmo
+    `ProductCatalogCard` do catálogo (segue o tema via `themedAccent`/`themedDeep`).
+  - **Carrossel (marquee sem esfumaçado):** reusa `.vw-marquee-track` do [globals.css](src/app/globals.css)
+    com **`.vw-marquee-hoverpause`** (classe nova) — **pausa no hover** (o cliente para e clica no
+    card) mas **SEM a máscara** que esfumaça as pontas (`.vw-marquee` traria a máscara; o dono não
+    quis). Laço imperceptível: **duas metades idênticas** + `translateX(-50%)`; cada metade **repete**
+    a lista até passar de ~6 cards (poucos produtos deixariam buracos) e a **duração** sai do nº de
+    cards (velocidade em px/s constante), passada por `--vw-marquee-duration`.
+    - **`prefers-reduced-motion` — EXCEÇÃO CONSCIENTE** (a 3ª do projeto, junto da barra de avisos e do
+      anel do story): o track leva **`.vw-marquee-always`**, que RE-LIGA a animação nesse modo. Sem
+      isso, num **Windows com "reduzir movimento"/efeitos de animação desligados** a faixa fica
+      **congelada** (foi exatamente o bug "não fica o carrossel passando sozinho"). **Não copie** para
+      animações novas: o padrão do projeto é respeitar a preferência.
+  - **No editor ("Monte a sua loja", [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)):**
+    um **mostruário** `id="passo-destaques"` entre os cards promo e os stories mostra os produtos (na
+    ordem escolhida via `featuredPreview`) e o **estado** ("escondida" / "N escolhido(s)" /
+    "automático"); o cabeçalho e o estado vazio levam à aba (`openFeaturedEditor` →
+    `/dashboard/destaques`). Aparece **SEMPRE** (mesmo sem produto), para o lojista descobrir o
+    recurso. Também há o item **"✨ Produtos em destaque"** no menu "⚙️ Configurações da loja".
 - **Stories da loja (`storefront.stories: StoreStory[]` + `storiesEnabled`, JSONB — sem migration):**
   bolinha flutuante na **lateral esquerda** da loja (`fixed left-3 top-1/2`, anel em degradê
   `--store-primary`→rosa) que abre um **player em tela cheia** estilo Instagram — vídeo/foto 9:16,

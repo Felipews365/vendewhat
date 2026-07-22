@@ -425,6 +425,9 @@ export type StoryMediaType = "video" | "image";
 /** Máximo de stories por loja. */
 export const MAX_STORIES = 6;
 
+/** Máximo de produtos escolhidos a dedo para a faixa "Produtos em destaque". */
+export const MAX_FEATURED_PRODUCTS = 12;
+
 /** Quanto tempo um story de FOTO fica na tela (vídeo dura o que durar). */
 export const STORY_IMAGE_MS = 5000;
 
@@ -510,6 +513,18 @@ export type StorefrontSettings = {
    * produto que já é story manual não se repete. Ver `buildStoryList`.
    */
   storiesAutoFromProducts: boolean;
+  /**
+   * Mostra a faixa "Produtos em destaque" (logo abaixo dos cards promocionais).
+   * Interruptor de liga/desliga escolhido pelo lojista (default `true`).
+   */
+  featuredEnabled: boolean;
+  /**
+   * IDs de produtos escolhidos a dedo para a faixa de destaque, NA ORDEM em que
+   * devem aparecer. Lista vazia = a loja monta uma vitrine automática
+   * (promoções → novidades → demais). IDs de produtos apagados são ignorados na
+   * hora de renderizar. Ver `featuredProductIds` em LojaClient.
+   */
+  featuredProductIds: string[];
   /** Mostra a barra de menu de categorias no topo (abaixo do cabeçalho). */
   showCategoryNav: boolean;
   /** Formato da foto dos cards de produto na loja: "1:1" (quadrado) ou "3:4" (retrato). */
@@ -744,6 +759,8 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   stories: [],
   storiesEnabled: true,
   storiesAutoFromProducts: true,
+  featuredEnabled: true,
+  featuredProductIds: [],
   showCategoryNav: true,
   productCardRatio: "3:4",
   flashSaleEndsAt: "",
@@ -1077,6 +1094,22 @@ function categoriesFromDb(v: unknown): StorefrontCategoryItem[] {
   return out;
 }
 
+/** IDs de produtos em destaque: strings não-vazias, sem repetir, teto MAX. */
+function featuredIdsFromDb(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const x of v) {
+    if (typeof x !== "string") continue;
+    const id = x.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= MAX_FEATURED_PRODUCTS) break;
+  }
+  return out;
+}
+
 /** Lista de strings não-vazias e aparadas (ignora não-strings). */
 function sanitizeStringList(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -1200,6 +1233,11 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       o.storiesAutoFromProducts,
       DEFAULT_STOREFRONT.storiesAutoFromProducts
     ),
+    featuredEnabled: boolFromDb(
+      o.featuredEnabled,
+      DEFAULT_STOREFRONT.featuredEnabled
+    ),
+    featuredProductIds: featuredIdsFromDb(o.featuredProductIds),
     showCategoryNav: boolFromDb(o.showCategoryNav, DEFAULT_STOREFRONT.showCategoryNav),
     productCardRatio: productCardRatioFromDb(o.productCardRatio),
     flashSaleEndsAt: isoDateFromDb(o.flashSaleEndsAt),
@@ -1330,6 +1368,8 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     stories: storiesFromDb(s.stories),
     storiesEnabled: s.storiesEnabled,
     storiesAutoFromProducts: s.storiesAutoFromProducts,
+    featuredEnabled: s.featuredEnabled,
+    featuredProductIds: featuredIdsFromDb(s.featuredProductIds),
     showCategoryNav: s.showCategoryNav,
     productCardRatio: productCardRatioFromDb(s.productCardRatio),
     flashSaleEndsAt: isoDateFromDb(s.flashSaleEndsAt),

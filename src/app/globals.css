@@ -306,6 +306,12 @@ html {
   animation-play-state: paused;
 }
 
+/* Pausa no hover SEM a máscara das pontas — carrossel de "Produtos em destaque":
+   o cliente para em cima e clica no card, mas as bordas NÃO devem esfumaçar. */
+.vw-marquee-hoverpause:hover .vw-marquee-track {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vw-fade-in-up,
   .vw-pop-in,

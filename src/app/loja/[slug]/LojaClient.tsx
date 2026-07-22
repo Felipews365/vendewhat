@@ -856,6 +856,90 @@ function FlashSaleCountdown({
   );
 }
 
+/**
+ * Faixa "Produtos em destaque" como CARROSSEL CONTÍNUO: os cards entram pela
+ * direita e somem pela esquerda, em laço (estilo marquee). Reusa a infra
+ * `.vw-marquee-track` do projeto com `.vw-marquee-hoverpause` (PAUSA NO HOVER,
+ * mas SEM a máscara que esfumaça as pontas — o dono não quis esse efeito), então
+ * o cliente para o carrossel e clica no card para abrir o produto.
+ *
+ * Laço imperceptível: duas metades idênticas + `translateX(-50%)`. Cada metade
+ * repete a lista até passar de ~6 cards (com 2-3 produtos, a volta seria curta
+ * e deixaria buracos). A duração sai do nº de cards, para a velocidade em px/s
+ * ficar igual com poucos ou muitos produtos.
+ *
+ * `prefers-reduced-motion` — EXCEÇÃO CONSCIENTE (a mesma da barra de avisos e do
+ * anel do story): o carrossel usa `.vw-marquee-always`, que RE-LIGA a animação
+ * nesse modo. Decisão do dono — é a vitrine de destaque da loja e, parada
+ * (recortada pela largura), não cumpre o papel. Sem isso, num Windows com
+ * "reduzir movimento"/efeitos de animação desligados a faixa fica congelada.
+ * NÃO copie para animações novas: o padrão do projeto é respeitar a preferência.
+ */
+function FeaturedCarousel({
+  products,
+  productCardRatio,
+  installmentsMax,
+  freeShippingLabel,
+  showRatings,
+  accent,
+  accentDeep,
+  onOpen,
+}: {
+  products: CatalogProduct[];
+  productCardRatio: ProductCardRatio;
+  installmentsMax: number;
+  freeShippingLabel: string;
+  showRatings: boolean;
+  accent: string;
+  accentDeep: string;
+  onOpen: (product: CatalogProduct) => void;
+}) {
+  const repeats = Math.max(1, Math.ceil(6 / products.length));
+  const half = Array.from({ length: repeats }, () => products).flat();
+  const duration = Math.max(18, half.length * 3.8);
+
+  const renderHalf = (keyPrefix: string, hidden: boolean) => (
+    <div
+      className="flex gap-3 pr-3 sm:gap-4 sm:pr-4"
+      aria-hidden={hidden || undefined}
+    >
+      {half.map((product, i) => (
+        <div
+          key={`${keyPrefix}-${i}`}
+          className="w-[160px] shrink-0 sm:w-[180px] lg:w-[200px]"
+        >
+          <ProductCatalogCard
+            product={product}
+            imageRatio={product.cardRatio ?? productCardRatio}
+            installmentsMax={installmentsMax}
+            freeShippingLabel={freeShippingLabel}
+            showRatings={showRatings}
+            accent={accent}
+            accentDeep={accentDeep}
+            onOpen={onOpen}
+          />
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    // py-2 dá folga para o "levantar" do card no hover (translate-y) não ser
+    // cortado pelo overflow-hidden do marquee.
+    <div className="vw-marquee-hoverpause overflow-hidden py-2">
+      <div
+        className="vw-marquee-track vw-marquee-always flex w-max"
+        style={
+          { "--vw-marquee-duration": `${duration}s` } as React.CSSProperties
+        }
+      >
+        {renderHalf("a", false)}
+        {renderHalf("b", true)}
+      </div>
+    </div>
+  );
+}
+
 /** Produto criado nos últimos N dias? (para o selo "Novo", igual à referência). */
 function isRecent(createdAt: string, days = 21): boolean {
   const t = new Date(createdAt).getTime();
@@ -2563,6 +2647,33 @@ export function LojaClient({
     }
   }, [catalogProducts, sortBy]);
 
+  /**
+   * Produtos em destaque (faixa logo abaixo dos cards promocionais): vitrine
+   * ESTÁVEL (não reage a busca/filtro, igual aos cards promo).
+   * - Desligada no painel (`featuredEnabled=false`) → não aparece.
+   * - Com escolha manual (`featuredProductIds`) → só esses produtos, NA ORDEM
+   *   escolhida (produtos apagados são ignorados).
+   * - Sem escolha → vitrine automática: promoções → novidades → demais (teto 10).
+   */
+  const featuredProducts = useMemo(() => {
+    if (!storefront.featuredEnabled) return [];
+    const chosen = storefront.featuredProductIds;
+    if (chosen.length > 0) {
+      const byId = new Map(products.map((p) => [p.id, p]));
+      return chosen
+        .map((id) => byId.get(id))
+        .filter((p): p is CatalogProduct => Boolean(p));
+    }
+    const promos = products.filter((p) => p.isPromotion);
+    const novos = products.filter(
+      (p) => !p.isPromotion && isRecent(p.createdAt)
+    );
+    const rest = products.filter(
+      (p) => !p.isPromotion && !isRecent(p.createdAt)
+    );
+    return [...promos, ...novos, ...rest].slice(0, 10);
+  }, [products, storefront.featuredEnabled, storefront.featuredProductIds]);
+
   const heroDisplayTitle =
     storefront.heroTitle.trim() || store.name;
 
@@ -3368,6 +3479,44 @@ export function LojaClient({
             ))}
           </div>
         </section>
+      )}
+
+      {/* Produtos em destaque — CARROSSEL contínuo (entra pela direita, some na
+          esquerda) logo abaixo dos cards promocionais. Segue o tema da loja e
+          reusa o mesmo card do catálogo. */}
+      {featuredProducts.length > 0 && (
+        <BlurFade inView delay={0.08} className="w-full">
+        <section className="max-w-[1260px] mx-auto w-full mt-6">
+          <div className="mb-3 flex items-center gap-2 px-4">
+            <h3
+              className="flex items-center gap-2 text-xl font-bold tracking-tight"
+              style={{ color: EC.foreground }}
+            >
+              <span aria-hidden style={{ color: themedAccent }}>
+                ✨
+              </span>{" "}
+              <AnimatedGradientText
+                colorFrom={themedAccent}
+                colorMid={themedDeep}
+                colorTo={themedAccent}
+                speed={5}
+              >
+                Produtos em destaque
+              </AnimatedGradientText>
+            </h3>
+          </div>
+          <FeaturedCarousel
+            products={featuredProducts}
+            productCardRatio={storefront.productCardRatio}
+            installmentsMax={storefront.cardInstallmentsMax}
+            freeShippingLabel={storefront.cardFreeShipping}
+            showRatings={storefront.cardShowRatings}
+            accent={themedAccent}
+            accentDeep={themedDeep}
+            onOpen={setSelectedProduct}
+          />
+        </section>
+        </BlurFade>
       )}
 
       {categoryStripItems.length > 0 && (

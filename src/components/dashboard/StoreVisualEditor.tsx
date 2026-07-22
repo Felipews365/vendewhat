@@ -390,6 +390,8 @@ export function StoreVisualEditor({
   const openPromoCardsEditor = () => router.push("/dashboard/cards");
   /** Abre a página dedicada dos stories (bolinha flutuante da loja). */
   const openStoriesEditor = () => router.push("/dashboard/stories");
+  /** Abre a página dedicada dos produtos em destaque (faixa abaixo dos cards). */
+  const openFeaturedEditor = () => router.push("/dashboard/destaques");
   /** Abre uma seção do editor pelo menu de configurações (fecha o menu antes). */
   const openSection = (p: EditorPanel) => {
     setSettingsMenuOpen(false);
@@ -479,6 +481,22 @@ export function StoreVisualEditor({
     ...productsInPreview,
     null,
   ];
+  /**
+   * Prévia da faixa "Produtos em destaque" (na loja fica logo abaixo dos cards
+   * promocionais). Com escolha manual (`featuredProductIds`), mostra esses
+   * produtos NA ORDEM; sem escolha, os primeiros do catálogo (que já chega mais
+   * novos primeiro) aproximam a vitrine automática da loja pública.
+   */
+  const featuredPreview = useMemo(() => {
+    if (sf.featuredProductIds.length > 0) {
+      const byId = new Map(catalogPreview.map((p) => [p.id, p]));
+      return sf.featuredProductIds
+        .map((id) => byId.get(id))
+        .filter((p): p is CatalogPreviewProduct => Boolean(p))
+        .slice(0, 8);
+    }
+    return catalogPreview.slice(0, 8);
+  }, [catalogPreview, sf.featuredProductIds]);
 
   const labeledStoreCategories = useMemo(
     () =>
@@ -684,6 +702,7 @@ export function StoreVisualEditor({
                     { emoji: "🖼️", label: "Logo da loja", onClick: () => openSection("logo") },
                     { emoji: "🎞️", label: "Banner da loja", onClick: () => { setSettingsMenuOpen(false); openBannerEditor(); } },
                     { emoji: "🏷️", label: "Cards abaixo do banner", onClick: () => { setSettingsMenuOpen(false); openPromoCardsEditor(); } },
+                    { emoji: "✨", label: "Produtos em destaque", onClick: () => { setSettingsMenuOpen(false); openFeaturedEditor(); } },
                     { emoji: "🎬", label: "Stories da loja", onClick: () => { setSettingsMenuOpen(false); openStoriesEditor(); } },
                     { emoji: "✍️", label: "Textos do banner", onClick: () => openSection("texts") },
                     { emoji: "🎨", label: "Aparência da loja", onClick: () => { setSettingsMenuOpen(false); router.push("/dashboard/aparencia"); } },
@@ -1065,6 +1084,92 @@ export function StoreVisualEditor({
               </div>
             </div>
           )}
+
+          {/* Produtos em destaque — MOSTRUÁRIO. Reproduz a faixa que aparece na
+              loja pública logo abaixo dos cards promocionais (na loja é um
+              carrossel contínuo). Aparece SEMPRE (mesmo sem produto ainda), para
+              o lojista descobrir o recurso e chegar na aba própria
+              (/dashboard/destaques): o cabeçalho abre a aba; cada card abre o
+              cadastro do produto. */}
+          <div className="relative mt-4" id="passo-destaques">
+            <button
+              type="button"
+              onClick={openFeaturedEditor}
+              title="Escolher os produtos em destaque"
+              className="mb-2 flex w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg px-1 py-0.5 text-left transition hover:bg-white/60"
+            >
+              <span aria-hidden style={{ color: sf.themePrimary }}>
+                ✨
+              </span>
+              <span className="text-xs font-bold tracking-tight text-slate-800">
+                Produtos em destaque
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {!sf.featuredEnabled
+                  ? "— escondida na loja no momento"
+                  : sf.featuredProductIds.length > 0
+                    ? `— ${sf.featuredProductIds.length} escolhido(s) a dedo`
+                    : "— automático (promoções e novidades)"}
+              </span>
+              <span className="ml-auto shrink-0 text-[10px] font-semibold text-landing-primary">
+                Editar →
+              </span>
+            </button>
+            {featuredPreview.length > 0 ? (
+              <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:thin]">
+                {featuredPreview.map((product) => {
+                  const ratioClass =
+                    (product.cardRatio ?? sf.productCardRatio) === "1:1"
+                      ? "aspect-square"
+                      : "aspect-[3/4]";
+                  return (
+                    <Link
+                      key={product.id}
+                      href={`/dashboard/produtos/${product.id}`}
+                      className="shrink-0 w-[104px] rounded-xl border border-slate-200 bg-white p-1.5 text-center shadow-sm transition-colors hover:border-landing-primary/40"
+                    >
+                      <div
+                        className={`relative ${ratioClass} rounded-lg bg-slate-200/90 overflow-hidden mb-1`}
+                      >
+                        {product.imageUrl ? (
+                          <Image
+                            src={product.imageUrl}
+                            alt=""
+                            fill
+                            className="object-cover"
+                            sizes="104px"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-[9px] text-slate-500 px-1 text-center">
+                              Sem foto
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-700 font-medium truncate">
+                        {product.name}
+                      </p>
+                      <p
+                        className="text-[10px] font-semibold"
+                        style={{ color: sf.themePrimary }}
+                      >
+                        {formatBRL(product.price)}
+                      </p>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={openFeaturedEditor}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-4 text-[11px] font-medium text-slate-500 transition hover:border-landing-primary/40 hover:text-slate-700"
+              >
+                <span aria-hidden>✨</span> Cadastre produtos para destacar aqui
+              </button>
+            )}
+          </div>
 
           {/* Stories — MOSTRUÁRIO. Na loja é uma bolinha flutuante na lateral,
               não uma faixa; aqui vira uma linha e aparece SEMPRE (inclusive sem
