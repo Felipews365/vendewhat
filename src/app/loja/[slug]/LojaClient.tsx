@@ -3109,6 +3109,22 @@ export function LojaClient({
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   /** Gaveta lateral com as informações da loja (botão "Info" do topo). */
   const [infoOpen, setInfoOpen] = useState(false);
+  /**
+   * Barra inferior (celular): só aparece depois que o topo (cabeçalho) sai da
+   * tela ao rolar. Um IntersectionObserver no `<header>` liga/desliga.
+   */
+  const [bottomNavVisible, setBottomNavVisible] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const obs = new IntersectionObserver(
+      ([entry]) => setBottomNavVisible(!entry.isIntersecting),
+      { threshold: 0 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   /**
    * Deep-link do produto (link compartilhado): ao carregar com `?p=<id>` na URL,
@@ -3768,6 +3784,7 @@ export function LojaClient({
 
       {/* Topo — cabeçalho estilo e-commerce (logo, busca, ações) */}
       <header
+        ref={headerRef}
         className="z-40 shadow-lg md:sticky md:top-0"
         style={{ backgroundColor: storefront.headerBackground }}
       >
@@ -3881,10 +3898,10 @@ export function LojaClient({
                     href={contactHref}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-0.5 inline-flex items-center gap-1 bg-whatsapp text-white text-xs font-semibold px-2.5 py-2 rounded-full hover:bg-whatsapp-dark transition-colors shadow-sm shrink-0 whitespace-nowrap"
+                    className="ml-0.5 inline-flex items-center justify-center bg-whatsapp text-white p-2 rounded-full hover:bg-whatsapp-dark transition-colors shadow-sm shrink-0"
+                    aria-label="Falar no WhatsApp"
                   >
-                    <WhatsAppGlyph className="w-3.5 h-3.5 shrink-0" />
-                    <span className="hidden min-[380px]:inline">WhatsApp</span>
+                    <WhatsAppGlyph className="w-4 h-4 shrink-0" />
                   </a>
                 )}
               </nav>
@@ -4475,7 +4492,9 @@ export function LojaClient({
 
       {/* Barra de navegação no rodapé (celular) — Início · Conta · Carrinho · Menu */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-4 border-t border-stone-200 bg-white/98 backdrop-blur shadow-[0_-6px_24px_rgba(0,0,0,0.08)] md:hidden"
+        className={`fixed bottom-0 left-0 right-0 z-40 grid grid-cols-4 border-t border-stone-200 bg-white/98 backdrop-blur shadow-[0_-6px_24px_rgba(0,0,0,0.08)] md:hidden transition-transform duration-300 ${
+          bottomNavVisible ? "translate-y-0" : "translate-y-full"
+        }`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         aria-label="Navegação da loja"
       >

@@ -603,7 +603,9 @@ cara de "quase pronto".
   (`IconInfo`, abre a gaveta de infos da loja), **Categorias** (`IconMenu` = ☰, abre a gaveta de
   categorias — só quando há categorias) e **Sacola** (`IconBag`, abre o carrinho, selo laranja com o
   total). Mantém Instagram + botão **WhatsApp**. No celular os mesmos dois botões (Info + ☰) ficam na
-  `<nav>` compacta, ao lado da Sacola/WhatsApp. **Substituíram** os antigos **Entrar**/**Favoritos**
+  `<nav>` compacta, ao lado da Sacola/WhatsApp — e o botão de WhatsApp aparece **só como logo** (botão
+  redondo, sem o texto "WhatsApp", com `aria-label`) para poupar espaço; no desktop segue com o rótulo.
+  **Substituíram** os antigos **Entrar**/**Favoritos**
   (que eram decorativos — loja é por WhatsApp, sem login/wishlist); `IconUser`/`IconHeart` foram
   removidos. No claro (headerBackground claro) o texto/ícones ficam escuros. Os `infoBullets` continuam
   opcionais (linha discreta abaixo do logo). Sem migration.
@@ -943,6 +945,14 @@ quantidade) e **Menu** (rola até `#catalogo`). Substituiu o antigo "carrinho fl
 está reservado pelo `pb-28` do wrapper. SVGs inline (casa/WhatsApp/sacola/hambúrguer). Cada item usa
 `outline-none`/`focus:outline-none` + `[-webkit-tap-highlight-color:transparent]` para o **foco não
 ficar preso** após o toque no celular (senão sobrava um outline/caixa fixa no item tocado).
+
+- **Só aparece depois que o topo some ao rolar (`bottomNavVisible`):** ao abrir a loja a barra fica
+  **escondida** (`translate-y-full`) e só surge, deslizando de baixo (`transition-transform`), quando o
+  cabeçalho sai da tela. Um **`IntersectionObserver`** no `<header>` (`headerRef`) liga/desliga o estado
+  (`!entry.isIntersecting`); ao voltar ao topo, ela recolhe. No **desktop** nada muda (a `<nav>` segue
+  `md:hidden` e o `<header>` é `md:sticky`, sempre intersectando → estado fica `false`). O `pb-28` do
+  wrapper permanece: ao rolar até o rodapé o topo já sumiu (barra visível), então a folga evita que a
+  barra cubra o fim do conteúdo.
 
 ### Aba do navegador (ícone da loja + título que chama de volta)
 
