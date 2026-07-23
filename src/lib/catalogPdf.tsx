@@ -919,9 +919,46 @@ function catalogPath(slug: string): string {
 }
 
 /**
+ * Momento (ms) da última mudança que afeta o catálogo: o produto mais
+ * recentemente editado/criado (`products.updated_at`, que já cobre inserções —
+ * default `now()`) e a própria loja (`stores.updated_at`, muda ao salvar
+ * logo/nome/tema). Serve para invalidar o cache do PDF na hora que o lojista
+ * mexe em algo, em vez de esperar o TTL. Falha/sem dado → 0 (deixa o TTL mandar).
+ */
+async function latestCatalogChange(
+  admin: SupabaseClient,
+  storeId: string
+): Promise<number> {
+  try {
+    const [prod, store] = await Promise.all([
+      admin
+        .from("products")
+        .select("updated_at")
+        .eq("store_id", storeId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      admin
+        .from("stores")
+        .select("updated_at")
+        .eq("id", storeId)
+        .maybeSingle(),
+    ]);
+    const stamps = [prod.data?.updated_at, store.data?.updated_at]
+      .map((v) => (v ? new Date(v as string).getTime() : 0))
+      .filter((n) => Number.isFinite(n));
+    return stamps.length ? Math.max(...stamps) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Garante um PDF do catálogo no bucket e devolve a URL pública (com `?v=` para
- * furar cache de CDN). Regenera se não existir ou se o cache estiver velho.
- * Retorna null se a loja não tem produtos (não faz sentido mandar catálogo vazio).
+ * furar cache de CDN). Regenera se não existir, se o cache estiver velho (TTL)
+ * **ou se algum produto/loja mudou depois do PDF** (`latestCatalogChange`) — daí
+ * download/envio já saem com a atualização nova, sem esperar o TTL. Retorna null
+ * se a loja não tem produtos (não faz sentido mandar catálogo vazio).
  */
 export async function ensureCatalogPdfUrl(
   admin: SupabaseClient,
@@ -950,7 +987,12 @@ export async function ensureCatalogPdfUrl(
       const lm = head.headers.get("last-modified");
       const stamp = lm ? new Date(lm).getTime() : 0;
       if (stamp && Date.now() - stamp < CACHE_TTL_MS) {
-        return `${publicUrl}?v=${stamp}`;
+        // Dentro do TTL: só reaproveita se NENHUM produto/loja mudou depois do
+        // PDF — senão regenera na hora para refletir a edição do lojista.
+        const changedAt = await latestCatalogChange(admin, args.storeId);
+        if (changedAt <= stamp) {
+          return `${publicUrl}?v=${stamp}`;
+        }
       }
     }
   } catch {

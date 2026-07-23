@@ -10,6 +10,7 @@ import {
   HERO_RECOMMENDED_WIDTH,
   heroImageProportionWarning,
   announcementMinOrder,
+  orderByIdList,
   type HeroLayout,
   type HeroSplitPhotoSide,
   type ProductCardRatio,
@@ -475,7 +476,14 @@ export function StoreVisualEditor({
     }));
 
   const MAX_CATALOG_PREVIEW = 32;
-  const productsInPreview = catalogPreview.slice(0, MAX_CATALOG_PREVIEW);
+  // Prévia na MESMA ordem da loja pública: a ordem manual do lojista primeiro,
+  // depois o resto pela ordem natural (o catalogPreview já chega mais novo
+  // primeiro). É essa lista que as setas ▲/▼ reordenam.
+  const productsInPreview = useMemo(
+    () =>
+      orderByIdList(catalogPreview, sf.productOrder).slice(0, MAX_CATALOG_PREVIEW),
+    [catalogPreview, sf.productOrder]
+  );
   /** Sempre um cartão vazio à direita para cadastrar o próximo produto. */
   const previewSlots: (CatalogPreviewProduct | null)[] = [
     ...productsInPreview,
@@ -550,6 +558,27 @@ export function StoreVisualEditor({
     const nextSf: StorefrontSettings = {
       ...sf,
       categories: sf.categories.filter((_, j) => j !== i),
+    };
+    setSf(nextSf);
+    onAutoSaveStorefront?.(nextSf);
+  };
+
+  /**
+   * Move um produto na ordem do catálogo (▲/▼) e SALVA na hora — igual às
+   * categorias. Grava a sequência de IDs visíveis na prévia em `productOrder`;
+   * IDs já ordenados que ficam além da prévia (loja com >32 produtos) são
+   * preservados no fim, para não perder a curadoria do que não coube na tela.
+   */
+  const moveProduct = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= productsInPreview.length) return;
+    const ids = productsInPreview.map((p) => p.id);
+    [ids[i], ids[j]] = [ids[j]!, ids[i]!];
+    const previewSet = new Set(ids);
+    const tail = sf.productOrder.filter((id) => !previewSet.has(id));
+    const nextSf: StorefrontSettings = {
+      ...sf,
+      productOrder: [...ids, ...tail],
     };
     setSf(nextSf);
     onAutoSaveStorefront?.(nextSf);
@@ -1359,10 +1388,12 @@ export function StoreVisualEditor({
         <div className="bg-white px-3 py-4 sm:px-4 border-t border-slate-200">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-bold text-slate-800">Produtos</span>
-            <span className="text-[11px] text-slate-400">Ordenar ▼</span>
+            <span className="text-[11px] text-slate-400">
+              Use ◀ ▶ para ordenar
+            </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {previewSlots.map((product) => {
+            {previewSlots.map((product, index) => {
               if (product) {
                 const href = `/dashboard/produtos/${product.id}`;
                 // Mesma regra da loja: o formato do produto manda; sem formato
@@ -1371,6 +1402,8 @@ export function StoreVisualEditor({
                   (product.cardRatio ?? sf.productCardRatio) === "1:1"
                     ? "aspect-square"
                     : "aspect-[3/4]";
+                const isFirst = index === 0;
+                const isLast = index === productsInPreview.length - 1;
                 return (
                   <Link
                     key={product.id}
@@ -1398,6 +1431,38 @@ export function StoreVisualEditor({
                           </span>
                         </div>
                       )}
+                      {/* Setas de ordem (▲/▼ do projeto, aqui ◀/▶ por ser grade).
+                          preventDefault/stopPropagation p/ não abrir a edição. */}
+                      <div className="absolute bottom-1 left-1 z-10 flex gap-1">
+                        <button
+                          type="button"
+                          aria-label="Mover para antes"
+                          title="Mover para antes"
+                          disabled={isFirst}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            moveProduct(index, -1);
+                          }}
+                          className="flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-slate-700 text-xs shadow ring-1 ring-slate-200 transition hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-landing-primary"
+                        >
+                          ◀
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Mover para depois"
+                          title="Mover para depois"
+                          disabled={isLast}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            moveProduct(index, 1);
+                          }}
+                          className="flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-slate-700 text-xs shadow ring-1 ring-slate-200 transition hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-landing-primary"
+                        >
+                          ▶
+                        </button>
+                      </div>
                     </div>
                     <p className="text-[10px] text-slate-700 font-medium truncate">
                       {product.name}
@@ -1452,9 +1517,10 @@ export function StoreVisualEditor({
             })}
           </div>
           <p className="text-[11px] text-slate-500 text-center mt-3">
-            A foto e o preço vêm dos produtos reais. Toque num card para editar;
-            o último cartão &quot;Adicione aqui&quot; sempre abre o cadastro de um
-            novo — quando salvar, ele entra na lista e aparece outro vazio.
+            A foto e o preço vêm dos produtos reais. Toque num card para editar
+            ou use as setas ◀ ▶ para mudar a ordem (salva na hora e vale na
+            loja); o último cartão &quot;Adicione aqui&quot; sempre abre o
+            cadastro de um novo.
           </p>
         </div>
 

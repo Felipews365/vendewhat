@@ -413,6 +413,26 @@ cara de "quase pronto".
     "automático"); o cabeçalho e o estado vazio levam à aba (`openFeaturedEditor` →
     `/dashboard/destaques`). Aparece **SEMPRE** (mesmo sem produto), para o lojista descobrir o
     recurso. Também há o item **"✨ Produtos em destaque"** no menu "⚙️ Configurações da loja".
+- **Ordem manual dos produtos no catálogo (`storefront.productOrder: string[]`, JSONB — sem
+  migration):** o lojista escolhe a ordem em que os produtos aparecem na loja, direto no canvas de
+  **"Monte sua loja"** (seção **Produtos** do
+  [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)). Cada card ganhou setas
+  **◀ / ▶** (`moveProduct`) que trocam a posição e **salvam na hora** (via `onAutoSaveStorefront`,
+  igual às categorias/destaques); `preventDefault`/`stopPropagation` impedem que a seta abra a edição
+  do produto, e a 1ª/última ficam desabilitadas. `productOrder` guarda só os IDs que o lojista
+  ordenou (teto `MAX_PRODUCT_ORDER` = 500); produtos fora da lista caem no fim pela **ordem natural**
+  (mais novo primeiro) — então **produto novo entra no fim** (o lojista o reposiciona), sem bagunçar
+  a curadoria. O helper puro **`orderByIdList(list, order)`** (em
+  [storefront.ts](src/lib/storefront.ts)) faz a ordenação estável (IDs em `order` primeiro, na
+  sequência; o resto mantém a ordem de entrada) e é usado **nos dois lados**: a prévia do editor
+  (`productsInPreview`) e a loja pública. Na
+  [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) a base do `filteredProducts` passa por
+  `orderByIdList(products, storefront.productOrder)`, então **Ofertas Relâmpago** e **"Mais
+  Produtos"** seguem a ordem escolhida; o **default** do seletor de ordenação preserva essa base
+  (deixou de reordenar por data — isso desfaria a curadoria) e seu rótulo vira **"Ordem da loja"**
+  quando há ordem manual (senão "Mais recentes"). As opções nome/preço do seletor continuam. A faixa
+  de destaque e os stories automáticos seguem a ordem natural (usam `products`, não reordenado) — são
+  vitrines à parte. Lojas antigas (`productOrder` vazio) **não mudam**.
 - **Stories da loja (`storefront.stories: StoreStory[]` + `storiesEnabled`, JSONB — sem migration):**
   bolinha flutuante na **lateral esquerda** da loja (`fixed left-3 top-1/2`, anel em degradê
   `--store-primary`→rosa) que abre um **player em tela cheia** estilo Instagram — vídeo/foto 9:16,
@@ -1743,11 +1763,17 @@ cliente escolher pelo site OU folheando o PDF. **Sem migration** (o PDF mora no 
   produtos) são baixadas com **concorrência limitada** (`mapWithConcurrency`). Como `@react-pdf` e
   `sharp` trazem deps/binários que quebram no bundler, ambos estão em
   `experimental.serverComponentsExternalPackages` no [next.config.mjs](next.config.mjs).
-- **Cache no bucket:** `ensureCatalogPdfUrl` (em [catalogPdf.tsx](src/lib/catalogPdf.tsx))
-  gera e guarda o PDF em `product-images/catalogos/{slug}.pdf` e devolve a **URL pública**
-  (com `?v=` para furar cache de CDN). Regenera só se não existir ou se o cache passar de
-  **30 min** (edições do lojista aparecem em até meia hora) — evita regerar a cada pedido no
-  WhatsApp. Retorna `null` se a loja não tem produtos (não manda catálogo vazio).
+- **Cache no bucket (invalidação por mudança de conteúdo):** `ensureCatalogPdfUrl` (em
+  [catalogPdf.tsx](src/lib/catalogPdf.tsx)) gera e guarda o PDF em
+  `product-images/catalogos/{slug}.pdf` e devolve a **URL pública** (com `?v=` para furar cache de
+  CDN). Regenera se não existir, se o cache passar do **TTL de 30 min** **ou** se algum
+  produto/loja mudou **depois** do PDF — `latestCatalogChange` compara o `updated_at` mais recente de
+  `products` (cobre edições e inserções, pois o default é `now()`) e de `stores` (logo/nome/tema) com
+  o `last-modified` do arquivo. Assim **edição do lojista aparece na hora** no próximo download/envio
+  (o TTL vira só rede de segurança p/ exclusões e afins). A checagem de mudança só roda no caso que
+  **seria** cache-hit (arquivo existe e dentro do TTL), então não pesa quando já vai regenerar. Evita
+  regerar a cada pedido no WhatsApp. Retorna `null` se a loja não tem produtos (não manda catálogo
+  vazio).
 - **Envio pela IA:** o `buildSystemPrompt`
   ([src/lib/ai/attendant.ts](src/lib/ai/attendant.ts)) recebe `hasCatalogPdf` (true quando a
   loja tem produtos) e instrui a IA a incluir o marcador **`[[ENVIAR_CATALOGO]]`** no fim da
@@ -1771,7 +1797,18 @@ cliente escolher pelo site OU folheando o PDF. **Sem migration** (o PDF mora no 
   Imagem/vídeo funcionam sem `mimetype` porque o Evolution infere o tipo.
 - **Acesso por link (humanos):** [/api/loja/[slug]/catalogo](src/app/api/loja/[slug]/catalogo/route.ts)
   (`runtime nodejs`, `maxDuration 60`) gera/reaproveita o mesmo PDF e **redireciona** para ele —
-  serve para baixar/abrir no navegador com a mesma lógica de cache.
+  serve para baixar/abrir no navegador com a mesma lógica de cache. Com **`?download=1`** a rota
+  **não redireciona**: baixa o PDF do Storage e o **entrega como anexo** (`Content-Disposition:
+  attachment` + nome amigável "Catálogo - Loja.pdf", com `filename*` UTF-8 para acentos), forçando o
+  download de fato (o redirect abriria no visualizador). Sem o param, mantém o 302 (IA/humanos/prévia).
+- **Área do lojista para enviar/baixar o catálogo ([/dashboard/compartilhar](src/app/dashboard/compartilhar/page.tsx),
+  item "Compartilhar" do `DASH_NAV`):** a página (antes só "copiar link/abrir loja") virou **dois
+  cartões** — **Link da loja** e **Catálogo em PDF**. O card do PDF traz **"Enviar no WhatsApp"**
+  (`https://wa.me/?text=…` com uma mensagem pronta + o link `…/api/loja/{slug}/catalogo`, deixando o
+  lojista escolher o contato), **"Baixar PDF"** (faz `fetch` no `?download=1`, vira `blob` e dispara
+  o download por uma âncora oculta, com spinner "Gerando…" e toast) e **"Copiar link"**. Um `count`
+  de produtos ativos decide se mostra os botões ou o aviso "cadastre um produto" (o catálogo vazio
+  não é gerado). Reaproveita o mesmo PDF/cache da IA — nenhuma geração nova nem migration.
 
 ### Pausar o atendimento da IA (assumir a conversa)
 

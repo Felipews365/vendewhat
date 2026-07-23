@@ -20,6 +20,7 @@ import {
   enabledShippingModeIds,
   describeAttendance,
   formatBRL,
+  orderByIdList,
 } from "@/lib/storefront";
 import { AnnouncementBar, AnnouncementText } from "@/components/storefront/AnnouncementBar";
 import { TabAttention } from "@/components/storefront/TabAttention";
@@ -3039,7 +3040,10 @@ export function LojaClient({
   }, [store.slug]);
 
   const filteredProducts = useMemo(() => {
-    let list = products;
+    // Base já na ordem escolhida pelo lojista em "Monte sua loja" (os produtos
+    // fora da lista caem no fim pela ordem natural, mais novo primeiro). Vale
+    // para as Ofertas Relâmpago e para o "Mais Produtos" (default do sortBy).
+    let list = orderByIdList(products, storefront.productOrder);
     const cf = categoryFilter?.trim();
     if (cf) {
       const useTree =
@@ -3070,7 +3074,14 @@ export function LojaClient({
         (p.category?.toLowerCase().includes(q) ?? false) ||
         p.tags.some((t) => t.toLowerCase().includes(q))
     );
-  }, [products, search, categoryFilter, promoOnly, storefront.categories]);
+  }, [
+    products,
+    search,
+    categoryFilter,
+    promoOnly,
+    storefront.categories,
+    storefront.productOrder,
+  ]);
 
   const promoProducts = useMemo(
     () => filteredProducts.filter((p) => p.isPromotion),
@@ -3095,11 +3106,10 @@ export function LojaClient({
         return arr.sort((a, b) => b.price - a.price);
       case "new":
       default:
-        return arr.sort(
-          (a, b) =>
-            new Date(b.createdAt || 0).getTime() -
-            new Date(a.createdAt || 0).getTime()
-        );
+        // Preserva a ordem base de `filteredProducts` = ordem manual do lojista
+        // quando definida, senão a natural (mais novo primeiro, do servidor).
+        // Re-ordenar por data aqui desfaria a curadoria do "Monte sua loja".
+        return arr;
     }
   }, [catalogProducts, sortBy]);
 
@@ -4159,7 +4169,11 @@ export function LojaClient({
                       onChange={(e) => setSortBy(e.target.value as SortKey)}
                       className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-800 focus:ring-2 focus:ring-boutique focus:border-boutique-dark outline-none cursor-pointer"
                     >
-                      <option value="new">Mais recentes</option>
+                      <option value="new">
+                        {storefront.productOrder.length > 0
+                          ? "Ordem da loja"
+                          : "Mais recentes"}
+                      </option>
                       <option value="name-asc">Nome A–Z</option>
                       <option value="name-desc">Nome Z–A</option>
                       <option value="price-asc">Menor preço</option>

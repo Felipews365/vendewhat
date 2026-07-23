@@ -428,6 +428,43 @@ export const MAX_STORIES = 6;
 /** Máximo de produtos escolhidos a dedo para a faixa "Produtos em destaque". */
 export const MAX_FEATURED_PRODUCTS = 12;
 
+/**
+ * Teto da ordem manual do catálogo (`productOrder`). Guarda só os IDs que o
+ * lojista arrastou/ordenou; o resto cai no fim pela ordem natural (mais novo
+ * primeiro). O teto evita um JSONB gigante em lojas com muitos produtos.
+ */
+export const MAX_PRODUCT_ORDER = 500;
+
+/**
+ * Ordena `list` pela sequência de IDs em `order`: os itens cujo `id` está em
+ * `order` vêm primeiro, NA ORDEM de `order`; os demais mantêm a ordem original
+ * (que já chega mais novo primeiro). IDs de `order` sem produto correspondente
+ * são ignorados. `order` vazio = devolve a lista como está (ordem natural).
+ * Usado tanto na loja pública quanto na prévia do editor "Monte sua loja".
+ */
+export function orderByIdList<T extends { id: string }>(
+  list: T[],
+  order: string[]
+): T[] {
+  if (!order.length) return list;
+  const rank = new Map<string, number>();
+  order.forEach((id, i) => {
+    if (!rank.has(id)) rank.set(id, i);
+  });
+  // Estável: só reordena quem tem rank; empate mantém a ordem de entrada.
+  return list
+    .map((item, i) => ({ item, i }))
+    .sort((a, b) => {
+      const ra = rank.get(a.item.id);
+      const rb = rank.get(b.item.id);
+      if (ra !== undefined && rb !== undefined) return ra - rb;
+      if (ra !== undefined) return -1;
+      if (rb !== undefined) return 1;
+      return a.i - b.i;
+    })
+    .map((x) => x.item);
+}
+
 /** Quanto tempo um story de FOTO fica na tela (vídeo dura o que durar). */
 export const STORY_IMAGE_MS = 5000;
 
@@ -525,6 +562,13 @@ export type StorefrontSettings = {
    * hora de renderizar. Ver `featuredProductIds` em LojaClient.
    */
   featuredProductIds: string[];
+  /**
+   * Ordem manual do catálogo escolhida pelo lojista em "Monte sua loja" (os IDs
+   * na sequência em que os produtos devem aparecer). Lista vazia = ordem natural
+   * (mais novo primeiro). Produtos fora da lista caem no fim pela ordem natural;
+   * IDs de produtos apagados são ignorados. Ver `orderByIdList`.
+   */
+  productOrder: string[];
   /** Mostra a barra de menu de categorias no topo (abaixo do cabeçalho). */
   showCategoryNav: boolean;
   /** Formato da foto dos cards de produto na loja: "1:1" (quadrado) ou "3:4" (retrato). */
@@ -761,6 +805,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   storiesAutoFromProducts: true,
   featuredEnabled: true,
   featuredProductIds: [],
+  productOrder: [],
   showCategoryNav: true,
   productCardRatio: "3:4",
   flashSaleEndsAt: "",
@@ -1159,6 +1204,22 @@ function featuredIdsFromDb(v: unknown): string[] {
   return out;
 }
 
+/** Ordem manual do catálogo: IDs não-vazios, sem repetir, teto MAX_PRODUCT_ORDER. */
+function productOrderFromDb(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const x of v) {
+    if (typeof x !== "string") continue;
+    const id = x.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= MAX_PRODUCT_ORDER) break;
+  }
+  return out;
+}
+
 /** Lista de strings não-vazias e aparadas (ignora não-strings). */
 function sanitizeStringList(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -1287,6 +1348,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       DEFAULT_STOREFRONT.featuredEnabled
     ),
     featuredProductIds: featuredIdsFromDb(o.featuredProductIds),
+    productOrder: productOrderFromDb(o.productOrder),
     showCategoryNav: boolFromDb(o.showCategoryNav, DEFAULT_STOREFRONT.showCategoryNav),
     productCardRatio: productCardRatioFromDb(o.productCardRatio),
     flashSaleEndsAt: isoDateFromDb(o.flashSaleEndsAt),
@@ -1419,6 +1481,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     storiesAutoFromProducts: s.storiesAutoFromProducts,
     featuredEnabled: s.featuredEnabled,
     featuredProductIds: featuredIdsFromDb(s.featuredProductIds),
+    productOrder: productOrderFromDb(s.productOrder),
     showCategoryNav: s.showCategoryNav,
     productCardRatio: productCardRatioFromDb(s.productCardRatio),
     flashSaleEndsAt: isoDateFromDb(s.flashSaleEndsAt),
