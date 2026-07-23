@@ -672,6 +672,8 @@ export type StorefrontSettings = {
   facebookUrl: string;
   tiktokUrl: string;
   youtubeUrl: string;
+  /** Link do grupo/comunidade do WhatsApp — a IA envia quando o cliente pede e aparece na loja. */
+  groupUrl: string;
   /** Até 8 categorias na faixa abaixo do banner; vazio na loja usa fallback visual */
   categories: StorefrontCategoryItem[];
   /** Endereço de retirada mostrado ao cliente quando escolhe "Retirada" no carrinho. */
@@ -842,6 +844,7 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   facebookUrl: "",
   tiktokUrl: "",
   youtubeUrl: "",
+  groupUrl: "",
   categories: [],
   pickupAddress: "",
   pickupInstructions: "",
@@ -1415,6 +1418,7 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
     facebookUrl: strOrEmpty(o.facebookUrl),
     tiktokUrl: strOrEmpty(o.tiktokUrl),
     youtubeUrl: strOrEmpty(o.youtubeUrl),
+    groupUrl: strOrEmpty(o.groupUrl),
     categories: categoriesFromDb(o.categories),
     pickupAddress: strOrEmpty(o.pickupAddress),
     pickupInstructions: strOrEmpty(o.pickupInstructions),
@@ -1516,6 +1520,7 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     facebookUrl: s.facebookUrl.trim(),
     tiktokUrl: s.tiktokUrl.trim(),
     youtubeUrl: s.youtubeUrl.trim(),
+    groupUrl: s.groupUrl.trim(),
     pickupAddress: s.pickupAddress.trim(),
     pickupInstructions: s.pickupInstructions.trim(),
     checkoutPixEnabled: s.checkoutPixEnabled,

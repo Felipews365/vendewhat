@@ -38,6 +38,8 @@ type Body = {
   saleMode?: string;
   /** Cidade/UF da loja só online — mora no storefront. */
   onlineCity?: string;
+  /** Link do grupo do WhatsApp — mora no storefront (IA envia + aparece na loja). */
+  groupUrl?: string;
   /** Dias da semana em que a loja atende — mora no storefront. */
   attendanceDays?: unknown;
   /** Horário de atendimento (texto livre) — mora no storefront. */
@@ -151,6 +153,9 @@ export async function POST(req: Request) {
   }
   if (typeof body.onlineCity === "string") {
     sfPatch.onlineCity = body.onlineCity.trim().slice(0, 120);
+  }
+  if (typeof body.groupUrl === "string") {
+    sfPatch.groupUrl = body.groupUrl.trim().slice(0, 300);
   }
   if (Array.isArray(body.attendanceDays)) {
     sfPatch.attendanceDays = attendanceDaysFromDb(body.attendanceDays);

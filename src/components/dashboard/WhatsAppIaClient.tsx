@@ -256,6 +256,9 @@ export default function WhatsAppIaClient({
   const [cartMinutes, setCartMinutes] = useState(0);
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [onlineCity, setOnlineCity] = useState("");
+  // Link do grupo/comunidade do WhatsApp (mora no storefront); a IA envia quando
+  // pedem e aparece na loja. Editável aqui e no editor visual (Redes sociais).
+  const [groupUrl, setGroupUrl] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [locationUrl, setLocationUrl] = useState("");
   // Campos de latitude/longitude (sincronizados com o link acima).
@@ -397,6 +400,7 @@ export default function WhatsAppIaClient({
         setSendPixOnCheckout(sf0.aiSendPixOnCheckout);
         setSaleMode(sf0.saleMode);
         setOnlineCity(sf0.onlineCity);
+        setGroupUrl(sf0.groupUrl);
         setPixKey(sf0.pixKey);
         setPixName(sf0.pixName);
         setAcceptPix(sf0.checkoutPixEnabled);
@@ -545,6 +549,7 @@ export default function WhatsAppIaClient({
           aiCartMinutes: cartMinutes,
           aiOnlineOnly: onlineOnly,
           onlineCity: onlineOnly ? onlineCity : "",
+          groupUrl,
           aiLocationAddress: locationAddress,
           aiLocationUrl: locationUrl,
           aiStorePhotoUrl: storePhotoUrl,
@@ -1077,6 +1082,25 @@ export default function WhatsAppIaClient({
             />
           </div>
         )}
+
+        {/* Link do grupo do WhatsApp (a IA envia quando pedem + aparece na loja) */}
+        <div className="rounded-xl border border-stone-200 dark:border-slate-700 p-4">
+          <label className="block text-sm font-medium text-stone-800 dark:text-slate-100">
+            Link do grupo do WhatsApp
+          </label>
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-slate-400">
+            Quando o cliente pedir para entrar no grupo, a IA envia esse link.
+            Ele também aparece na loja, em <strong>Informações</strong>. Deixe
+            vazio se não tiver grupo.
+          </p>
+          <input
+            type="text"
+            value={groupUrl}
+            onChange={(e) => setGroupUrl(e.target.value)}
+            placeholder="https://chat.whatsapp.com/…"
+            className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-stone-400 focus:border-violet-500 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+          />
+        </div>
 
         {/* Localização e foto da loja (escondido quando a loja é só online) */}
         {!onlineOnly && (

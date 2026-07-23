@@ -17,6 +17,7 @@ import {
   storefrontRichFooterVisible,
   minOrderStatus,
   announcementMinOrder,
+  describeMinOrder,
   enabledShippingModeIds,
   describeAttendance,
   formatBRL,
@@ -92,6 +93,8 @@ export type CatalogProduct = {
   compareAtPrice: number | null;
   /** Formato da foto deste produto no card ("1:1"/"3:4"); null = usa o padrão da loja. */
   cardRatio: ProductCardRatio | null;
+  /** Nº de estrelinhas decorativas no card: 0 = esconder, 1-5 = quantas; null = padrão (5). */
+  cardRating: number | null;
   /** Enquadramento da 1.ª foto no card (lista); no detalhe as fotos aparecem inteiras. */
   imageObjectPosition: string;
   /** Foco por índice de `images` (arraste no painel); mesmo comprimento que `images`. */
@@ -802,15 +805,22 @@ const EC = {
   imgBg: "#E8ECF2",
 } as const;
 
-/** 5 estrelas cheias + nota — decorativo, igual à referência (não são reviews reais). */
-function StarRating() {
+/**
+ * Estrelas decorativas + nota (não são reviews reais). `count` = quantas estrelas
+ * cheias (1-5); o resto vira estrela vazia para manter o alinhamento. Nota: 5 →
+ * "(4.9)" (mesma pegada de marketing de antes); menos que 5 → "(N.0)".
+ */
+function StarRating({ count = 5 }: { count?: number }) {
+  const full = Math.max(1, Math.min(5, Math.round(count)));
+  const label = full === 5 ? "4.9" : `${full}.0`;
   return (
     <div className="flex items-center gap-1">
       <span className="leading-none tracking-tight text-[13px]" style={{ color: EC.gold }} aria-hidden>
-        ★★★★★
+        {"★".repeat(full)}
+        {"☆".repeat(5 - full)}
       </span>
       <span className="text-[0.65rem]" style={{ color: EC.muted }}>
-        (4.9)
+        ({label})
       </span>
     </div>
   );
@@ -1262,7 +1272,11 @@ function ProductCatalogCard({
             </p>
           )}
 
-          {showRatings && <StarRating />}
+          {/* Estrelas: o produto pode definir quantas (0 = esconder); null = padrão (5). */}
+          {showRatings &&
+            (product.cardRating ?? 5) > 0 && (
+              <StarRating count={product.cardRating ?? 5} />
+            )}
 
           {/* Botão: aparece no hover (igual à referência); abre o detalhe. */}
           <button
@@ -2535,12 +2549,14 @@ function StoreInfoDrawer({
   store,
   storefront,
   contactHref,
+  paymentEnabled,
 }: {
   open: boolean;
   onClose: () => void;
   store: StoreInfo;
   storefront: StorefrontSettings;
   contactHref: string | null;
+  paymentEnabled: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -2566,6 +2582,23 @@ function StoreInfoDrawer({
     formatBrPhone(store.whatsappNumber || store.phone);
   const email = storefront.footerEmail.trim();
   const website = storefront.footerWebsite.trim();
+  const groupUrl = storefront.groupUrl.trim();
+  // Pedido mínimo (mesma fonte do checkout/IA); vazio = sem exigência.
+  const minOrderText = describeMinOrder(storefront);
+  // Formas de pagamento aceitas (Pix exige chave; Mercado Pago exige gateway conectado).
+  const payLabels = (() => {
+    const list: string[] = [];
+    if (storefront.checkoutPixEnabled && storefront.pixKey.trim()) list.push("Pix");
+    if (storefront.checkoutCashEnabled) list.push("Dinheiro na entrega");
+    if (storefront.checkoutCardEnabled) list.push("Cartão na entrega");
+    if (paymentEnabled && storefront.checkoutMercadoPagoEnabled)
+      list.push("Mercado Pago");
+    return list;
+  })();
+  // Formas de envio/retirada aceitas.
+  const shipLabels = enabledShippingModeIds(storefront)
+    .map((id) => shippingModeLabel(id))
+    .filter((l): l is string => Boolean(l));
   const socials: { label: string; url: string }[] = [
     { label: "Instagram", url: storefront.instagramUrl },
     { label: "Facebook", url: storefront.facebookUrl },
@@ -2579,6 +2612,10 @@ function StoreInfoDrawer({
     email ||
     website ||
     contactHref ||
+    groupUrl ||
+    minOrderText ||
+    payLabels.length > 0 ||
+    shipLabels.length > 0 ||
     socials.length > 0 ||
     (store.description && store.description.trim());
 
@@ -2745,6 +2782,58 @@ function StoreInfoDrawer({
                 </div>
               </div>
             )}
+            {minOrderText && (
+              <div className="flex gap-3">
+                <span className={rowIcon}>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+                    <path d="M6 6h15l-1.5 9h-12z" />
+                    <path d="M6 6 5 3H3" />
+                    <circle cx="9" cy="20" r="1" />
+                    <circle cx="18" cy="20" r="1" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                    Pedido mínimo
+                  </p>
+                  <p className="text-sm text-stone-700">{minOrderText}</p>
+                </div>
+              </div>
+            )}
+            {payLabels.length > 0 && (
+              <div className="flex gap-3">
+                <span className={rowIcon}>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+                    <rect x="3" y="6" width="18" height="12" rx="2" />
+                    <path d="M3 10h18" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                    Formas de pagamento
+                  </p>
+                  <p className="text-sm text-stone-700">{payLabels.join(" · ")}</p>
+                </div>
+              </div>
+            )}
+            {shipLabels.length > 0 && (
+              <div className="flex gap-3">
+                <span className={rowIcon}>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" {...strokeProps} aria-hidden>
+                    <path d="M3 7h11v8H3z" />
+                    <path d="M14 10h4l3 3v2h-7z" />
+                    <circle cx="7" cy="18" r="1.4" />
+                    <circle cx="17" cy="18" r="1.4" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                    Formas de envio
+                  </p>
+                  <p className="text-sm text-stone-700">{shipLabels.join(" · ")}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {contactHref && (
@@ -2756,6 +2845,18 @@ function StoreInfoDrawer({
             >
               <WhatsAppGlyph className="h-4 w-4 shrink-0" />
               Falar no WhatsApp
+            </a>
+          )}
+
+          {groupUrl && (
+            <a
+              href={groupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-whatsapp/40 bg-whatsapp/10 px-4 py-3 text-sm font-semibold text-whatsapp-dark shadow-sm transition-colors hover:bg-whatsapp/20"
+            >
+              <WhatsAppGlyph className="h-4 w-4 shrink-0" />
+              Entrar no grupo do WhatsApp
             </a>
           )}
 
@@ -3922,6 +4023,7 @@ export function LojaClient({
         store={store}
         storefront={storefront}
         contactHref={contactHref}
+        paymentEnabled={paymentEnabled}
       />
 
       {/* Menu de categorias no topo (abaixo do cabeçalho). */}

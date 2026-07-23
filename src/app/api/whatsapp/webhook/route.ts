@@ -92,6 +92,20 @@ export async function POST(req: Request) {
   // Valida o segredo do webhook — ignora chamadas não reconhecidas.
   if (!cfg || cfg.webhookToken !== token) return ok();
 
+  // Auto-corrige o número conectado da loja: a Evolution manda o dono da instância
+  // em `sender` (JID) em cada evento. Se ainda não temos o número salvo, guardamos
+  // agora — a vitrine usa esse número como contato real (não o telefone de cadastro).
+  if (!cfg.connectedNumber && !event.includes("connection")) {
+    // Só em eventos de mensagem (o de conexão não traz `sender`); receber
+    // mensagem prova que está conectado, então gravamos status "connected".
+    const senderDigits =
+      typeof body.sender === "string" ? body.sender.replace(/\D/g, "") : "";
+    if (senderDigits) {
+      await updateConnection(admin, cfg.storeId, "connected", senderDigits);
+      cfg.connectedNumber = senderDigits;
+    }
+  }
+
   // --- Atualização de conexão -------------------------------------------------
   if (event.includes("connection")) {
     const data = asObj(body.data);

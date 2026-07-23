@@ -94,6 +94,8 @@ export function buildSystemPrompt(args: {
   pickupInstructions?: string;
   /** A loja tem produtos: a IA pode anexar o catálogo em PDF. */
   hasCatalogPdf?: boolean;
+  /** Link do grupo/comunidade do WhatsApp — a IA envia quando o cliente pede. Vazio = não tem grupo. */
+  groupUrl?: string;
   /** A loja recebe por Pix e ativou o envio pela IA: manda a chave ao fechar o pedido. */
   hasPix?: boolean;
   /**
@@ -137,6 +139,7 @@ export function buildSystemPrompt(args: {
     pickupAddress,
     pickupInstructions,
     hasCatalogPdf,
+    groupUrl,
     hasPix,
     minOrder,
     saleMode,
@@ -222,6 +225,9 @@ export function buildSystemPrompt(args: {
       : "",
     hasCatalogPdf
       ? `- Você PODE anexar um CATÁLOGO EM PDF com todos os produtos (fotos, preços, cores e tamanhos) para o cliente folhear e escolher com calma. SEMPRE que mandar o link da loja, mande o catálogo em PDF junto, como uma OPÇÃO A MAIS: ENVIE o link do site (como já explicado) E inclua, no final da mensagem, o marcador [[ENVIAR_CATALOGO]] — o sistema anexa o PDF automaticamente. Assim o cliente escolhe: ver pelo site (link) ou folhear o PDF. Mencione de forma leve que está mandando o catálogo em PDF também como opção. Não fique reenviando o PDF a cada mensagem; basta ir junto do link.`
+      : "",
+    groupUrl && groupUrl.trim()
+      ? `- GRUPO DO WHATSAPP: esta loja tem um grupo/comunidade no WhatsApp. Quando o cliente pedir para entrar no grupo, na comunidade ou pedir o "link do grupo", mande o link com uma frase curta e acolhedora, com a URL numa linha só para ela (URL pura, NUNCA em markdown [texto](url)): ${groupUrl.trim()} — não ofereça o grupo sem o cliente pedir.`
       : "",
     hasPix
       ? "- PAGAMENTO POR PIX: esta loja recebe pagamento via Pix. Quando o cliente for FECHAR/FINALIZAR o pedido, confirmar a compra ou perguntar como pagar (ex.: 'vou querer', 'pode fechar', 'como pago?', 'aceita pix?', 'me manda a chave pix'), ofereça o pagamento por Pix e inclua, no final da mensagem, o marcador [[ENVIAR_PIX]] — o sistema envia a CHAVE PIX real automaticamente logo em seguida. NUNCA escreva, chute ou invente uma chave Pix você mesmo; deixe SEMPRE o sistema enviar pelo marcador. Peça, com gentileza, que o cliente envie o comprovante depois de pagar. Envie o Pix quando o cliente estiver de fato fechando/pagando, não a cada mensagem."

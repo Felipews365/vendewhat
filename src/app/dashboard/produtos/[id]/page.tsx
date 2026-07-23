@@ -173,6 +173,7 @@ export default function EditarProdutoPage() {
     unitType: DEFAULT_UNIT_TYPE,
     barcode: "",
     cardRatio: "",
+    cardRating: "",
     packHeight: "",
     packWidth: "",
     packLength: "",
@@ -300,6 +301,12 @@ export default function EditarProdutoPage() {
           cardRatio: ((): string => {
             const cr = (row as { card_ratio?: string | null }).card_ratio;
             return cr === "1:1" || cr === "3:4" ? cr : "";
+          })(),
+          cardRating: ((): string => {
+            const r = (row as { card_rating?: number | null }).card_rating;
+            return typeof r === "number" && r >= 0 && r <= 5
+              ? String(Math.round(r))
+              : "";
           })(),
           packHeight: dimensionToInput(row.package_height),
           packWidth: dimensionToInput(row.package_width),
@@ -534,6 +541,7 @@ export default function EditarProdutoPage() {
         unit_type: form.unitType || DEFAULT_UNIT_TYPE,
         barcode: sanitizeBarcode(form.barcode) || null,
         card_ratio: form.cardRatio || null,
+        card_rating: form.cardRating === "" ? null : Number(form.cardRating),
         package_height: dimensionFromInput(form.packHeight),
         package_width: dimensionFromInput(form.packWidth),
         package_length: dimensionFromInput(form.packLength),
@@ -571,6 +579,19 @@ export default function EditarProdutoPage() {
           await supabase
             .from("products")
             .update(withoutRatio)
+            .eq("id", productId)
+        ).error;
+      }
+
+      if (
+        updateError &&
+        isMissingColumnError(updateError.message, "card_rating", updateError.code)
+      ) {
+        const { card_rating: _crt, ...withoutRating } = updatePayload;
+        updateError = (
+          await supabase
+            .from("products")
+            .update(withoutRating)
             .eq("id", productId)
         ).error;
       }
@@ -1203,6 +1224,31 @@ export default function EditarProdutoPage() {
                   <p className="mt-1 text-[11px] text-slate-400">
                     Como a foto deste produto aparece na grade da loja. “Padrão da
                     loja” segue o formato geral da vitrine.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Estrelinhas no card
+                  </label>
+                  <select
+                    value={form.cardRating}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, cardRating: e.target.value }))
+                    }
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value="">Padrão da loja (★★★★★)</option>
+                    <option value="0">Sem estrelinhas</option>
+                    <option value="1">★ (1)</option>
+                    <option value="2">★★ (2)</option>
+                    <option value="3">★★★ (3)</option>
+                    <option value="4">★★★★ (4)</option>
+                    <option value="5">★★★★★ (5)</option>
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Estrelinhas decorativas no card deste produto. “Sem estrelinhas”
+                    esconde só neste produto.
                   </p>
                 </div>
 

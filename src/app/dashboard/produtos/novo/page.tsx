@@ -88,6 +88,7 @@ const INITIAL_FORM = {
   unitType: DEFAULT_UNIT_TYPE,
   barcode: "",
   cardRatio: "3:4",
+  cardRating: "",
   packHeight: "",
   packWidth: "",
   packLength: "",
@@ -386,6 +387,7 @@ export default function NovoProdutoPage() {
         unit_type: form.unitType || DEFAULT_UNIT_TYPE,
         barcode: sanitizeBarcode(form.barcode) || null,
         card_ratio: form.cardRatio || null,
+        card_rating: form.cardRating === "" ? null : Number(form.cardRating),
         package_height: dimensionFromInput(form.packHeight),
         package_width: dimensionFromInput(form.packWidth),
         package_length: dimensionFromInput(form.packLength),
@@ -410,6 +412,15 @@ export default function NovoProdutoPage() {
       ) {
         const { card_ratio: _cr, ...withoutRatio } = payload;
         insertError = (await supabase.from("products").insert(withoutRatio))
+          .error;
+      }
+
+      if (
+        insertError &&
+        isMissingColumnError(insertError.message, "card_rating", insertError.code)
+      ) {
+        const { card_rating: _crt, ...withoutRating } = payload;
+        insertError = (await supabase.from("products").insert(withoutRating))
           .error;
       }
 
@@ -1126,6 +1137,32 @@ export default function NovoProdutoPage() {
                   <p className="mt-1 text-[11px] text-slate-400">
                     Como a foto deste produto aparece na grade da loja. “Padrão da
                     loja” segue o formato geral da vitrine.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Estrelinhas no card
+                  </label>
+                  <select
+                    value={form.cardRating}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, cardRating: e.target.value }));
+                      setSaveOk(false);
+                    }}
+                    className={inputClass}
+                  >
+                    <option value="">Padrão da loja (★★★★★)</option>
+                    <option value="0">Sem estrelinhas</option>
+                    <option value="1">★ (1)</option>
+                    <option value="2">★★ (2)</option>
+                    <option value="3">★★★ (3)</option>
+                    <option value="4">★★★★ (4)</option>
+                    <option value="5">★★★★★ (5)</option>
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Estrelinhas decorativas no card deste produto. “Sem estrelinhas”
+                    esconde só neste produto.
                   </p>
                 </div>
 

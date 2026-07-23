@@ -355,6 +355,11 @@ export async function respondToCustomer(
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
   const storeUrl = `${baseUrl.replace(/\/+$/, "")}/loja/${store.slug}`;
 
+  // Link do grupo/comunidade do WhatsApp: a IA envia quando o cliente pede. É só
+  // uma URL (como o link da loja), então não precisa de anexo/marcador próprio.
+  const groupUrl = sf.groupUrl.trim();
+  const hasGroup = Boolean(groupUrl);
+
   // Histórico + lote: as mensagens do cliente após a última resposta da IA são o
   // "lote" (chegaram juntas); o que veio antes é o contexto da conversa.
   const full = await getRecentHistory(admin, cfg.storeId, customerPhone, 20);
@@ -375,6 +380,10 @@ export async function respondToCustomer(
   // para o PDF (a IA nem sempre emite o marcador [[ENVIAR_CATALOGO]]).
   const customerWantsCatalog =
     /\bcat[aá]logos?\b|lista de produtos|\bpdf\b/i.test(combinedUserText);
+  // Cliente pediu o grupo/comunidade? Gatilho determinístico para enviar o link
+  // do grupo mesmo que a IA esqueça de colar a URL.
+  const customerWantsGroup =
+    hasGroup && /\b(grupo|comunidade)\b/i.test(combinedUserText);
 
   // Plano + créditos: no "Sem IA", ou sem saldo, a IA NÃO responde ao cliente e o
   // dono é avisado uma vez (Opção A) — no WhatsApp da própria loja, nunca ao cliente.
@@ -405,6 +414,7 @@ export async function respondToCustomer(
     pickupAddress,
     pickupInstructions,
     hasCatalogPdf,
+    groupUrl: hasGroup ? groupUrl : "",
     hasPix: pixEnabled,
     minOrder,
     minOrderMessage: sf.minOrderMessage,
@@ -471,6 +481,11 @@ export async function respondToCustomer(
   const hasUrl = /https?:\/\//i.test(finalText);
   if (finalText && baseUrl && (mentionsLink || sendCatalog || customerWantsCatalog) && !hasUrl) {
     finalText = `${finalText}\n\n${storeUrl}`;
+  }
+  // Rede de segurança do grupo: se o cliente pediu o grupo e o link ainda não está
+  // na resposta, anexa a URL do grupo como bloco próprio (vira um balão clicável).
+  if (customerWantsGroup && !finalText.includes(groupUrl)) {
+    finalText = finalText ? `${finalText}\n\n${groupUrl}` : groupUrl;
   }
   // Confirmação do pedido registrado (balão próprio, ao final).
   if (orderConfirmationMsg) {

@@ -227,6 +227,12 @@ export default async function LojaPublicaPage({ params }: Props) {
         const cr = (p as { card_ratio?: string | null }).card_ratio;
         return cr === "1:1" || cr === "3:4" ? cr : null;
       })(),
+      cardRating: (() => {
+        // Nº de estrelinhas decorativas no card: 0 = esconder, 1-5 = quantas mostrar,
+        // null = padrão da loja (5). Coluna pode não existir em bancos antigos.
+        const r = (p as { card_rating?: number | null }).card_rating;
+        return typeof r === "number" && r >= 0 && r <= 5 ? Math.round(r) : null;
+      })(),
       imageObjectPosition: legacyPos,
       imageObjectPositions,
       sale: productSaleFromDb(p as Record<string, unknown>),

@@ -2204,6 +2204,24 @@ export function StoreVisualEditor({
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
+              Grupo do WhatsApp (opcional)
+            </label>
+            <input
+              type="text"
+              value={sf.groupUrl}
+              onChange={(e) =>
+                setSf((s) => ({ ...s, groupUrl: e.target.value }))
+              }
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
+              placeholder="https://chat.whatsapp.com/…"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Aparece na loja (em <strong>Informações</strong>) e a{" "}
+              <strong>IA envia</strong> quando o cliente pede o grupo.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
               Instagram
             </label>
             <input

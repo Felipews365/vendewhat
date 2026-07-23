@@ -618,10 +618,13 @@ cara de "quase pronto".
       rola ao catálogo. Reaproveita os `categoryStripItems` e os mesmos setters da `CategoryNavBar`.
     - **`StoreInfoDrawer`** (botão Info): painel "Informações" com logo + nome + descrição e, **só quando
       preenchido**, linhas de atendimento (`describeAttendance`), endereço (`pickupAddress` ou `onlineCity`),
-      telefone, e-mail (`footerEmail`), site (`footerWebsite`), botão "Falar no
-      WhatsApp" (`contactHref`) e redes (Instagram/Facebook/TikTok/YouTube). Sem nada preenchido, mostra um
+      telefone, e-mail (`footerEmail`), site (`footerWebsite`), **pedido mínimo** (`describeMinOrder`),
+      **formas de pagamento aceitas** (Pix/dinheiro/cartão/Mercado Pago — MP só quando `paymentEnabled`,
+      passado à gaveta), **formas de envio aceitas** (`enabledShippingModeIds` → `shippingModeLabel`), botão
+      "Falar no WhatsApp" (`contactHref`), botão **"Entrar no grupo do WhatsApp"** (`storefront.groupUrl`,
+      estilo WhatsApp claro) e redes (Instagram/Facebook/TikTok/YouTube). Sem nada preenchido, mostra um
       aviso curto para falar pelo WhatsApp. Deriva tudo do `storefront`/`store` que a loja já recebe — sem
-      campo/migration novo.
+      campo/migration novo (o pedido mínimo/pagamento/envio saem da **mesma** fonte do checkout e da IA).
     - **Contato da loja = WhatsApp do ATENDIMENTO, não o telefone do cadastro:** `stores.phone` é
       preenchido no **signup** ([register/route.ts](src/app/api/auth/register/route.ts)) com o número que o
       **dono** digitou — é o contato dele, não da loja. O contato certo é o **WhatsApp conectado**
@@ -637,6 +640,27 @@ cara de "quase pronto".
       [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) tem uma **dica** abaixo do
       "Telefone de atendimento" explicando isso (deixar em branco → mostra o WhatsApp conectado; conectar em
       "Configuração da IA"). Sem migration (usa `store_whatsapp` que já existe).
+      - **De onde vem o `connected_number` (por que às vezes estava `null`):** o
+        `/instance/connectionState` da **Evolution v2 não traz o dono** (só o `state`), então o número
+        conectado ficava `null` mesmo com a loja conectada — e a gaveta caía no telefone do cadastro. Duas
+        capturas o preenchem sozinho (self-healing, sem migration): (1) `getConnectionState`
+        ([evolution.ts](src/lib/evolution.ts)), quando está `connected` e sem número, busca o `ownerJid`
+        em **`/instance/fetchInstances`** (`fetchOwnerNumber`) — roda quando o lojista abre a aba (o status
+        route sincroniza); (2) o [webhook](src/app/api/whatsapp/webhook/route.ts) grava o número do
+        **`body.sender`** (JID do dono, que a Evolution manda em cada evento de mensagem) na 1ª mensagem,
+        via `updateConnection(..., "connected", senderDigits)` — assim conserta mesmo sem abrir o painel.
+    - **Link do grupo/comunidade do WhatsApp (`storefront.groupUrl`, JSONB — sem migration):** um só campo
+      que aparece **na loja** (botão "Entrar no grupo do WhatsApp" na gaveta Informações) **e** que a **IA
+      envia** quando o cliente pede. Editável em **dois lugares** (mesmo campo): no editor visual, painel
+      **"Redes sociais"** (salva no "Salvar loja") e na aba **Configuração IA → Atendente de IA**
+      ([WhatsAppIaClient.tsx](src/components/dashboard/WhatsAppIaClient.tsx), estado `groupUrl`, salvo pela
+      rota [config/route.ts](src/app/api/whatsapp/config/route.ts) via patch no `storefront`, igual ao
+      `onlineCity`/`saleMode`). **A IA sabe:** [whatsappRespond.ts](src/lib/whatsappRespond.ts) passa
+      `groupUrl` ao `buildSystemPrompt` ([attendant.ts](src/lib/ai/attendant.ts)), que instrui a IA a mandar
+      a **URL pura** (sem markdown) quando o cliente pede "grupo"/"comunidade" e a **não** oferecer sem
+      pedir. Como é só uma URL (igual ao link da loja), **não** usa marcador/anexo próprio; há um **gatilho
+      determinístico** (`customerWantsGroup` = regex `grupo|comunidade`) que anexa o link como balão próprio
+      se a IA esquecer de colar.
 - **Grade "Categorias" em tiles (redesenho de `StorefrontCategoriesStrip`):** trocou a faixa circular
   (stories) por **cards brancos retangulares** iguais ao print — grid `sm:grid-cols-4 md:grid-cols-8`
   (scroll horizontal no celular), cada tile com **emoji** (`categoryEmoji`) ou a `imageUrl` da
@@ -997,6 +1021,19 @@ Config por loja no JSONB `storefront` (**sem migration**), editada no painel **"
 `cardInstallmentsMax` (default 10; 0 = não mostra), `cardFreeShipping` (rótulo do selo; vazio = usa a
 regra da referência: preço ≥ R$79) e `cardShowRatings` (default `true`; estrelas **decorativas**, não
 são reviews reais). Sanitizados em `storefrontFromDb`/`storefrontToDb`.
+
+- **Estrelinhas por produto (`products.card_rating`, migration
+  [supabase-migration-product-card-rating.sql](supabase-migration-product-card-rating.sql)):** além do
+  `cardShowRatings` global (liga/desliga as estrelas na loja toda), **cada produto** define **quantas
+  estrelas** aparecem no card: `0` = esconde só nele, `1..5` = quantas mostrar, **`null` = padrão (5)**.
+  Seletor **"Estrelinhas no card"** na aba Produto das duas telas ([novo](src/app/dashboard/produtos/novo/page.tsx)
+  e [id](src/app/dashboard/produtos/[id]/page.tsx)), salvo com **fallback de coluna ausente**
+  (`isMissingColumnError(..., "card_rating")`, ramo próprio igual ao `card_ratio`). Mapeado em
+  [loja/[slug]/page.tsx](src/app/loja/[slug]/page.tsx) para `CatalogProduct.cardRating`. No card
+  ([LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx)) o `StarRating` recebe `count` (renderiza `count`
+  cheias `★` + `5-count` vazias `☆`; nota `(4.9)` p/ 5, `(N.0)` p/ menos) e só renderiza quando
+  `cardShowRatings && (product.cardRating ?? 5) > 0` — então lojas/produtos antigos (`null`) seguem com as
+  **5 estrelas** de antes (zero regressão). Sem regra nova no editor visual (a prévia não mostrava estrelas).
 
 ### Controlar estoque ou não (por loja)
 
