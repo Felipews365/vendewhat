@@ -127,6 +127,16 @@ cara de "quase pronto".
   painel, **sempre adicionar variantes `dark:`** (ex.: `bg-white dark:bg-slate-900`).
 - **Animações:** keyframes/utilitários (`vw-fade-in-up`, `vw-pop-in`, `vw-aurora`) em
   [src/app/globals.css](src/app/globals.css); respeitam `prefers-reduced-motion`.
+  - **`.vw-fade-in-up` usa `fill-mode: backwards` (não `both`) — senão prende os modais lá embaixo:**
+    o [DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx) envolve **todo o
+    conteúdo do painel** em `vw-fade-in-up`. Com `both`, o `transform: translateY(0)` do frame final
+    fica aplicado **para sempre** e um `transform ≠ none` cria um **containing block** — todos os
+    `position: fixed` descendentes (o `EditorSheet` do editor visual, `CategoryFormModal` e demais
+    modais das páginas de produto) passam a se posicionar relativos ao wrapper (a página inteira, bem
+    alta) em vez da viewport, caindo **lá embaixo** (o dono só chegava neles via Tab). `backwards`
+    reverte ao estado base (sem `transform`) ao terminar — mesmo motivo e mesma correção do
+    `.vw-blur-fade`. (`.vw-pop-in` segue com `both` porque só é usado em cards folha / cards internos
+    de modais posicionados por flex, que **não** envolvem descendentes `fixed`.)
   - **Reveal estilo Magic UI (`BlurFade`) — CSS puro, sem framer-motion:** o keyframe
     `vw-blur-fade` (sobe + fade + sai do desfoque, vars `--vw-bf-y`/`--vw-bf-blur`) alimenta o
     componente [src/components/magicui/blur-fade.tsx](src/components/magicui/blur-fade.tsx)
@@ -184,6 +194,16 @@ cara de "quase pronto".
   prévia e na loja pública); no painel "Categorias" cada item tem setas **▲/▼** (`moveStoreCategory`
   em [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)) que trocam a posição e
   **salvam na hora** (via `onAutoSaveStorefront`, igual salvar/excluir).
+  - **Painel "Categorias na loja" = cartões-resumo, não inputs crus:** o painel `categories` do
+    [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) lista cada categoria como um
+    **cartão com miniatura redonda + nome (+ "Dentro de X" quando há pai)**; tocar no cartão abre o
+    **mesmo `CategoryFormModal` `variant="store"`** (fotos prontas, upload/URL, categoria pai) via
+    `setStoreCategoryModal({ open, editIndex })`, e o **"+ Adicionar categoria"** abre o modal com
+    `editIndex: null`. **▲/▼ e Remover salvam na hora** (`moveStoreCategory`/`removeStoreCategory`, ambos
+    chamam `onAutoSaveStorefront`). Substituiu os antigos inputs crus de **Nome** + **"URL da imagem"**
+    (esse último mostrava o `data:image/svg+xml…` feio dos presets e, junto do Remover inline, **não**
+    fazia auto-save — só persistia no "Salvar loja"). A edição de nome/foto/pai agora é toda pelo modal
+    (que já auto-salva), então o painel e o "+" da prévia usam o mesmo caminho.
   - **Criar categoria pelo cadastro de produto (o "+" do campo Categorias):** nas duas páginas de
     produto ([novo](src/app/dashboard/produtos/novo/page.tsx) e [id](src/app/dashboard/produtos/[id]/page.tsx))
     o campo é o [CategoryAutocompleteField.tsx](src/components/dashboard/CategoryAutocompleteField.tsx)

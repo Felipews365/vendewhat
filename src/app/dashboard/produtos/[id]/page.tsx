@@ -1029,7 +1029,7 @@ export default function EditarProdutoPage() {
                     storeId={storeId}
                     suggestionsRefresh={categorySuggestionsRefresh}
                     onOpenAdvanced={() => setCategoryModalOpen(true)}
-                    placeholder="Ex.: Bermuda — digite para ver sugestões"
+                    placeholder="Toque para ver as suas categorias ou digite"
                   />
                   <p className="text-[11px] text-slate-400 mt-1.5">
                     Sugestões vêm dos outros produtos e das categorias da aparência da loja.

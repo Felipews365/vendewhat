@@ -545,6 +545,16 @@ export function StoreVisualEditor({
     onAutoSaveStorefront?.(nextSf);
   };
 
+  const removeStoreCategory = (i: number) => {
+    if (i < 0 || i >= sf.categories.length) return;
+    const nextSf: StorefrontSettings = {
+      ...sf,
+      categories: sf.categories.filter((_, j) => j !== i),
+    };
+    setSf(nextSf);
+    onAutoSaveStorefront?.(nextSf);
+  };
+
   /* ---- Blocos de conteúdo (builder) — hoje só "Destaque com imagem + texto" ---- */
   const contentBlocks = sf.contentBlocks;
   const FEAT = BLOCK_LIMITS.imageTextFeature;
@@ -2189,113 +2199,94 @@ export function StoreVisualEditor({
         onClose={() => setPanel(null)}
       >
         <p className="text-xs text-slate-500">
-          Use o <strong>+</strong> ou &quot;Categoria 1…4&quot;. Na loja pública a
-          faixa <strong>aparece abaixo do banner</strong> quando há{" "}
-          <strong>produtos</strong> e você definiu pelo menos um nome aqui. Para{" "}
+          Toque numa categoria para <strong>editar nome e foto</strong>, ou use{" "}
+          <strong>+ Adicionar categoria</strong>. Na loja pública a faixa{" "}
+          <strong>aparece abaixo do banner</strong> quando há{" "}
+          <strong>produtos</strong> e existe pelo menos uma categoria. Para{" "}
           <strong>filtrar</strong> ao tocar, a categoria escolhida no{" "}
           <strong>cadastro do produto</strong> deve ter o mesmo nome que você
           definiu aqui. Máximo 8 itens.
         </p>
-        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+        <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-1">
+          {sf.categories.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-3">
+              Nenhuma categoria ainda. Toque em “+ Adicionar categoria”.
+            </p>
+          ) : null}
           {sf.categories.map((cat, i) => (
             <div
               key={i}
-              className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-2"
+              className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50/80 p-2.5"
             >
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-xs font-semibold text-slate-600">
-                  Categoria {i + 1}
+              <button
+                type="button"
+                onClick={() => setStoreCategoryModal({ open: true, editIndex: i })}
+                className="group flex min-w-0 flex-1 items-center gap-3 text-left"
+                title="Editar nome e foto"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 ring-1 ring-slate-200">
+                  {cat.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={cat.imageUrl}
+                      alt=""
+                      className="h-full w-full object-cover object-center"
+                    />
+                  ) : (
+                    <span className="text-lg text-slate-400" aria-hidden>
+                      🏷️
+                    </span>
+                  )}
                 </span>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    disabled={i === 0}
-                    title="Mover para cima"
-                    aria-label="Mover categoria para cima"
-                    onClick={() => moveStoreCategory(i, -1)}
-                    className="px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    type="button"
-                    disabled={i === sf.categories.length - 1}
-                    title="Mover para baixo"
-                    aria-label="Mover categoria para baixo"
-                    onClick={() => moveStoreCategory(i, 1)}
-                    className="px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    ▼
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSf((s) => ({
-                        ...s,
-                        categories: s.categories.filter((_, j) => j !== i),
-                      }))
-                    }
-                    className="text-xs text-red-600 hover:underline ml-1"
-                  >
-                    Remover
-                  </button>
-                </div>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-slate-800 group-hover:text-landing-primary">
+                    {cat.label.trim() || (
+                      <span className="italic text-slate-400">Sem nome</span>
+                    )}
+                  </span>
+                  <span className="block truncate text-[10px] text-slate-400">
+                    {cat.parentLabel?.trim()
+                      ? `Dentro de ${cat.parentLabel.trim()}`
+                      : "Toque para editar foto e nome"}
+                  </span>
+                </span>
+              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  disabled={i === 0}
+                  title="Mover para cima"
+                  aria-label="Mover categoria para cima"
+                  onClick={() => moveStoreCategory(i, -1)}
+                  className="px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  disabled={i === sf.categories.length - 1}
+                  title="Mover para baixo"
+                  aria-label="Mover categoria para baixo"
+                  onClick={() => moveStoreCategory(i, 1)}
+                  className="px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  ▼
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeStoreCategory(i)}
+                  className="ml-1 text-xs text-red-600 hover:underline"
+                >
+                  Remover
+                </button>
               </div>
-              <label className="block text-[11px] font-medium text-slate-600">
-                Nome
-              </label>
-              <input
-                type="text"
-                value={cat.label}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSf((s) => {
-                    const next = [...s.categories];
-                    next[i] = { ...next[i]!, label: v };
-                    return { ...s, categories: next };
-                  });
-                }}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
-                placeholder="Ex.: Vestidos"
-              />
-              {cat.parentLabel?.trim() ? (
-                <p className="text-[10px] text-slate-400 -mt-1">
-                  Pai: <span className="font-medium">{cat.parentLabel.trim()}</span>{" "}
-                  (edite no + da prévia para alterar)
-                </p>
-              ) : null}
-              <label className="block text-[11px] font-medium text-slate-600">
-                URL da imagem (opcional)
-              </label>
-              <input
-                type="url"
-                value={cat.imageUrl}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSf((s) => {
-                    const next = [...s.categories];
-                    next[i] = { ...next[i]!, imageUrl: v };
-                    return { ...s, categories: next };
-                  });
-                }}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono text-xs"
-                placeholder="https://…"
-              />
             </div>
           ))}
         </div>
         <button
           type="button"
           disabled={sf.categories.length >= 8}
-          onClick={() =>
-            setSf((s) => ({
-              ...s,
-              categories: [
-                ...s.categories,
-                { label: "", imageUrl: "" } satisfies StorefrontCategoryItem,
-              ],
-            }))
-          }
+          onClick={() => setStoreCategoryModal({ open: true, editIndex: null })}
           className="w-full py-2.5 rounded-xl border-2 border-dashed border-landing-primary/40 text-landing-primary font-semibold text-sm hover:bg-teal-50 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           + Adicionar categoria

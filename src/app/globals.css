@@ -62,7 +62,13 @@ html {
 }
 
 .vw-fade-in-up {
-  animation: vw-fade-in-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* backwards (não both): com `both`, o transform:translateY(0) do frame final
+     ficava aplicado PARA SEMPRE, criando um containing block que prendia todo
+     `position: fixed` descendente ao wrapper (o conteúdo do dashboard é envolto
+     por esta classe) em vez da viewport — modais/EditorSheet caíam lá embaixo.
+     `backwards` reverte ao estado base (sem transform) ao terminar. Mesmo motivo
+     do `.vw-blur-fade`. */
+  animation: vw-fade-in-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .vw-pop-in {
