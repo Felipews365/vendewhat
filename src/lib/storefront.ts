@@ -1094,6 +1094,55 @@ function categoriesFromDb(v: unknown): StorefrontCategoryItem[] {
   return out;
 }
 
+/**
+ * Adiciona (ou atualiza) uma categoria da loja preservando as demais. Dedup por
+ * rótulo (sem caixa), respeitando o teto de 8. Devolve o **mesmo** objeto quando
+ * nada muda (o chamador pode pular a gravação). Usado ao criar categoria pelo
+ * cadastro de produto, para o "+" gerar uma categoria real de `storefront.categories`.
+ */
+export function upsertStorefrontCategory(
+  sf: StorefrontSettings,
+  item: { label: string; imageUrl?: string; parentLabel?: string }
+): StorefrontSettings {
+  const label = item.label.trim();
+  if (!label) return sf;
+  const imageUrl = (item.imageUrl ?? "").trim();
+  const parentRaw = (item.parentLabel ?? "").trim();
+  const parentLabel =
+    parentRaw &&
+    parentRaw.localeCompare(label, "pt", { sensitivity: "base" }) !== 0
+      ? parentRaw
+      : undefined;
+
+  const idx = sf.categories.findIndex(
+    (c) => c.label.localeCompare(label, "pt", { sensitivity: "base" }) === 0
+  );
+
+  if (idx >= 0) {
+    const cur = sf.categories[idx]!;
+    const nextItem: StorefrontCategoryItem = {
+      label: cur.label,
+      imageUrl: imageUrl || cur.imageUrl,
+      parentLabel: parentLabel ?? cur.parentLabel,
+    };
+    if (
+      nextItem.imageUrl === cur.imageUrl &&
+      nextItem.parentLabel === cur.parentLabel
+    ) {
+      return sf;
+    }
+    const categories = sf.categories.slice();
+    categories[idx] = nextItem;
+    return { ...sf, categories };
+  }
+
+  if (sf.categories.length >= 8) return sf;
+  return {
+    ...sf,
+    categories: [...sf.categories, { label, imageUrl, parentLabel }],
+  };
+}
+
 /** IDs de produtos em destaque: strings não-vazias, sem repetir, teto MAX. */
 function featuredIdsFromDb(v: unknown): string[] {
   if (!Array.isArray(v)) return [];

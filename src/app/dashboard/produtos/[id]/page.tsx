@@ -1033,7 +1033,7 @@ export default function EditarProdutoPage() {
                   />
                   <p className="text-[11px] text-slate-400 mt-1.5">
                     Sugestões vêm dos outros produtos e das categorias da aparência da loja.
-                    O + abre o editor com foto e categoria pai.
+                    O + cria uma categoria da loja (com foto e categoria pai).
                   </p>
                 </div>
 
@@ -1363,6 +1363,7 @@ export default function EditarProdutoPage() {
       <ProductChooseCategoryModal
         open={categoryModalOpen}
         onClose={() => setCategoryModalOpen(false)}
+        storeId={storeId}
         initialName={form.category}
         onSave={(name) => {
           setForm((f) => ({ ...f, category: name }));

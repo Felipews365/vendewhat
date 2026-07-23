@@ -184,6 +184,21 @@ cara de "quase pronto".
   prévia e na loja pública); no painel "Categorias" cada item tem setas **▲/▼** (`moveStoreCategory`
   em [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)) que trocam a posição e
   **salvam na hora** (via `onAutoSaveStorefront`, igual salvar/excluir).
+  - **Criar categoria pelo cadastro de produto (o "+" do campo Categorias):** nas duas páginas de
+    produto ([novo](src/app/dashboard/produtos/novo/page.tsx) e [id](src/app/dashboard/produtos/[id]/page.tsx))
+    o campo é o [CategoryAutocompleteField.tsx](src/components/dashboard/CategoryAutocompleteField.tsx)
+    (sugestões vindas dos outros produtos + de `storefront.categories`) com um **"+"** que abre o
+    [ProductChooseCategoryModal.tsx](src/components/ProductChooseCategoryModal.tsx). Esse modal usa o
+    **mesmo `CategoryFormModal` `variant="store"`** do editor da loja (galeria de fotos prontas,
+    upload/URL e "categoria pai") e **cria a categoria de verdade** em `storefront.categories` — não
+    grava só o texto no produto. Ao salvar: define a categoria no produto na hora (ação principal via
+    `onSave(name)`) **e** persiste a categoria na loja lendo o `storefront` atual → `upsertStorefrontCategory`
+    (helper puro em [storefront.ts](src/lib/storefront.ts): dedup por rótulo sem caixa, teto de 8,
+    devolve o **mesmo** objeto quando nada muda p/ pular a gravação) → grava de volta preservando o
+    resto do JSONB (mesmo padrão do `autoSaveStorefront`). As páginas passam `storeId` ao modal; o
+    select "categoria pai" é carregado das categorias existentes ao abrir. É **otimista** (fecha na
+    hora; toast "Categoria salva!" vem do modal) e só avisa por toast de erro se a gravação na vitrine
+    falhar — o produto fica com a categoria de qualquer jeito. Sem migration (JSONB `storefront`).
 - **Banner da loja (carrossel com formato por foto):** o banner é **uma lista de fotos**
   (`storefront.heroSlides: HeroSlide[]` em [src/lib/storefront.ts](src/lib/storefront.ts), cada
   `{ url, layout, photoSide }`) que passam **uma atrás da outra** (1→2→…). Renderizado por
