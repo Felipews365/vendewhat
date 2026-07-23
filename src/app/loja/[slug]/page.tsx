@@ -149,6 +149,10 @@ export default async function LojaPublicaPage({ params }: Props) {
   // Pagamento online: a tabela store_payment_gateway só é lida via service role
   // (o token nunca vai pro browser). Aqui derivamos apenas um booleano.
   let paymentEnabled = false;
+  // Contato real da loja = o WhatsApp CONECTADO (onde a IA/lojista atende), não o
+  // telefone do cadastro (stores.phone, digitado pelo dono no signup). store_whatsapp
+  // só é lida via service role. `connected_number` fica nulo quando desconectado.
+  let whatsappNumber: string | null = null;
   const admin = createAdminSupabase();
   if (admin) {
     const { data: gw } = await admin
@@ -157,6 +161,15 @@ export default async function LojaPublicaPage({ params }: Props) {
       .eq("store_id", store.id)
       .maybeSingle();
     paymentEnabled = Boolean(gw?.access_token && gw.enabled !== false);
+
+    const { data: wa } = await admin
+      .from("store_whatsapp")
+      .select("connected_number")
+      .eq("store_id", store.id)
+      .maybeSingle();
+    const n =
+      typeof wa?.connected_number === "string" ? wa.connected_number.trim() : "";
+    whatsappNumber = n || null;
   }
 
   const list: CatalogProduct[] = (products ?? []).map((p) => {
@@ -235,6 +248,7 @@ export default async function LojaPublicaPage({ params }: Props) {
           description: store.description ? String(store.description) : null,
           logo: store.logo ? String(store.logo) : null,
           phone: store.phone ? String(store.phone) : null,
+          whatsappNumber,
         }}
         storefront={storefront}
         products={list}

@@ -2118,8 +2118,20 @@ type StoreInfo = {
   name: string;
   description: string | null;
   logo: string | null;
+  /** Telefone do cadastro (signup). É o contato do DONO, não da loja. */
   phone: string | null;
+  /** WhatsApp conectado da loja (onde a IA/lojista atende). É o contato real da loja. */
+  whatsappNumber: string | null;
 };
+
+/** Telefone BR legível: (81) 99170-1373. Aceita com/sem DDI 55. */
+function formatBrPhone(raw: string | null): string {
+  let d = (raw ?? "").replace(/\D/g, "");
+  if (d.startsWith("55") && d.length > 11) d = d.slice(2);
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return (raw ?? "").trim();
+}
 
 function scrollToCatalogo() {
   document.getElementById("catalogo")?.scrollIntoView({
@@ -2546,7 +2558,12 @@ function StoreInfoDrawer({
 
   const attendance = describeAttendance(storefront);
   const address = storefront.pickupAddress.trim() || storefront.onlineCity.trim();
-  const phone = (storefront.footerPhone || store.phone || "").trim();
+  // Contato da loja: o telefone que o lojista pôs no rodapé tem prioridade; senão,
+  // o WhatsApp CONECTADO (contato real da loja). O telefone do cadastro (store.phone,
+  // do dono) só entra como último recurso, formatado para leitura.
+  const phone =
+    storefront.footerPhone.trim() ||
+    formatBrPhone(store.whatsappNumber || store.phone);
   const email = storefront.footerEmail.trim();
   const website = storefront.footerWebsite.trim();
   const socials: { label: string; url: string }[] = [
@@ -2903,6 +2920,13 @@ export function LojaClient({
       variantStock: [],
     }));
   }, [rawProducts, storefront.stockControlEnabled]);
+  /**
+   * Contato da loja: o WhatsApp conectado (onde a loja atende) tem prioridade
+   * sobre o telefone do cadastro (que é do dono, digitado no signup). Vale para
+   * o botão "Falar no WhatsApp", a barra inferior e o envio do pedido — assim o
+   * cliente sempre fala com o número da loja, não com o do cadastro.
+   */
+  const storeContactPhone = store.whatsappNumber || store.phone;
   /**
    * Stories = os criados na mão + os produtos novos que já têm vídeo (quando a
    * loja liga `storiesAutoFromProducts`). `products` já vem do mais novo para o
@@ -3479,8 +3503,8 @@ export function LojaClient({
 
   /** WhatsApp da loja válido para montar o link do pedido (mensagem é montada no clique, com código). */
   const orderWhatsAppReady = useMemo(
-    () => whatsAppLink(store.phone, ".") !== null,
-    [store.phone]
+    () => whatsAppLink(storeContactPhone, ".") !== null,
+    [storeContactPhone]
   );
 
   /** Devolve o pedido gravado no painel (número + id), para o WhatsApp e o pagamento online. */
@@ -3584,7 +3608,7 @@ export function LojaClient({
   }
 
   const contactHref = whatsAppLink(
-    store.phone,
+    storeContactPhone,
     `Olá! Vim pelo catálogo da ${store.name} no VendeWhat.`
   );
 
@@ -4904,7 +4928,7 @@ export function LojaClient({
                   onClick={async () => {
                     const snap = await persistOrderSnapshot();
                     const href = whatsAppLink(
-                      store.phone,
+                      storeContactPhone,
                       buildOrderMessage(snap.orderNumber)
                     );
                     if (!href) return;

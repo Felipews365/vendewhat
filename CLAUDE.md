@@ -618,10 +618,25 @@ cara de "quase pronto".
       rola ao catálogo. Reaproveita os `categoryStripItems` e os mesmos setters da `CategoryNavBar`.
     - **`StoreInfoDrawer`** (botão Info): painel "Informações" com logo + nome + descrição e, **só quando
       preenchido**, linhas de atendimento (`describeAttendance`), endereço (`pickupAddress` ou `onlineCity`),
-      telefone (`footerPhone`/`store.phone`), e-mail (`footerEmail`), site (`footerWebsite`), botão "Falar no
+      telefone, e-mail (`footerEmail`), site (`footerWebsite`), botão "Falar no
       WhatsApp" (`contactHref`) e redes (Instagram/Facebook/TikTok/YouTube). Sem nada preenchido, mostra um
       aviso curto para falar pelo WhatsApp. Deriva tudo do `storefront`/`store` que a loja já recebe — sem
       campo/migration novo.
+    - **Contato da loja = WhatsApp do ATENDIMENTO, não o telefone do cadastro:** `stores.phone` é
+      preenchido no **signup** ([register/route.ts](src/app/api/auth/register/route.ts)) com o número que o
+      **dono** digitou — é o contato dele, não da loja. O contato certo é o **WhatsApp conectado**
+      (`store_whatsapp.connected_number`, onde a IA/lojista atende). A [page.tsx](src/app/loja/[slug]/page.tsx)
+      lê `connected_number` **via service role** (junto da consulta do gateway de pagamento; fica `null` quando
+      desconectado) e passa `store.whatsappNumber` para a [LojaClient](src/app/loja/[slug]/LojaClient.tsx). Lá
+      um único `storeContactPhone = store.whatsappNumber || store.phone` alimenta **tudo que fala com a loja**:
+      `contactHref` (botão "Falar no WhatsApp" do topo/gaveta + barra inferior), `orderWhatsAppReady` e o
+      **envio do pedido** — o cliente sempre cai no número do atendimento, com fallback para o do cadastro só
+      quando não há WhatsApp conectado (lojas antigas não mudam). No **telefone exibido** na gaveta a
+      prioridade é `footerPhone` (rodapé, editável) → `formatBrPhone(whatsappNumber || phone)` (formatado
+      `(81) 99170-1373`); o cadastro é o último recurso. O painel "Pix, pagamentos e rodapé" do
+      [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx) tem uma **dica** abaixo do
+      "Telefone de atendimento" explicando isso (deixar em branco → mostra o WhatsApp conectado; conectar em
+      "Configuração da IA"). Sem migration (usa `store_whatsapp` que já existe).
 - **Grade "Categorias" em tiles (redesenho de `StorefrontCategoriesStrip`):** trocou a faixa circular
   (stories) por **cards brancos retangulares** iguais ao print — grid `sm:grid-cols-4 md:grid-cols-8`
   (scroll horizontal no celular), cada tile com **emoji** (`categoryEmoji`) ou a `imageUrl` da

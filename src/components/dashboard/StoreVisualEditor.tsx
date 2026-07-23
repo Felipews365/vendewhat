@@ -2628,6 +2628,12 @@ export function StoreVisualEditor({
           className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400"
           placeholder="(00) 00000-0000"
         />
+        <p className="-mt-1 text-xs text-slate-500">
+          É o telefone que o cliente vê em “Informações” na loja. Deixando em
+          branco, mostramos o <strong>WhatsApp conectado da loja</strong> (o do
+          atendimento). Conecte o WhatsApp em “Configuração da IA” para o contato
+          ficar certo — só usamos o telefone do cadastro como último recurso.
+        </p>
         <label className="block text-sm font-medium text-slate-700">E-mail</label>
         <input
           type="email"
