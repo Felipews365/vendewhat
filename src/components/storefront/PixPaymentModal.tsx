@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { buildPixPayload } from "@/lib/pixPayload";
 import { useToast } from "@/components/Toast";
 
+type QrModule = {
+  toDataURL: (
+    text: string,
+    opts?: { width?: number; margin?: number }
+  ) => Promise<string>;
+};
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -87,10 +94,13 @@ export default function PixPaymentModal({
       return;
     }
     let alive = true;
-    import("qrcode")
-      .then((mod) => {
-        const q = ((mod as unknown as { default?: typeof mod }).default ??
-          mod) as typeof import("qrcode");
+    // Import do build de browser do `qrcode` (canvas): o `browser` field do pacote
+    // é inválido, então o `import("qrcode")` puxaria o build Node e falharia aqui.
+    // @ts-expect-error — o subpath do browser não tem tipos próprios.
+    import("qrcode/lib/browser")
+      .then((mod: unknown) => {
+        const q = ((mod as { default?: QrModule }).default ??
+          (mod as QrModule)) as QrModule;
         return q.toDataURL(payload, { width: 320, margin: 1 });
       })
       .then((url) => {
