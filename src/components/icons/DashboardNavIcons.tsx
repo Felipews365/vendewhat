@@ -142,6 +142,16 @@ export function NavIconPlanos(props: NavGlyphProps) {
   );
 }
 
+/** Verificação — escudo com check (identidade confirmada) */
+export function NavIconVerificacao(props: NavGlyphProps) {
+  return (
+    <Shell {...props}>
+      <path d="M12 2.5l7 2.5v6c0 4.4-3 7.8-7 9-4-1.2-7-4.6-7-9v-6l7-2.5z" {...s} />
+      <path d="M9 11.8l2.2 2.2L15.2 10" {...s} />
+    </Shell>
+  );
+}
+
 export const DASH_NAV_ICONS = {
   painel: NavIconPainel,
   loja: NavIconLoja,
@@ -152,6 +162,7 @@ export const DASH_NAV_ICONS = {
   ia: NavIconIa,
   pagamentos: NavIconPagamentos,
   planos: NavIconPlanos,
+  verificacao: NavIconVerificacao,
 } as const;
 
 export type DashNavIconKey = keyof typeof DASH_NAV_ICONS;

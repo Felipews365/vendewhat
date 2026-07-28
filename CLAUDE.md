@@ -1482,6 +1482,49 @@ lojista **também paga sozinho** pelo Mercado Pago (assinatura recorrente **ou**
     **pagar 3× o mesmo plano** achando que tinha falhado. Enquanto espera, a view chama
     `router.refresh()` a cada 5s por ~1min: o plano vira "Ativo" sozinho, sem F5.
 
+## Verificação de identidade do lojista (KYC anti-golpe)
+
+O dono da loja envia dados pessoais + selfie + foto do documento (frente/verso) e o **admin do
+SaaS** revisa em `/admin`. É **só informativo** (nada é bloqueado): serve para o dono do SaaS
+identificar quem pode estar usando a vitrine para golpe. **Migration:** rode
+[supabase-migration-store-verification.sql](supabase-migration-store-verification.sql) (tabela
+`store_verifications` `(store_id PK)` + **bucket PRIVADO** `verification-docs` com policies de
+storage para o dono só mexer na pasta dele).
+
+- **Bucket PRIVADO (não o `product-images` público):** documento de identidade **nunca** pode ficar
+  num bucket público. O lojista só INSERT/UPDATE/SELECT na **própria pasta** (`(storage.foldername
+  (name))[1]` = id da loja dele); o admin vê por **URL assinada** (service role, 1h) — não há SELECT
+  público. Os `*_path` guardam o caminho no bucket (não uma URL).
+- **Escrita só por service role (o lojista NÃO se auto-aprova):** a RLS de `store_verifications` dá
+  ao dono **só SELECT** da própria linha. A gravação (status `pending`) é pela rota
+  [/api/store/verification](src/app/api/store/verification/route.ts) (POST, service role) — se o
+  dono pudesse dar UPDATE, marcaria `status='approved'` sozinho. Helpers/validação (CPF real,
+  formatação, status) em [src/lib/storeVerification.ts](src/lib/storeVerification.ts) (sem
+  server-only, usado no front e no back).
+- **Painel do lojista** [/dashboard/verificacao](src/app/dashboard/verificacao/page.tsx) (item
+  **"Verificação"** no `DASH_NAV`, ícone `verificacao` = escudo com check): formulário guiado
+  (dados + endereço opcional + 3 uploads com `capture="environment"` para abrir a câmera no
+  celular). Sobe as fotos ao bucket privado e chama o POST. Pré-preenche com o que já foi enviado
+  (o GET lê a própria linha por RLS), então "Atualizar cadastro" reaproveita os dados; reenviar
+  volta para `pending`.
+- **Caixinha no painel inicial** ([VerificationPrompt.tsx](src/components/dashboard/VerificationPrompt.tsx),
+  ao lado do card de WhatsApp em [dashboard/page.tsx](src/app/dashboard/page.tsx)): convida quem já
+  é cliente a enviar/atualizar o cadastro, com texto por status (não enviado / em análise / recusado
+  / verificado). Não bloqueia nada.
+- **Modal ao acessar** ([VerificationGateModal.tsx](src/components/dashboard/VerificationGateModal.tsx),
+  montado no [DashboardLayoutClient.tsx](src/components/dashboard/DashboardLayoutClient.tsx) **fora**
+  do wrapper `.vw-fade-in-up`, então o `position: fixed` não vira containing block): aviso mais forte
+  que aparece **assim que o dono entra no painel**, com botão "Preencher meus dados agora" →
+  `/dashboard/verificacao`. Mostrado **uma vez por sessão** (`sessionStorage` `vw-verif-modal-seen`,
+  reaparece a cada novo acesso) e **só** com status `none`/`rejected` (nunca em `pending`/`approved`,
+  nem já na própria tela de verificação). Não bloqueia — só convida (Esc / "Agora não" fecha).
+- **Admin:** coluna **"Verificação"** na lista [/admin](src/app/admin/(panel)/page.tsx) (status vem
+  em lote no `getClients`, tolerando a tabela ausente) e o **card completo** na página do cliente
+  ([VerificationCard.tsx](src/app/admin/(panel)/clientes/[storeId]/VerificationCard.tsx)): dados +
+  fotos (URLs assinadas via `getStoreVerification` em [adminData.ts](src/lib/adminData.ts)) e botões
+  **Aprovar/Recusar** (recusa exige observação) → [/api/admin/verification](src/app/api/admin/verification/route.ts)
+  (`requireAdmin`, service role, grava `reviewed_at`/`reviewed_by`).
+
 ## Atendimento por IA no WhatsApp (Evolution API)
 
 Cada loja conecta o próprio WhatsApp via **QR Code** em `/dashboard/whatsapp` (usando a

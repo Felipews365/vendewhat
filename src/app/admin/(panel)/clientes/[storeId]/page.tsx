@@ -1,10 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAllPlans, getAiUsageSummary, getClient, type AiUsageSummary } from "@/lib/adminData";
+import {
+  getAllPlans,
+  getAiUsageSummary,
+  getClient,
+  getStoreVerification,
+  type AiUsageSummary,
+} from "@/lib/adminData";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { loadCredits, TOKENS_PER_CONVERSATION } from "@/lib/aiCredits";
 import ClientForm from "./ClientForm";
 import AiCreditsCard from "./AiCreditsCard";
+import VerificationCard from "./VerificationCard";
 
 export const dynamic = "force-dynamic";
 
@@ -95,10 +102,11 @@ export default async function AdminClientePage({
   params: Promise<{ storeId: string }>;
 }) {
   const { storeId } = await params;
-  const [client, plans, aiUsage] = await Promise.all([
+  const [client, plans, aiUsage, verification] = await Promise.all([
     getClient(storeId),
     getAllPlans(),
     getAiUsageSummary({ days: 30, storeId }),
+    getStoreVerification(storeId),
   ]);
 
   if (!client) notFound();
@@ -171,6 +179,8 @@ export default async function AdminClientePage({
           </p>
         </div>
       </div>
+
+      {verification && <VerificationCard storeId={store.id} detail={verification} />}
 
       {credits && (
         <AiCreditsCard

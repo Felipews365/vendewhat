@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { StoreSetupGuideModal } from "@/components/dashboard/StoreSetupGuideModal";
 import { VisitsByDayModal } from "@/components/dashboard/VisitsByDayModal";
+import { VerificationPrompt } from "@/components/dashboard/VerificationPrompt";
 
 interface Store {
   id: string;
@@ -215,7 +216,7 @@ export default function DashboardPage() {
         })}
       </div>
 
-      <div className="mb-8 max-w-xl">
+      <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h2 className="font-semibold text-slate-800 dark:text-slate-100">WhatsApp & IA</h2>
@@ -265,6 +266,8 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        <VerificationPrompt />
       </div>
 
       <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Ações rápidas</h2>

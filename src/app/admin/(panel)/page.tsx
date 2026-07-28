@@ -7,8 +7,18 @@ import {
   type AiUsageSummary,
 } from "@/lib/adminData";
 import { formatBRL } from "@/lib/plans";
+import { VERIFICATION_STATUS_LABEL, type VerificationStatus } from "@/lib/storeVerification";
 
 export const dynamic = "force-dynamic";
+
+function VerificationBadge({ status }: { status: VerificationStatus }) {
+  const s = VERIFICATION_STATUS_LABEL[status];
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${s.cls}`}>
+      {s.label}
+    </span>
+  );
+}
 
 function daysUntil(dateIso: string | null): number | null {
   if (!dateIso) return null;
@@ -169,7 +179,7 @@ export default async function AdminClientesPage() {
 
       <div className="mt-8 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
         <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] text-left text-sm">
+        <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3 font-semibold">Loja</th>
@@ -177,6 +187,7 @@ export default async function AdminClientesPage() {
               <th className="px-4 py-3 font-semibold">Plano</th>
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold">Vencimento</th>
+              <th className="px-4 py-3 font-semibold">Verificação</th>
               <th className="px-4 py-3 font-semibold">IA (saldo · gasto mês)</th>
               <th className="px-4 py-3 text-right font-semibold">Valor</th>
             </tr>
@@ -184,7 +195,7 @@ export default async function AdminClientesPage() {
           <tbody className="divide-y divide-slate-100">
             {clients.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                   Nenhuma loja encontrada.
                 </td>
               </tr>
@@ -221,6 +232,9 @@ export default async function AdminClientesPage() {
                     ) : (
                       <VencimentoBadge expiresAt={sub?.expires_at ?? null} />
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <VerificationBadge status={c.verificationStatus} />
                   </td>
                   <td className="px-4 py-3">
                     {c.ai ? (

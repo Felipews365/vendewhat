@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AiStatusBanner } from "@/components/dashboard/AiStatusBanner";
 import { SaleAlertWatcher } from "@/components/dashboard/SaleAlertWatcher";
+import { VerificationGateModal } from "@/components/dashboard/VerificationGateModal";
 import {
   DASH_NAV_ICONS,
   type DashNavIconKey,
@@ -48,6 +49,12 @@ const DASH_NAV: readonly {
     icon: "pagamentos",
   },
   { href: "/dashboard/planos", short: "Planos", label: "Planos e assinatura", icon: "planos" },
+  {
+    href: "/dashboard/verificacao",
+    short: "Verificação",
+    label: "Verificação da conta",
+    icon: "verificacao",
+  },
   { href: "/dashboard/conta", short: "Conta", label: "Conta", icon: "conta" },
 ];
 
@@ -497,6 +504,9 @@ export function DashboardLayoutClient({
         userName={userName}
         onLogout={handleLogout}
       />
+
+      {/* Aviso ao acessar: convida a fazer a verificação de identidade (1x/sessão) */}
+      <VerificationGateModal />
     </div>
   );
 }

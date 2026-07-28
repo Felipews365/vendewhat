@@ -1,6 +1,11 @@
 import "server-only";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { conversationsFromTokens, includedTokensForPlan } from "@/lib/aiCredits";
+import {
+  VERIFICATION_BUCKET,
+  normalizeVerificationStatus,
+  type VerificationStatus,
+} from "@/lib/storeVerification";
 
 export type StoreRow = {
   id: string;
@@ -72,6 +77,8 @@ export type AdminClient = {
   subscription: SubscriptionRow | null;
   planTitle: string | null;
   ai: AdminClientAi | null;
+  /** Status da verificação de identidade do dono (KYC). */
+  verificationStatus: VerificationStatus;
 };
 
 type AiCreditRow = {
@@ -143,20 +150,28 @@ export async function getClients(): Promise<AdminClient[]> {
   const db = createAdminSupabase();
   if (!db) return [];
 
-  const [{ data: stores }, { data: subs }, { data: plans }, aiCredits, emails] = await Promise.all([
-    db
-      .from("stores")
-      .select("id, user_id, name, slug, phone, logo, created_at")
-      .order("created_at", { ascending: false }),
-    db.from("subscriptions").select("*"),
-    db.from("plans").select("id, title"),
-    // Tolera a tabela ausente (migration de créditos não aplicada) → sem dados de IA.
-    db
-      .from("store_ai_credits")
-      .select("store_id, cycle_start, included_tokens, used_tokens, credit_tokens")
-      .then((r) => (r.error ? [] : ((r.data as AiCreditRow[] | null) ?? []))),
-    ownerEmailMap(db),
-  ]);
+  const [{ data: stores }, { data: subs }, { data: plans }, aiCredits, verifications, emails] =
+    await Promise.all([
+      db
+        .from("stores")
+        .select("id, user_id, name, slug, phone, logo, created_at")
+        .order("created_at", { ascending: false }),
+      db.from("subscriptions").select("*"),
+      db.from("plans").select("id, title"),
+      // Tolera a tabela ausente (migration de créditos não aplicada) → sem dados de IA.
+      db
+        .from("store_ai_credits")
+        .select("store_id, cycle_start, included_tokens, used_tokens, credit_tokens")
+        .then((r) => (r.error ? [] : ((r.data as AiCreditRow[] | null) ?? []))),
+      // Tolera a tabela ausente (migration de verificação não aplicada).
+      db
+        .from("store_verifications")
+        .select("store_id, status")
+        .then((r) =>
+          r.error ? [] : ((r.data as { store_id: string; status: string }[] | null) ?? [])
+        ),
+      ownerEmailMap(db),
+    ]);
 
   const subByStore = new Map<string, SubscriptionRow>();
   for (const s of (subs as SubscriptionRow[] | null) ?? []) {
@@ -173,6 +188,11 @@ export async function getClients(): Promise<AdminClient[]> {
     aiByStore.set(row.store_id, row);
   }
 
+  const verificationByStore = new Map<string, VerificationStatus>();
+  for (const row of verifications) {
+    verificationByStore.set(row.store_id, normalizeVerificationStatus(row.status));
+  }
+
   const now = new Date();
   return ((stores as StoreRow[] | null) ?? []).map((store) => {
     const subscription = subByStore.get(store.id) ?? null;
@@ -182,6 +202,7 @@ export async function getClients(): Promise<AdminClient[]> {
       subscription,
       planTitle: subscription?.plan_id ? planTitleById.get(subscription.plan_id) ?? null : null,
       ai: aiFromRow(aiByStore.get(store.id), subscription?.plan_id ?? null, now),
+      verificationStatus: verificationByStore.get(store.id) ?? "none",
     };
   });
 }
@@ -222,6 +243,102 @@ export async function getClient(storeId: string): Promise<
     ownerEmail: emails.get((store as StoreRow).user_id) ?? null,
     subscription: (subscription as SubscriptionRow | null) ?? null,
     payments: (payments as PaymentRow[] | null) ?? [],
+  };
+}
+
+export type StoreVerificationDetail = {
+  status: VerificationStatus;
+  fullName: string | null;
+  cpf: string | null;
+  birthDate: string | null;
+  address: string | null;
+  reviewNotes: string | null;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  /** URLs assinadas (temporárias) das fotos, para o admin ver. */
+  selfieUrl: string | null;
+  docFrontUrl: string | null;
+  docBackUrl: string | null;
+};
+
+/** Monta o endereço numa linha só (o que estiver preenchido). */
+function joinAddress(r: {
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  uf?: string | null;
+  cep?: string | null;
+}): string | null {
+  const line1 = [r.street, r.number].filter(Boolean).join(", ");
+  const line2 = [r.complement, r.neighborhood].filter(Boolean).join(" · ");
+  const line3 = [[r.city, r.uf].filter(Boolean).join(" - "), r.cep].filter(Boolean).join(" · ");
+  const full = [line1, line2, line3].filter(Boolean).join(" — ");
+  return full || null;
+}
+
+/**
+ * Verificação de identidade de uma loja para o admin (dados + URLs assinadas das
+ * fotos, válidas por 1h). Tolera a tabela/coluna ausente → status `none`.
+ */
+export async function getStoreVerification(
+  storeId: string
+): Promise<StoreVerificationDetail | null> {
+  const db = createAdminSupabase();
+  if (!db) return null;
+
+  const { data, error } = await db
+    .from("store_verifications")
+    .select("*")
+    .eq("store_id", storeId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      status: "none",
+      fullName: null,
+      cpf: null,
+      birthDate: null,
+      address: null,
+      reviewNotes: null,
+      submittedAt: null,
+      reviewedAt: null,
+      reviewedBy: null,
+      selfieUrl: null,
+      docFrontUrl: null,
+      docBackUrl: null,
+    };
+  }
+
+  const sign = async (path: string | null | undefined): Promise<string | null> => {
+    if (!path) return null;
+    const { data: signed } = await db.storage
+      .from(VERIFICATION_BUCKET)
+      .createSignedUrl(path, 60 * 60);
+    return signed?.signedUrl ?? null;
+  };
+
+  const [selfieUrl, docFrontUrl, docBackUrl] = await Promise.all([
+    sign(data.selfie_path),
+    sign(data.doc_front_path),
+    sign(data.doc_back_path),
+  ]);
+
+  return {
+    status: normalizeVerificationStatus(data.status),
+    fullName: data.full_name ?? null,
+    cpf: data.cpf ?? null,
+    birthDate: (data.birth_date as string | null) ?? null,
+    address: joinAddress(data),
+    reviewNotes: data.review_notes ?? null,
+    submittedAt: (data.submitted_at as string | null) ?? null,
+    reviewedAt: (data.reviewed_at as string | null) ?? null,
+    reviewedBy: (data.reviewed_by as string | null) ?? null,
+    selfieUrl,
+    docFrontUrl,
+    docBackUrl,
   };
 }
 
