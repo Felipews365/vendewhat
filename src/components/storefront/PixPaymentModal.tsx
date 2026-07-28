@@ -155,7 +155,7 @@ export default function PixPaymentModal({
       aria-label="Pagamento PIX"
     >
       <div
-        className="vw-pop-in relative max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7"
+        className="vw-pop-in relative max-h-[92vh] w-full max-w-3xl overflow-y-auto overflow-x-hidden rounded-2xl bg-white p-5 shadow-2xl sm:p-7"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -208,7 +208,7 @@ export default function PixPaymentModal({
         ) : (
           <div className="mt-5 grid gap-6 sm:grid-cols-2">
             {/* QR Code */}
-            <div>
+            <div className="min-w-0">
               <h3 className="mb-3 font-semibold text-slate-800">QR Code</h3>
               <Steps
                 items={[
@@ -237,7 +237,7 @@ export default function PixPaymentModal({
             </div>
 
             {/* Copia e cola */}
-            <div>
+            <div className="min-w-0">
               <h3 className="mb-3 font-semibold text-slate-800">Copia e cola</h3>
               <Steps
                 items={[
@@ -248,7 +248,7 @@ export default function PixPaymentModal({
                 ]}
               />
               <div className="mt-4 flex items-stretch gap-2">
-                <div className="flex-1 truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600">
+                <div className="min-w-0 flex-1 truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600">
                   {payload}
                 </div>
                 <button
