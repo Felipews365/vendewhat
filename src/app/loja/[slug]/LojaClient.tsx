@@ -27,6 +27,7 @@ import { AnnouncementBar, AnnouncementText } from "@/components/storefront/Annou
 import { TabAttention } from "@/components/storefront/TabAttention";
 import { StoreStories, buildStoryList } from "@/components/storefront/StoreStories";
 import { ProductShare } from "@/components/storefront/StoreShare";
+import PixPaymentModal from "@/components/storefront/PixPaymentModal";
 import { discountPercent } from "@/lib/productCardMeta";
 import {
   HeroTemplateSlide,
@@ -3082,6 +3083,8 @@ export function LojaClient({
   }, [cart, cartReady, store.slug]);
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState("");
+  const [pixModalOpen, setPixModalOpen] = useState(false);
+  const [pixOrderCode, setPixOrderCode] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -3500,6 +3503,11 @@ export function LojaClient({
   const paymentComplete =
     enabledPayMethods.length === 0 ||
     (paymentMethod != null && enabledPayMethods.includes(paymentMethod));
+  // Botão "Pagar" (tela PIX com QR): só quando a loja tem chave Pix e o cliente
+  // escolheu Pix (ou a loja nem mostra seletor de pagamento).
+  const pixPayAvailable =
+    storefront.pixKey.trim() !== "" &&
+    (enabledPayMethods.length === 0 || paymentMethod === "pix");
 
   // Pedido mínimo (valor e/ou quantidade) definido pela loja. Só libera o
   // checkout quando o carrinho atinge o(s) mínimo(s) configurado(s).
@@ -3545,41 +3553,77 @@ export function LojaClient({
   }
 
   function buildOrderMessage(orderCode?: number | null): string {
-    const lines = [
-      `*Pedido — ${store.name}*`,
-      "",
-    ];
+    const money = (v: number) =>
+      v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    // Mensagem organizada por seções (cabeçalho, cliente, entrega, pagamento,
+    // itens, total), pra ficar fácil de ler no WhatsApp.
+    const lines: string[] = [`*Pedido — ${store.name}*`];
     if (orderCode != null && Number.isFinite(orderCode)) {
-      lines.push(`*Código do pedido:* #${orderCode}`, "");
+      lines.push(`*Código do pedido:* #${orderCode}`);
     }
+
+    const displayCustomer = titleCasePtBr(customerName);
     lines.push(
-      `*Cliente:* ${titleCasePtBr(customerName) || "—"}`,
-      `*Telefone / WhatsApp:* ${customerPhone.trim() || "—"}`,
+      "",
+      displayCustomer ? `Olá, ${displayCustomer}.` : "Olá!",
+      "",
+      "Segue o resumo do seu pedido:"
     );
+
+    // Dados do cliente
+    lines.push(
+      "",
+      "*Dados do cliente*",
+      `*Telefone / WhatsApp:* ${customerPhone.trim() || "—"}`
+    );
+
+    // Entrega
+    const entrega: string[] = [];
     if (shippingMode) {
       const lab = shippingModeLabel(shippingMode);
-      if (lab) lines.push(`*Forma de envio:* ${lab}`);
+      if (lab) entrega.push(`*Forma de envio:* ${lab}`);
     }
     if (shippingMode === "excursao" && excursionName.trim()) {
-      lines.push(`*Excursão:* ${excursionName.trim()}`);
+      entrega.push(`*Excursão:* ${excursionName.trim()}`);
     }
     if (shippingMode === "transportadora" && carrierName.trim()) {
-      lines.push(`*Transportadora:* ${carrierName.trim()}`);
+      entrega.push(`*Transportadora:* ${carrierName.trim()}`);
     }
     if (needsAddress) {
       const addr = formatCustomerAddress();
-      if (addr) lines.push(`*Endereço de entrega:* ${addr}`);
+      if (addr) entrega.push(`*Endereço de entrega:* ${addr}`);
     } else if (shippingMode === "retirada") {
-      if (pickupAddress) lines.push(`*Retirada em:* ${pickupAddress}`);
+      if (pickupAddress) entrega.push(`*Retirada em:* ${pickupAddress}`);
       if (pickupInstructions)
-        lines.push(`*Como retirar:* ${pickupInstructions}`);
+        entrega.push(`*Como retirar:* ${pickupInstructions}`);
     }
+    if (entrega.length) lines.push("", "*Entrega*", ...entrega);
+
+    // Pagamento
+    const pixSelected =
+      enabledPayMethods.length === 0 || paymentMethod === "pix";
+    const pixKey = storefront.pixKey.trim();
+    const pagamento: string[] = [];
     if (paymentMethod) {
       const payLabel = paymentMethodLabel(paymentMethod);
-      if (payLabel) lines.push(`*Forma de pagamento:* ${payLabel}`);
+      if (payLabel) pagamento.push(`*Forma de pagamento:* ${payLabel}`);
     }
-    const money = (v: number) =>
-      v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    if (pixKey && pixSelected) {
+      pagamento.push(`*Chave Pix:* ${pixKey}`);
+      const pixName = storefront.pixName.trim();
+      if (pixName) pagamento.push(`*Titular:* ${pixName}`);
+      // Página de pagamento (QR + copia e cola) do pedido registrado.
+      const origin =
+        typeof window !== "undefined" ? window.location.origin : "";
+      if (origin && store.slug && orderCode != null && Number.isFinite(orderCode)) {
+        pagamento.push(
+          `*Link de pagamento:* ${origin}/loja/${store.slug}/pedido/${orderCode}`
+        );
+      }
+    }
+    if (pagamento.length) lines.push("", "*Pagamento*", ...pagamento);
+
+    // Itens do pedido
     const itemLines = items.map((i) => {
       const ref = i.productReference?.trim();
       const displayName = titleCasePtBr(i.name);
@@ -3593,27 +3637,18 @@ export function LojaClient({
       seg.push(money(i.lineTotal));
       return seg.join(" — ");
     });
-    lines.push(
-      "",
-      "*Itens do pedido:*",
-      "",
-      itemLines.join("\n\n"),
-      "",
-      `*Total parcial: ${money(subtotal)}*`
-    );
+    lines.push("", "*Itens do pedido*", "", itemLines.join("\n\n"));
+
+    // Total
+    lines.push("", "*Total*", `*Total parcial: ${money(subtotal)}*`);
+
     if (notes.trim()) {
-      lines.push("", `Obs: ${notes.trim()}`);
+      lines.push("", "*Observações*", notes.trim());
     }
-    // A chave Pix só entra quando o cliente escolheu Pix (ou quando a loja não
-    // configurou um seletor de pagamento — mantém o comportamento anterior).
-    const pixSelected =
-      enabledPayMethods.length === 0 || paymentMethod === "pix";
-    const pixKey = storefront.pixKey.trim();
+
+    // Fecho: só pede o comprovante do Pix quando o pagamento é por Pix.
     if (pixKey && pixSelected) {
-      lines.push("", "*Pagamento via Pix:*", `Chave: ${pixKey}`);
-      const pixName = storefront.pixName.trim();
-      if (pixName) lines.push(`Titular: ${pixName}`);
-      lines.push("Faça o Pix e envie o comprovante aqui, por favor. 🙏");
+      lines.push("", "Faça o Pix e envie o comprovante por aqui, por favor.");
     }
     return lines.join("\n");
   }
@@ -3722,6 +3757,42 @@ export function LojaClient({
     } finally {
       setPaying(false);
     }
+  }
+
+  /** Abre o WhatsApp da loja com a mensagem do pedido e limpa o carrinho. */
+  function sendOrderOnWhatsApp(orderNumber: number | null) {
+    const href = whatsAppLink(
+      storeContactPhone,
+      buildOrderMessage(orderNumber)
+    );
+    if (!href) return;
+    setCartOpen(false);
+    // Pedido enviado: o carrinho guardado no aparelho some, senão ele
+    // reapareceria montado quando o cliente voltasse à loja.
+    setCart({});
+    /**
+     * Depois do `await`, o browser já não trata o clique como “gesto direto”:
+     * em mobile o `window.open` costuma ser bloqueado. Navegar na mesma aba
+     * abre o WhatsApp de forma fiável; no desktop mantemos novo separador.
+     */
+    const narrow =
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 767px)").matches;
+    const touchPrimary =
+      typeof window !== "undefined" &&
+      window.matchMedia("(pointer: coarse)").matches;
+    if (narrow || touchPrimary) {
+      window.location.assign(href);
+    } else {
+      window.open(href, "_blank", "noopener,noreferrer");
+    }
+  }
+
+  /** Registra o pedido e abre a tela de pagamento PIX (QR + copia e cola). */
+  async function handlePayPix() {
+    const snap = await persistOrderSnapshot();
+    setPixOrderCode(snap.orderNumber);
+    setPixModalOpen(true);
   }
 
   const contactHref = whatsAppLink(
@@ -5045,34 +5116,25 @@ export function LojaClient({
             </div>
             {items.length > 0 && orderWhatsAppReady && (
               <div className="p-4 border-t border-boutique-muted/50 bg-boutique-cream/60">
+                {pixPayAvailable && (
+                  <button
+                    type="button"
+                    onClick={handlePayPix}
+                    disabled={!checkoutReady}
+                    className="mb-3 flex w-full items-center justify-center gap-2 rounded-full py-3.5 text-base font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-45 disabled:pointer-events-none"
+                    style={{ background: "var(--store-primary)" }}
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l9 9-9 9-9-9 9-9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12l3 3 5-6" />
+                    </svg>
+                    Pagar
+                  </button>
+                )}
                 <ShimmerButton
                   onClick={async () => {
                     const snap = await persistOrderSnapshot();
-                    const href = whatsAppLink(
-                      storeContactPhone,
-                      buildOrderMessage(snap.orderNumber)
-                    );
-                    if (!href) return;
-                    setCartOpen(false);
-                    // Pedido enviado: o carrinho guardado no aparelho some, senão
-                    // ele reapareceria montado quando o cliente voltasse à loja.
-                    setCart({});
-                    /**
-                     * Depois do `await`, o browser já não trata o clique como “gesto direto”:
-                     * em mobile o `window.open` costuma ser bloqueado. Navegar na mesma aba
-                     * abre o WhatsApp de forma fiável; no desktop mantemos novo separador.
-                     */
-                    const narrow =
-                      typeof window !== "undefined" &&
-                      window.matchMedia("(max-width: 767px)").matches;
-                    const touchPrimary =
-                      typeof window !== "undefined" &&
-                      window.matchMedia("(pointer: coarse)").matches;
-                    if (narrow || touchPrimary) {
-                      window.location.assign(href);
-                    } else {
-                      window.open(href, "_blank", "noopener,noreferrer");
-                    }
+                    sendOrderOnWhatsApp(snap.orderNumber);
                   }}
                   disabled={!checkoutReady}
                   background="radial-gradient(ellipse 80% 50% at 50% 120%, #25D366, #128C7E)"
@@ -5167,6 +5229,20 @@ export function LojaClient({
           </div>
         </div>
       )}
+
+      <PixPaymentModal
+        open={pixModalOpen}
+        onClose={() => setPixModalOpen(false)}
+        pixKey={storefront.pixKey.trim()}
+        pixName={storefront.pixName.trim()}
+        city={storefront.onlineCity.trim() || storefront.pickupAddress.trim()}
+        amount={subtotal}
+        orderCode={pixOrderCode}
+        onPaid={() => {
+          setPixModalOpen(false);
+          sendOrderOnWhatsApp(pixOrderCode);
+        }}
+      />
 
       <CookieConsent />
     </div>

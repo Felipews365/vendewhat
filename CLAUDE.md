@@ -1171,12 +1171,43 @@ checkoutMercadoPagoEnabled` (ou seja, gateway conectado **E** ativado no painel)
 com Mercado Pago" só é exibido quando `paymentMethod === "mercadopago"`. A escolha vai na mensagem
 (`*Forma de pagamento:*`) e em `payload.paymentMethod`.
 
-**Formato da mensagem de pedido (`buildOrderMessage` em LojaClient):** cabeçalho, dados do cliente,
-envio/endereço e depois `*Itens do pedido:*` com **um item por bloco** (linha em branco entre eles):
-`1x Nome — Cor — Tam. P — R$ 90,00` (dinheiro em BRL com vírgula via `toLocaleString`, sem o antigo
-"(un. R$ x)"); fecha com `*Total parcial: R$ …*`. O **nome do cliente e do produto** passam por
-`titleCasePtBr` (1ª letra de cada palavra maiúscula, mantendo conectores `da/de/do/das/dos/e/di/du`
-minúsculos no meio) — normaliza o que foi digitado em caixa alta/baixa.
+**Formato da mensagem de pedido (`buildOrderMessage` em LojaClient):** mensagem **organizada por
+seções** (cada título em `*negrito*`): cabeçalho (`*Pedido — Loja*` + `*Código do pedido:* #N`) →
+saudação (`Olá, {Nome}.` + "Segue o resumo do seu pedido:") → **`*Dados do cliente*`** (telefone) →
+**`*Entrega*`** (forma de envio, excursão/transportadora, endereço/retirada) → **`*Pagamento*`**
+(forma + `*Chave Pix:*`/`*Titular:*` quando Pix) → **`*Itens do pedido*`** com **um item por bloco**
+(linha em branco entre eles): `1x Nome (Ref. X) — Cor — Tam. P — R$ 90,00` (dinheiro em BRL com
+vírgula via `toLocaleString`) → **`*Total*`** (`*Total parcial: R$ …*`) → `*Observações*` (se houver)
+→ fecho `Faça o Pix e envie o comprovante por aqui, por favor.` **só quando o pagamento é Pix**. Cada
+seção só é impressa se tiver conteúdo. O **nome do cliente e do produto** passam por `titleCasePtBr`
+(1ª letra de cada palavra maiúscula, mantendo conectores `da/de/do/das/dos/e/di/du` minúsculos no
+meio) — normaliza o que foi digitado em caixa alta/baixa.
+
+**Botão "Pagar" + tela PIX com QR (`PixPaymentModal`):** quando a loja tem **chave Pix**
+(`storefront.pixKey`) e o cliente escolheu **Pix** (ou a loja não mostra seletor de pagamento —
+`pixPayAvailable`), o carrinho mostra um **botão "Pagar" em pílula** na cor da loja
+(`var(--store-primary)`, acima do "Enviar pedido no WhatsApp"). Ele registra o pedido
+(`persistOrderSnapshot`) e abre o [PixPaymentModal.tsx](src/components/storefront/PixPaymentModal.tsx):
+chave/titular/valor no topo, **QR Code + "copia e cola"** lado a lado (empilha no celular) com passos
+numerados, e dois botões — **"Tudo certo, já paguei"** (envia o pedido/comprovante pelo WhatsApp via
+`sendOrderOnWhatsApp` e limpa o carrinho) e **"Pagar depois"** (fecha). O "copia e cola" é o **BR Code
+EMV** gerado por [pixPayload.ts](src/lib/pixPayload.ts) (`buildPixPayload` — campos TLV + CRC16-CCITT,
+sem dependência externa; nome/cidade em ASCII maiúsculo, txid `PED{N}` ou `***`); o QR sai do mesmo
+payload via **import dinâmico do `qrcode`** (fora do bundle inicial). O valor é o `subtotal` do
+carrinho; a cidade vem de `onlineCity`/`pickupAddress` (fallback `BRASIL`). Sem migration (reaproveita
+`storefront.pixKey`/`pixName`).
+
+**Página de pagamento do pedido (`/loja/[slug]/pedido/[numero]`) + link na mensagem:** além do modal
+no carrinho, o pedido registrado ganha uma **página pública de pagamento** —
+[pedido/[numero]/page.tsx](src/app/loja/[slug]/pedido/[numero]/page.tsx) (server, lê a loja + o pedido
+por `store_id`+`order_number` **via service role**, pois `orders` não é lida pelo anon) que renderiza a
+[OrderPaymentClient.tsx](src/app/loja/[slug]/pedido/[numero]/OrderPaymentClient.tsx): logo da loja,
+resumo do pedido (itens, total, envio/endereço/pagamento) e o **mesmo botão "Pagar" + `PixPaymentModal`**
+do carrinho. Se o pedido já está `payment_status="pago"`, mostra selo "✓ Pago" no lugar do botão. O
+`buildOrderMessage` **inclui o link** na seção `*Pagamento*` (`*Link de pagamento:*
+{origin}/loja/{slug}/pedido/{N}`) quando o pagamento é Pix e há código do pedido — assim o cliente
+abre a página, paga pelo QR/copia-e-cola e o "Tudo certo, já paguei" leva ao WhatsApp da loja
+(`connected_number` com fallback pro cadastro). Sem migration (usa `orders`/`stores`/`store_whatsapp`).
 
 **Pix na mensagem do WhatsApp:** se a loja preencher a **chave Pix** (`storefront.pixKey` + titular
 `pixName`, no mesmo painel "Rodapé da vitrine"), a mensagem do **Enviar pedido no WhatsApp** termina
