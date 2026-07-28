@@ -1193,9 +1193,18 @@ numerados, e dois botões — **"Tudo certo, já paguei"** (envia o pedido/compr
 `sendOrderOnWhatsApp` e limpa o carrinho) e **"Pagar depois"** (fecha). O "copia e cola" é o **BR Code
 EMV** gerado por [pixPayload.ts](src/lib/pixPayload.ts) (`buildPixPayload` — campos TLV + CRC16-CCITT,
 sem dependência externa; nome/cidade em ASCII maiúsculo, txid `PED{N}` ou `***`); o QR sai do mesmo
-payload via **import dinâmico do `qrcode`** (fora do bundle inicial). O valor é o `subtotal` do
-carrinho; a cidade vem de `onlineCity`/`pickupAddress` (fallback `BRASIL`). Sem migration (reaproveita
+payload via **import dinâmico** (fora do bundle inicial). O valor é o `subtotal` do carrinho; a cidade
+vem de `onlineCity`/`pickupAddress` (fallback `BRASIL`). Sem migration (reaproveita
 `storefront.pixKey`/`pixName`).
+- **⚠️ Importa `qrcode/lib/browser`, não `qrcode`:** o `browser` field do `package.json` do pacote
+  `qrcode` é **inválido**, então `import("qrcode")` puxa o build **Node** (`toDataURL` quebra no
+  navegador → o QR aparecia em branco). O import é direto no build de browser (renderer via `<canvas>`,
+  sem tipos próprios → um `@ts-expect-error` e o cast pra `QrModule`). **Não troque** de volta pra
+  `import("qrcode")`.
+- **⚠️ Mobile: `min-w-0` nas colunas + na caixa do "copia e cola":** a string do BR Code é longa e
+  sem quebra; num flex sem `min-w-0` o `truncate` **não encolhe** e estoura a largura do card,
+  empurrando o QR **pro lado** no celular. As duas colunas (QR/copia-e-cola) e a caixa do código levam
+  `min-w-0`, e o card tem `overflow-x-hidden` como trava extra.
 
 **Página de pagamento do pedido (`/loja/[slug]/pedido/[numero]`) + link na mensagem:** além do modal
 no carrinho, o pedido registrado ganha uma **página pública de pagamento** —
