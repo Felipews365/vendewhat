@@ -12,6 +12,7 @@ import { displayTotalStock } from "@/lib/productVariants";
 import {
   storefrontFromDb,
   storefrontToDb,
+  DEFAULT_OFFLINE_MESSAGE,
   type StorefrontSettings,
 } from "@/lib/storefront";
 import { useToast } from "@/components/Toast";
@@ -40,6 +41,8 @@ export default function ProdutosPage() {
   const [storeId, setStoreId] = useState<string | null>(null);
   const [sf, setSf] = useState<StorefrontSettings | null>(null);
   const [savingStock, setSavingStock] = useState(false);
+  const [savingOffline, setSavingOffline] = useState(false);
+  const [offlineDraft, setOfflineDraft] = useState("");
 
   useEffect(() => {
     loadProducts();
@@ -65,7 +68,9 @@ export default function ProdutosPage() {
       return;
     }
     setStoreId(store.id);
-    setSf(storefrontFromDb(store.storefront));
+    const loadedSf = storefrontFromDb(store.storefront);
+    setSf(loadedSf);
+    setOfflineDraft(loadedSf.offlineMessage);
 
     const { data, error } = await supabase
       .from("products")
@@ -111,6 +116,61 @@ export default function ProdutosPage() {
       showToast("Erro de conexão ao salvar.", "error");
     } finally {
       setSavingStock(false);
+    }
+  }
+
+  // Grava o storefront inteiro (padrão dos toggles desta página). Devolve true no
+  // sucesso para os handlers decidirem o toast / desfazer.
+  async function persistStorefront(next: StorefrontSettings) {
+    if (!storeId) return false;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("stores")
+      .update({
+        storefront: storefrontToDb(next),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", storeId);
+    return !error;
+  }
+
+  async function toggleOffline(offline: boolean) {
+    if (!sf) return;
+    const next: StorefrontSettings = { ...sf, storeOffline: offline };
+    setSf(next); // otimista
+    setSavingOffline(true);
+    try {
+      const ok = await persistStorefront(next);
+      if (!ok) {
+        setSf({ ...sf, storeOffline: !offline }); // desfaz
+        showToast("Não foi possível salvar. Tente de novo.", "error");
+      } else {
+        showToast(offline ? "Loja em manutenção." : "Loja no ar novamente!");
+      }
+    } catch {
+      setSf({ ...sf, storeOffline: !offline });
+      showToast("Erro de conexão ao salvar.", "error");
+    } finally {
+      setSavingOffline(false);
+    }
+  }
+
+  async function saveOfflineMessage() {
+    if (!sf) return;
+    const trimmed = offlineDraft.trim().slice(0, 400);
+    if (trimmed === sf.offlineMessage) return; // nada mudou
+    const next: StorefrontSettings = { ...sf, offlineMessage: trimmed };
+    setSf(next); // otimista
+    try {
+      const ok = await persistStorefront(next);
+      if (!ok) {
+        setSf({ ...sf }); // mantém o anterior
+        showToast("Não foi possível salvar a mensagem.", "error");
+      } else {
+        showToast("Mensagem salva!");
+      }
+    } catch {
+      showToast("Erro de conexão ao salvar.", "error");
     }
   }
 
@@ -189,6 +249,78 @@ export default function ProdutosPage() {
             + Novo produto
           </Link>
         </div>
+
+        {sf && (
+          <div
+            className={`mb-4 rounded-xl p-4 sm:p-5 shadow-sm ring-1 ${
+              sf.storeOffline
+                ? "bg-amber-50 dark:bg-amber-950/30 ring-amber-300 dark:ring-amber-800"
+                : "bg-white dark:bg-slate-900 ring-transparent dark:ring-slate-800"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <span aria-hidden>🛠️</span> Loja em manutenção
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  {sf.storeOffline ? (
+                    <>
+                      A loja está{" "}
+                      <strong className="text-amber-700 dark:text-amber-400">
+                        fora do ar
+                      </strong>
+                      : quem acessa vê o aviso abaixo e a IA avisa os clientes no
+                      WhatsApp. Desligue quando terminar de atualizar o catálogo.
+                    </>
+                  ) : (
+                    <>
+                      Deixe a loja fora do ar enquanto atualiza o catálogo. Os
+                      clientes veem uma mensagem no lugar da vitrine e a IA avisa
+                      no WhatsApp.
+                    </>
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={sf.storeOffline}
+                aria-label="Loja em manutenção"
+                disabled={savingOffline}
+                onClick={() => toggleOffline(!sf.storeOffline)}
+                className={`relative shrink-0 inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${
+                  sf.storeOffline ? "bg-amber-500" : "bg-slate-300 dark:bg-slate-700"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    sf.storeOffline ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+            {sf.storeOffline && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+                  Mensagem para os clientes
+                </label>
+                <textarea
+                  value={offlineDraft}
+                  onChange={(e) => setOfflineDraft(e.target.value)}
+                  onBlur={saveOfflineMessage}
+                  maxLength={400}
+                  rows={3}
+                  placeholder={DEFAULT_OFFLINE_MESSAGE}
+                  className="w-full rounded-lg border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Em branco, usamos uma mensagem padrão. É salva ao sair do campo.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {sf && (
           <div className="mb-8 bg-white dark:bg-slate-900 dark:ring-1 dark:ring-slate-800 rounded-xl p-4 sm:p-5 shadow-sm">

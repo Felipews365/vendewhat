@@ -423,6 +423,8 @@ export async function respondToCustomer(
     shippingModes,
     paymentMethods: paymentModes,
     customerName,
+    storeOffline: sf.storeOffline,
+    offlineMessage: sf.offlineMessage,
   });
 
   const reply = await generateReply(systemPrompt, contextHistory, combinedUserText);

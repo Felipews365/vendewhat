@@ -602,6 +602,18 @@ export type StorefrontSettings = {
    */
   stockControlEnabled: boolean;
   /**
+   * Loja em manutenção (fora do ar temporariamente). `true`: a loja pública mostra
+   * uma tela de "atualizando o catálogo" no lugar da vitrine e a IA do WhatsApp
+   * avisa os clientes. `false` (padrão): loja normal. Serve para o lojista atualizar
+   * o catálogo sem os clientes verem preços/estoque pela metade.
+   */
+  storeOffline: boolean;
+  /**
+   * Mensagem que aparece para o cliente (e que a IA usa) quando a loja está em
+   * manutenção (`storeOffline`). Vazio = usa `DEFAULT_OFFLINE_MESSAGE`.
+   */
+  offlineMessage: string;
+  /**
    * Pedido mínimo em **valor** (R$). `0` = sem mínimo de valor. Quando > 0, o
    * checkout na loja pública só libera se o subtotal atingir esse valor. Aparece
    * no carrinho (não abaixo do logo) e a IA do WhatsApp é informada.
@@ -791,6 +803,10 @@ export function minOrderTypeFromDb(v: unknown): MinOrderType {
     : "ambos";
 }
 
+/** Mensagem padrão da tela de manutenção (quando o lojista não escreve uma). */
+export const DEFAULT_OFFLINE_MESSAGE =
+  "Estamos atualizando nosso catálogo e voltamos já já. 😊 Enquanto isso, fale com a gente no WhatsApp!";
+
 export const DEFAULT_STOREFRONT: StorefrontSettings = {
   heroSubtitle: "Bem-vindo à nossa loja",
   heroTitle: "",
@@ -815,6 +831,8 @@ export const DEFAULT_STOREFRONT: StorefrontSettings = {
   cardFreeShipping: "",
   cardShowRatings: true,
   stockControlEnabled: true,
+  storeOffline: false,
+  offlineMessage: "",
   minOrderValue: 0,
   minOrderQty: 0,
   minOrderEnabled: false,
@@ -1365,6 +1383,8 @@ export function storefrontFromDb(value: unknown): StorefrontSettings {
       o.stockControlEnabled,
       DEFAULT_STOREFRONT.stockControlEnabled
     ),
+    storeOffline: boolFromDb(o.storeOffline, DEFAULT_STOREFRONT.storeOffline),
+    offlineMessage: strOrEmpty(o.offlineMessage).slice(0, 400),
     minOrderValue: minOrderValueFromDb(o.minOrderValue),
     minOrderQty: minOrderQtyFromDb(o.minOrderQty),
     // Lojas antigas não têm o interruptor: liga se já havia algum mínimo > 0.
@@ -1493,6 +1513,8 @@ export function storefrontToDb(s: StorefrontSettings): Record<string, unknown> {
     cardFreeShipping: s.cardFreeShipping.trim().slice(0, 40),
     cardShowRatings: s.cardShowRatings,
     stockControlEnabled: s.stockControlEnabled,
+    storeOffline: s.storeOffline,
+    offlineMessage: s.offlineMessage.trim().slice(0, 400),
     minOrderValue: minOrderValueFromDb(s.minOrderValue),
     minOrderQty: minOrderQtyFromDb(s.minOrderQty),
     minOrderEnabled: s.minOrderEnabled,

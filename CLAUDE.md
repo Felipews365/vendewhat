@@ -1069,6 +1069,32 @@ quando `stockControlEnabled` é `false`.
   load (`stockControl`, default `true`). A **lista de produtos** também oculta o selo "Esgotado" e a
   linha "Estoque: N unidades" nesse modo.
 
+### Loja em manutenção (deixar o site "off" ao atualizar o catálogo)
+
+Toggle `storefront.storeOffline` (default `false`) + `storefront.offlineMessage` (JSONB — **sem
+migration**), editado num **cartão âmbar no topo da lista de produtos**
+([/dashboard/produtos](src/app/dashboard/produtos/page.tsx), "🛠️ Loja em manutenção"), logo acima do
+"📦 Controlar estoque" — o lojista liga quando vai atualizar o catálogo. O switch **salva na hora**
+(`persistStorefront` grava o `storefront` inteiro via `storefrontToDb`; otimista com desfazer + toast);
+ligado, aparece um **textarea "Mensagem para os clientes"** (cap 400, salvo no `onBlur` por
+`saveOfflineMessage`; vazio = `DEFAULT_OFFLINE_MESSAGE` em [storefront.ts](src/lib/storefront.ts)).
+
+- **Loja pública:** o **server component** [loja/[slug]/page.tsx](src/app/loja/[slug]/page.tsx)
+  checa `storefront.storeOffline` **logo após buscar a loja** e, se ligado, renderiza o
+  [StoreOfflineScreen.tsx](src/components/storefront/StoreOfflineScreen.tsx) **em vez do catálogo** —
+  então **nem carregamos os produtos** quando a loja está off (o cliente não vê preços/estoque pela
+  metade). A tela mostra a logo (via `next/image`) ou a inicial da loja, o nome, um selo "🛠️ Loja em
+  atualização", a mensagem e um botão **"Falar no WhatsApp"** (usa o `connected_number` da loja, lido
+  via service role, com fallback para `stores.phone`). É um componente estático (só um `<a>`), usa
+  `pageBackground`/`themePrimary` do tema.
+- **A IA sabe:** [whatsappRespond.ts](src/lib/whatsappRespond.ts) passa `storeOffline` +
+  `offlineMessage` ao `buildSystemPrompt` ([attendant.ts](src/lib/ai/attendant.ts)), que injeta uma
+  **regra de prioridade máxima**: a IA avisa o cliente que o catálogo está em atualização, **não manda
+  o link nem o PDF** (não funcionariam) e **não fecha pedido** enquanto durar — pode tirar dúvidas
+  gerais e anotar o interesse. Vale só no atendimento interativo; os **crons** (follow-up/pós-venda/
+  carrinho) usam o prompt enxuto e **não** aplicam a manutenção (coerente com `minOrder`/`pickup`/`pix`
+  que também não vão lá) — limitação consciente, já que a manutenção é temporária.
+
 ## Loja pública — carrinho e formas de envio
 
 O checkout fica no carrinho de [src/app/loja/[slug]/LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx).

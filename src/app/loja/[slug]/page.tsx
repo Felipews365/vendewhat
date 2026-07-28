@@ -20,6 +20,7 @@ import {
   unitTypeShort,
 } from "@/lib/productDetails";
 import { StoreTrackingScripts } from "@/components/StoreTrackingScripts";
+import { StoreOfflineScreen } from "@/components/storefront/StoreOfflineScreen";
 import { LojaClient, type CatalogProduct } from "./LojaClient";
 
 type Props = { params: { slug: string } };
@@ -113,6 +114,37 @@ export default async function LojaPublicaPage({ params }: Props) {
 
   if (storeError || !store) {
     notFound();
+  }
+
+  const storefront = storefrontFromDb(store.storefront);
+
+  /* Loja em manutenção: mostramos só a tela de aviso e NÃO carregamos o catálogo
+     (o lojista está atualizando os produtos; o cliente não deve ver preços pela
+     metade). O contato é o WhatsApp conectado (onde a loja atende) com fallback
+     para o telefone do cadastro. */
+  if (storefront.storeOffline) {
+    let offlineWhatsapp: string | null = store.phone ? String(store.phone) : null;
+    const adminOff = createAdminSupabase();
+    if (adminOff) {
+      const { data: wa } = await adminOff
+        .from("store_whatsapp")
+        .select("connected_number")
+        .eq("store_id", store.id)
+        .maybeSingle();
+      const n =
+        typeof wa?.connected_number === "string" ? wa.connected_number.trim() : "";
+      if (n) offlineWhatsapp = n;
+    }
+    return (
+      <StoreOfflineScreen
+        storeName={String(store.name ?? "")}
+        logo={store.logo ? String(store.logo) : null}
+        message={storefront.offlineMessage}
+        whatsappPhone={offlineWhatsapp}
+        pageBackground={storefront.pageBackground}
+        primary={storefront.themePrimary}
+      />
+    );
   }
 
   // `select("*")` inclui colunas novas; se o PostgREST ainda não tiver `product_reference` no cache, repetimos sem esse campo.
@@ -238,8 +270,6 @@ export default async function LojaPublicaPage({ params }: Props) {
       sale: productSaleFromDb(p as Record<string, unknown>),
     };
   });
-
-  const storefront = storefrontFromDb(store.storefront);
 
   return (
     <>

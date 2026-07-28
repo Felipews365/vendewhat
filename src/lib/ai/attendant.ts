@@ -6,6 +6,7 @@
  */
 import OpenAI, { toFile } from "openai";
 import type { ChatTurn } from "@/lib/whatsappConfig";
+import { DEFAULT_OFFLINE_MESSAGE } from "@/lib/storefront";
 
 export type AttendantProduct = {
   name: string;
@@ -121,6 +122,13 @@ export function buildSystemPrompt(args: {
    * às 18h"). Vazio = não informado.
    */
   attendance?: string;
+  /**
+   * Loja em manutenção: o catálogo online está temporariamente fora do ar (o
+   * lojista está atualizando os produtos). A IA avisa o cliente e NÃO manda o link.
+   */
+  storeOffline?: boolean;
+  /** Mensagem que o lojista escreveu para a manutenção. Vazio = a IA usa a própria. */
+  offlineMessage?: string;
 }): string {
   const {
     storeName,
@@ -148,7 +156,10 @@ export function buildSystemPrompt(args: {
     paymentMethods,
     customerName,
     attendance,
+    storeOffline,
+    offlineMessage,
   } = args;
+  const offlineMsg = (offlineMessage ?? "").trim();
   const minOrderText = (minOrder ?? "").trim();
   const attendanceText = (attendance ?? "").trim();
   const minOrderMsg = (minOrderMessage ?? "").trim();
@@ -175,6 +186,11 @@ export function buildSystemPrompt(args: {
     `Ao mandar o link, cole a URL pura numa linha só para ela, exatamente assim: ${storeUrl} — NUNCA use markdown nem o formato [texto](url) (o WhatsApp mostra isso quebrado). Nada de colchetes, "[CATÁLOGO ONLINE]" ou link com texto por cima; só o endereço mesmo.`,
     "",
     "Regras:",
+    storeOffline
+      ? `- ⚠️ LOJA EM MANUTENÇÃO (PRIORIDADE MÁXIMA): o catálogo online está TEMPORARIAMENTE FORA DO AR porque a loja está atualizando os produtos. NÃO mande o link da loja nem o catálogo em PDF agora (o link não vai funcionar). Avise o cliente com gentileza que a loja está atualizando o catálogo e volta em breve, seguindo o espírito desta mensagem da loja: "${
+          offlineMsg || DEFAULT_OFFLINE_MESSAGE
+        }". Você pode tirar dúvidas gerais e anotar o interesse do cliente (o que ele procura) para retornar assim que o catálogo voltar, mas NÃO feche pedido nem envie preços/link enquanto durar a manutenção.`
+      : "",
     isFirstContact
       ? `- Esta é a PRIMEIRA mensagem deste cliente. É OBRIGATÓRIO se apresentar logo na abertura: diga seu nome (${aiName}) E o nome da loja ("${storeName}") ANTES de fazer qualquer pergunta. Só depois faça UMA pergunta que avance a venda. Modelo (espelhe a saudação do cliente): "Boa noite! 😊 Aqui é a ${aiName}, da ${storeName}. Me diz: você tá procurando qual tipo de produto hoje?". Apresente-se apenas uma vez, neste primeiro contato.`
       : "- Você já se apresentou antes nesta conversa. NÃO repita a apresentação; vá direto ao ponto.",
