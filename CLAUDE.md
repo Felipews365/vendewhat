@@ -1542,6 +1542,19 @@ lojista **também paga sozinho** pelo Mercado Pago (assinatura recorrente **ou**
   e escreve via service role).
 - **Planos editáveis:** os preços/recursos saíram do estático `plans.ts` para a tabela `plans`.
   A landing (`/`) e `/dashboard/planos` leem do banco via `loadPlans()`; `plans.ts` vira fallback.
+- **Lista de clientes ([/admin](src/app/admin/(panel)/page.tsx)) — 7 colunas, SEM rolagem lateral, e
+  cartões no celular:** a tabela é `table-fixed w-full` com larguras em **%** (nada de `min-w` nem
+  `overflow-x-auto`) — para caber, colunas foram **fundidas**: Plano traz o **valor/mês** como
+  sublinha, Status traz o **vencimento** embaixo (vitalício vira a linha "Nunca vence") e **IA** junta
+  saldo + gasto do mês + **custo 30d** (a contagem de respostas/tokens ficou só no bloco "Consumo real
+  da IA" e na página do cliente). A última coluna, **Ações**, tem dois botões **só de ícone** (`title`
+  + `aria-label` no lugar do rótulo): **Editar** (→ `/admin/clientes/{id}`) e **Ver loja** (→
+  `/loja/{slug}` em nova aba, `rel="noopener noreferrer"`) — dá para espiar a vitrine do cliente sem
+  sair do painel. **No celular (`< lg`) a tabela é trocada por um cartão por cliente** (`ClientCard`,
+  `lg:hidden`; a tabela é `hidden … lg:table`), com os chips de status/vencimento/verificação em
+  linha que quebra e os botões em **40×40** (contra 32×32 do desktop, via a prop `compact`). Os dois
+  lados **compartilham** `ClientActions`/`AiSummary`/`planLine` no mesmo arquivo — ao mexer numa
+  célula, mexa no helper, não em dois lugares. Textos longos usam `truncate` + `min-w-0`.
 - **Plano atual + upgrade (na página do lojista):** [/dashboard/planos](src/app/dashboard/planos/page.tsx)
   mostra qual é o plano ativo da loja e destaca a opção de upgrade. O server component carrega
   `loadPlans()` **e** `loadCurrentSubscription()` ([plans.server.ts](src/lib/plans.server.ts)) — esta

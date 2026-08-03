@@ -84,6 +84,36 @@ function fmtInt(n: number): string {
   return n.toLocaleString("pt-BR");
 }
 
+const ICON_PROPS = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  className: "h-4 w-4",
+  "aria-hidden": true,
+} as const;
+
+function EditIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function ExternalIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+    </svg>
+  );
+}
+
 /** Bloco de MEDIÇÃO REAL do consumo da IA (valida "1 conversa ≈ 80 mil tokens"). */
 function AiUsageMeasurement({ usage }: { usage: AiUsageSummary }) {
   if (!usage.measured) {
@@ -190,6 +220,119 @@ function AiUsageMeasurement({ usage }: { usage: AiUsageSummary }) {
   );
 }
 
+/** Editar o cliente + abrir a vitrine. Usado na tabela (desktop) e nos cartões (celular). */
+function ClientActions({ client, compact }: { client: AdminClient; compact?: boolean }) {
+  const box = compact ? "h-8 w-8" : "h-10 w-10";
+  const base = `inline-flex ${box} items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2`;
+  return (
+    <div className="flex items-center gap-1.5">
+      <Link
+        href={`/admin/clientes/${client.store.id}`}
+        title="Editar cliente"
+        aria-label={`Editar ${client.store.name}`}
+        className={`${base} hover:border-landing-primary hover:text-landing-primary focus-visible:outline-landing-primary`}
+      >
+        <EditIcon />
+      </Link>
+      <a
+        href={`/loja/${client.store.slug}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`Ver a loja /${client.store.slug}`}
+        aria-label={`Abrir a loja ${client.store.name} em nova aba`}
+        className={`${base} hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 focus-visible:outline-emerald-500`}
+      >
+        <ExternalIcon />
+      </a>
+    </div>
+  );
+}
+
+/** Saldo de conversas + gasto do mês + custo dos 30 dias. */
+function AiSummary({ client }: { client: AdminClient }) {
+  const ai = client.ai;
+  if (!ai) return <span className="text-slate-400 dark:text-slate-500">—</span>;
+  const tone =
+    ai.conversationsLeft <= 0
+      ? "text-red-600 dark:text-red-400"
+      : ai.conversationsLeft <= 20
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-emerald-600 dark:text-emerald-400";
+  return (
+    <div className="flex flex-col leading-tight">
+      <span className={`font-semibold ${tone}`}>{fmtInt(ai.conversationsLeft)} conv.</span>
+      <span className="text-xs text-slate-400 dark:text-slate-500">
+        {fmtInt(ai.usedConversations)} no mês
+        {client.aiCost ? ` · ${formatBrlCost(client.aiCost.brl)} (30d)` : ""}
+      </span>
+    </div>
+  );
+}
+
+function planLine(client: AdminClient): { title: string; amount: string } {
+  const sub = client.subscription;
+  const amount = sub?.amount != null ? Number(sub.amount) : null;
+  return {
+    title: client.planTitle ?? sub?.plan_id ?? "—",
+    amount: amount != null ? `R$ ${formatBRL(amount)}/mês` : "—",
+  };
+}
+
+/** Cartão de um cliente — versão de celular da tabela. */
+function ClientCard({ client }: { client: AdminClient }) {
+  const sub = client.subscription;
+  const plan = planLine(client);
+  return (
+    <li className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link
+            href={`/admin/clientes/${client.store.id}`}
+            className="block truncate text-base font-semibold text-slate-900 dark:text-slate-100"
+          >
+            {client.store.name}
+          </Link>
+          <div className="truncate text-xs text-slate-400 dark:text-slate-500">/{client.store.slug}</div>
+        </div>
+        <ClientActions client={client} />
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <StatusBadge status={sub?.status} />
+        {sub?.status === "vitalicio" ? (
+          <span className="inline-flex items-center rounded-full bg-purple-100 dark:bg-purple-500/15 px-2.5 py-1 text-xs font-semibold text-purple-700 dark:text-purple-300">
+            Nunca vence
+          </span>
+        ) : (
+          <VencimentoBadge expiresAt={sub?.expires_at ?? null} />
+        )}
+        <VerificationBadge status={client.verificationStatus} />
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+        <div className="min-w-0">
+          <dt className="text-xs font-medium text-slate-400 dark:text-slate-500">Plano</dt>
+          <dd className="truncate text-slate-700 dark:text-slate-300">{plan.title}</dd>
+          <dd className="text-xs text-slate-400 dark:text-slate-500">{plan.amount}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-xs font-medium text-slate-400 dark:text-slate-500">IA</dt>
+          <dd>
+            <AiSummary client={client} />
+          </dd>
+        </div>
+        <div className="col-span-2 min-w-0">
+          <dt className="text-xs font-medium text-slate-400 dark:text-slate-500">Dono</dt>
+          <dd className="truncate text-slate-700 dark:text-slate-300">{client.ownerEmail ?? "—"}</dd>
+          {client.store.phone && (
+            <dd className="text-xs text-slate-400 dark:text-slate-500">{client.store.phone}</dd>
+          )}
+        </div>
+      </dl>
+    </li>
+  );
+}
+
 export default async function AdminClientesPage() {
   const [clients, aiUsage] = await Promise.all([getClients(), getAiUsageSummary({ days: 30 })]);
   const { total, active, expired, mrr, aiUsed, aiLeft } = summarize(clients);
@@ -213,110 +356,89 @@ export default async function AdminClientesPage() {
       <AiUsageMeasurement usage={aiUsage} />
 
       <div className="mt-8 overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-        <div className="overflow-x-auto">
-        <table className="w-full min-w-[960px] text-left text-sm">
+        {/* Celular: um cartão por cliente (a tabela de 7 colunas não cabe). */}
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800 lg:hidden">
+          {clients.length === 0 && (
+            <li className="px-4 py-10 text-center text-slate-400 dark:text-slate-500">
+              Nenhuma loja encontrada.
+            </li>
+          )}
+          {clients.map((c: AdminClient) => (
+            <ClientCard key={c.store.id} client={c} />
+          ))}
+        </ul>
+
+        <table className="hidden w-full table-fixed text-left text-sm lg:table">
           <thead className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
             <tr>
-              <th className="px-4 py-3 font-semibold">Loja</th>
-              <th className="px-4 py-3 font-semibold">Dono</th>
-              <th className="px-4 py-3 font-semibold">Plano</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">Vencimento</th>
-              <th className="px-4 py-3 font-semibold">Verificação</th>
-              <th className="px-4 py-3 font-semibold">IA (saldo · gasto mês)</th>
-              <th className="px-4 py-3 font-semibold">Custo IA (30d)</th>
-              <th className="px-4 py-3 text-right font-semibold">Valor</th>
+              <th className="w-[19%] px-4 py-3 font-semibold">Loja</th>
+              <th className="w-[21%] px-4 py-3 font-semibold">Dono</th>
+              <th className="w-[14%] px-4 py-3 font-semibold">Plano</th>
+              <th className="w-[14%] px-4 py-3 font-semibold">Status</th>
+              <th className="w-[11%] px-4 py-3 font-semibold">Verificação</th>
+              <th className="w-[13%] px-4 py-3 font-semibold">IA</th>
+              <th className="w-[8%] px-4 py-3 text-right font-semibold">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {clients.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-slate-400 dark:text-slate-500">
+                <td colSpan={7} className="px-4 py-10 text-center text-slate-400 dark:text-slate-500">
                   Nenhuma loja encontrada.
                 </td>
               </tr>
             )}
             {clients.map((c: AdminClient) => {
               const sub = c.subscription;
-              const amount = sub?.amount != null ? Number(sub.amount) : null;
+              const plan = planLine(c);
               return (
                 <tr key={c.store.id} className="transition hover:bg-slate-50 dark:hover:bg-slate-800">
                   <td className="px-4 py-3">
                     <Link
                       href={`/admin/clientes/${c.store.id}`}
-                      className="font-semibold text-slate-900 dark:text-slate-100 hover:text-landing-primary"
+                      title={c.store.name}
+                      className="block truncate font-semibold text-slate-900 dark:text-slate-100 hover:text-landing-primary"
                     >
                       {c.store.name}
                     </Link>
-                    <div className="text-xs text-slate-400 dark:text-slate-500">/{c.store.slug}</div>
+                    <div className="truncate text-xs text-slate-400 dark:text-slate-500">/{c.store.slug}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-slate-700 dark:text-slate-300">{c.ownerEmail ?? "—"}</div>
+                    <div className="truncate text-slate-700 dark:text-slate-300" title={c.ownerEmail ?? undefined}>
+                      {c.ownerEmail ?? "—"}
+                    </div>
                     <div className="text-xs text-slate-400 dark:text-slate-500">{c.store.phone ?? ""}</div>
                   </td>
-                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
-                    {c.planTitle ?? sub?.plan_id ?? "—"}
+                  <td className="px-4 py-3">
+                    <div className="truncate text-slate-700 dark:text-slate-300">{plan.title}</div>
+                    <div className="text-xs text-slate-400 dark:text-slate-500">{plan.amount}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={sub?.status} />
-                  </td>
-                  <td className="px-4 py-3">
-                    {sub?.status === "vitalicio" ? (
-                      <span className="inline-flex items-center rounded-full bg-purple-100 dark:bg-purple-500/15 px-2.5 py-1 text-xs font-semibold text-purple-700 dark:text-purple-300">
-                        Nunca vence
-                      </span>
-                    ) : (
-                      <VencimentoBadge expiresAt={sub?.expires_at ?? null} />
-                    )}
+                    <div className="flex flex-col items-start gap-1">
+                      <StatusBadge status={sub?.status} />
+                      {sub?.status === "vitalicio" ? (
+                        <span className="text-xs text-slate-400 dark:text-slate-500">Nunca vence</span>
+                      ) : (
+                        <VencimentoBadge expiresAt={sub?.expires_at ?? null} />
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <VerificationBadge status={c.verificationStatus} />
                   </td>
                   <td className="px-4 py-3">
-                    {c.ai ? (
-                      <div className="flex flex-col leading-tight">
-                        <span
-                          className={`font-semibold ${
-                            c.ai.conversationsLeft <= 0
-                              ? "text-red-600 dark:text-red-400"
-                              : c.ai.conversationsLeft <= 20
-                                ? "text-amber-600 dark:text-amber-400"
-                                : "text-emerald-600 dark:text-emerald-400"
-                          }`}
-                        >
-                          {fmtInt(c.ai.conversationsLeft)} conv.
-                        </span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">
-                          {fmtInt(c.ai.usedConversations)} gastas no mês
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-slate-400 dark:text-slate-500">—</span>
-                    )}
+                    <AiSummary client={c} />
                   </td>
                   <td className="px-4 py-3">
-                    {c.aiCost ? (
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">
-                          {formatBrlCost(c.aiCost.brl)}
-                        </span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">
-                          {fmtInt(c.aiCost.responses)} respostas · {fmtInt(c.aiCost.tokens)} tokens
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-slate-400 dark:text-slate-500">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">
-                    {amount != null ? `R$ ${formatBRL(amount)}` : "—"}
+                    <div className="flex justify-end">
+                      <ClientActions client={c} compact />
+                    </div>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-        </div>
       </div>
     </div>
   );
