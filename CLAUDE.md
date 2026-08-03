@@ -124,7 +124,14 @@ cara de "quase pronto".
   Botão [src/components/ThemeToggle.tsx](src/components/ThemeToggle.tsx) alterna a classe `dark`
   no `<html>` e salva em `localStorage` (`vw-theme`). Um script anti-flash em
   [src/app/layout.tsx](src/app/layout.tsx) aplica o tema antes do render. Ao estilizar telas do
-  painel, **sempre adicionar variantes `dark:`** (ex.: `bg-white dark:bg-slate-900`).
+  painel, **sempre adicionar variantes `dark:`** (ex.: `bg-white dark:bg-slate-900`). Vale para o
+  **painel do lojista E o painel do admin** (ver "Tema escuro no admin" abaixo); a única tela
+  deliberadamente de um tema só é a **`/admin/login`**, que já é escura por design.
+  - **Convenção de tons (siga ao criar tela nova):** fundo da **página** `dark:bg-slate-950`,
+    **cards** `dark:bg-slate-900`, **blocos internos** `dark:bg-slate-800`, bordas
+    `dark:border-slate-800`. Título `dark:text-slate-100`, corpo `dark:text-slate-300`, apoio
+    `dark:text-slate-400/500`. **Chip colorido precisa de fundo próprio** (`dark:bg-emerald-500/15`
+    + `dark:text-emerald-300`) — só escurecer o texto deixa claro sobre claro.
 - **Animações:** keyframes/utilitários (`vw-fade-in-up`, `vw-pop-in`, `vw-aurora`) em
   [src/app/globals.css](src/app/globals.css); respeitam `prefers-reduced-motion`.
   - **`.vw-fade-in-up` usa `fill-mode: backwards` (não `both`) — senão prende os modais lá embaixo:**
@@ -1516,6 +1523,17 @@ lojista **também paga sozinho** pelo Mercado Pago (assinatura recorrente **ou**
   `src/app/admin/(panel)/*` (layout protegido por `requireAdmin`); o middleware
   ([src/middleware.ts](src/middleware.ts)) protege `/admin/*` (exceto `/admin/login`) e
   redireciona não-admins para `/admin/login`.
+- **Tema escuro no admin:** o botão ☀️/🌙 fica no cabeçalho do
+  [layout do painel](src/app/admin/(panel)/layout.tsx), ao lado do e-mail do admin. É o **mesmo**
+  [ThemeToggle.tsx](src/components/ThemeToggle.tsx) do painel do lojista — mesma classe `dark` no
+  `<html>`, mesmo `localStorage` (`vw-theme`), e o **script anti-flash do layout raiz já cobria o
+  `/admin`**, então não houve nada de infra a criar. Siga a convenção de tons da seção de tema
+  (fundo da página `slate-950` × cards `slate-900` × blocos `slate-800`). ⚠️ Dois cuidados que já
+  morderam: os **chips de status** precisam de fundo próprio no escuro (`dark:bg-*-500/15`), senão
+  ficam claro sobre claro; e os selos de **verificação** não moram no `/admin` e sim em
+  `VERIFICATION_STATUS_LABEL` ([storeVerification.ts](src/lib/storeVerification.ts)) — ao mexer em
+  cor de badge do admin, lembre de olhar lá também. A **`/admin/login` é escura de propósito** e não
+  leva variantes `dark:`.
 - **Libs:** [src/lib/admin.ts](src/lib/admin.ts) (`isAdminEmail`, `requireAdmin`),
   [src/lib/adminData.ts](src/lib/adminData.ts) (leitura cross-tenant via service role),
   [src/lib/plans.server.ts](src/lib/plans.server.ts) (`loadPlans` com fallback p/ `plans.ts`).
