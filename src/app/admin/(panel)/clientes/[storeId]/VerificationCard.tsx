@@ -23,21 +23,21 @@ function formatBirth(iso: string | null): string {
 function Photo({ label, url }: { label: string; url: string | null }) {
   if (!url) {
     return (
-      <div className="flex aspect-[4/3] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-400">
+      <div className="flex aspect-[4/3] items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-xs text-slate-400 dark:text-slate-500">
         {label} — não enviado
       </div>
     );
   }
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="group block">
-      <span className="mb-1 block text-xs font-medium text-slate-500">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={url}
         alt={label}
-        className="aspect-[4/3] w-full rounded-xl border border-slate-200 object-cover transition group-hover:opacity-90"
+        className="aspect-[4/3] w-full rounded-xl border border-slate-200 dark:border-slate-800 object-cover transition group-hover:opacity-90"
       />
-      <span className="mt-1 block text-[11px] text-slate-400 group-hover:text-slate-600">
+      <span className="mt-1 block text-[11px] text-slate-400 dark:text-slate-500 group-hover:text-slate-600">
         Abrir em tamanho real ↗
       </span>
     </a>
@@ -86,22 +86,22 @@ export default function VerificationCard({
   const badge = VERIFICATION_STATUS_LABEL[status];
 
   return (
-    <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+    <div className="mt-6 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-bold text-slate-900">Verificação de identidade</h2>
+        <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Verificação de identidade</h2>
         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${badge.cls}`}>
           {badge.label}
         </span>
       </div>
 
       {status === "none" ? (
-        <p className="mt-3 text-sm text-slate-500">
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
           O dono desta loja ainda não enviou os dados de verificação.
         </p>
       ) : (
         <>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="rounded-xl bg-slate-50 p-4 text-sm">
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-4 text-sm">
               <dl className="space-y-1.5">
                 <Row label="Nome" value={detail.fullName} />
                 <Row label="CPF" value={detail.cpf ? formatCpf(detail.cpf) : null} />
@@ -124,7 +124,7 @@ export default function VerificationCard({
           </div>
 
           <div className="mt-4">
-            <label className="mb-1 block text-xs font-medium text-slate-600">
+            <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
               Observação da revisão (obrigatória para recusar)
             </label>
             <textarea
@@ -132,7 +132,7 @@ export default function VerificationCard({
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               placeholder="Ex.: foto do documento ilegível, dados não conferem…"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
             />
           </div>
 
@@ -147,11 +147,11 @@ export default function VerificationCard({
             <button
               onClick={() => review("reject")}
               disabled={busy !== null || status === "rejected"}
-              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+              className="rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-100 disabled:opacity-50"
             >
               {busy === "reject" ? "Recusando…" : "Recusar"}
             </button>
-            {msg && <span className="text-xs font-medium text-slate-600">{msg}</span>}
+            {msg && <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{msg}</span>}
           </div>
         </>
       )}
@@ -162,10 +162,10 @@ export default function VerificationCard({
 function Row({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="flex gap-2">
-      <dt className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400">
+      <dt className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
         {label}
       </dt>
-      <dd className="text-slate-800">{value || "—"}</dd>
+      <dd className="text-slate-800 dark:text-slate-200">{value || "—"}</dd>
     </div>
   );
 }

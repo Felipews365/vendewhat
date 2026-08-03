@@ -48,14 +48,14 @@ function PlanCard({ plan, onSaved }: { plan: PlanRow; onSaved: () => void }) {
   }
 
   const inputCls =
-    "mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-landing-primary focus:ring-2 focus:ring-landing-primary/20";
-  const labelCls = "text-sm font-semibold text-slate-700";
+    "mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-landing-primary focus:ring-2 focus:ring-landing-primary/20";
+  const labelCls = "text-sm font-semibold text-slate-700 dark:text-slate-300";
 
   return (
-    <form onSubmit={save} className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+    <form onSubmit={save} className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-900">{plan.title}</h2>
-        <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">{plan.id}</code>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{plan.title}</h2>
+        <code className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs text-slate-500 dark:text-slate-400">{plan.id}</code>
       </div>
       <div className="mt-4 space-y-4">
         <label className="block">
@@ -96,12 +96,12 @@ function PlanCard({ plan, onSaved }: { plan: PlanRow; onSaved: () => void }) {
             type="checkbox"
             checked={active}
             onChange={(e) => setActive(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-landing-primary focus:ring-landing-primary"
+            className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-landing-primary focus:ring-landing-primary"
           />
-          <span className="text-sm font-medium text-slate-700">Plano ativo (visível na loja)</span>
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Plano ativo (visível na loja)</span>
         </label>
       </div>
-      {msg && <p className="mt-3 text-sm text-slate-600">{msg}</p>}
+      {msg && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{msg}</p>}
       <button
         type="submit"
         disabled={saving}

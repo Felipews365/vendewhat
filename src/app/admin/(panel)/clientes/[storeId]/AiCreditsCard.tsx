@@ -48,25 +48,25 @@ export default function AiCreditsCard(props: Props) {
   }
 
   return (
-    <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+    <div className="mt-6 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-slate-900">Créditos da IA</h2>
-        <span className="text-2xl font-extrabold tracking-tight text-emerald-600">
+        <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Créditos da IA</h2>
+        <span className="text-2xl font-extrabold tracking-tight text-emerald-600 dark:text-emerald-400">
           {fmt(left)}
-          <span className="ml-1 text-xs font-medium text-slate-500">conversas</span>
+          <span className="ml-1 text-xs font-medium text-slate-500 dark:text-slate-400">conversas</span>
         </span>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-xl bg-slate-50 p-3">
-          <p className="text-xs text-slate-500">Créditos comprados</p>
-          <p className="mt-0.5 font-bold text-slate-900">{fmt(credits)}</p>
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">Créditos comprados</p>
+          <p className="mt-0.5 font-bold text-slate-900 dark:text-slate-100">{fmt(credits)}</p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
-          <p className="text-xs text-slate-500">Franquia do mês</p>
-          <p className="mt-0.5 font-bold text-slate-900">
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">Franquia do mês</p>
+          <p className="mt-0.5 font-bold text-slate-900 dark:text-slate-100">
             {fmt(remainingIncluded)}
-            <span className="text-xs font-normal text-slate-400">
+            <span className="text-xs font-normal text-slate-400 dark:text-slate-500">
               {" "}
               / {fmt(props.includedConversations)}
             </span>
@@ -80,9 +80,9 @@ export default function AiCreditsCard(props: Props) {
           min={1}
           value={qty}
           onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 0))}
-          className="w-28 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+          className="w-28 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
         />
-        <span className="text-sm text-slate-500">conversas</span>
+        <span className="text-sm text-slate-500 dark:text-slate-400">conversas</span>
         <button
           onClick={addCredits}
           disabled={busy}
@@ -92,8 +92,8 @@ export default function AiCreditsCard(props: Props) {
         </button>
       </div>
 
-      {msg && <p className="mt-2 text-xs font-medium text-emerald-700">{msg}</p>}
-      <p className="mt-2 text-[11px] text-slate-400">
+      {msg && <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">{msg}</p>}
+      <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
         Crédito manual (cortesia/suporte). Some ao saldo comprado — não expira. Para
         reduzir ou zerar, use o SQL no Supabase.
       </p>

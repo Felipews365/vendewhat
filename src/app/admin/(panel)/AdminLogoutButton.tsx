@@ -23,7 +23,7 @@ export default function AdminLogoutButton() {
       type="button"
       onClick={logout}
       disabled={loading}
-      className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-60"
+      className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-500 dark:text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-60"
     >
       {loading ? "Saindo…" : "Sair"}
     </button>

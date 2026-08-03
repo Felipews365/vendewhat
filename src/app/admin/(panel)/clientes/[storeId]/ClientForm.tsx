@@ -144,19 +144,19 @@ export default function ClientForm({
   }
 
   const inputCls =
-    "mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-landing-primary focus:ring-2 focus:ring-landing-primary/20";
-  const labelCls = "text-sm font-semibold text-slate-700";
+    "mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-landing-primary focus:ring-2 focus:ring-landing-primary/20";
+  const labelCls = "text-sm font-semibold text-slate-700 dark:text-slate-300";
 
   return (
     <div className="mt-6 grid gap-6 lg:grid-cols-2">
       {/* Assinatura */}
       <form
         onSubmit={saveSubscription}
-        className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"
+        className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm"
       >
-        <h2 className="text-lg font-bold text-slate-900">Assinatura</h2>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Assinatura</h2>
         {subscription?.gateway === "mercadopago" && (
-          <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-800">
+          <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 dark:bg-sky-500/10 px-3 py-2.5 text-xs text-sky-800">
             <span className="font-semibold">Assinatura automática (Mercado Pago)</span>
             {subscription.gateway_status && (
               <span className="ml-1">· status MP: {subscription.gateway_status}</span>
@@ -229,7 +229,7 @@ export default function ClientForm({
                 type="text"
                 value="Nunca vence"
                 disabled
-                className={`${inputCls} cursor-not-allowed bg-slate-100 text-slate-500`}
+                className={`${inputCls} cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400`}
               />
             ) : (
               <input
@@ -250,7 +250,7 @@ export default function ClientForm({
             />
           </label>
         </div>
-        {subMsg && <p className="mt-3 text-sm text-slate-600">{subMsg}</p>}
+        {subMsg && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{subMsg}</p>}
         <button
           type="submit"
           disabled={savingSub}
@@ -264,10 +264,10 @@ export default function ClientForm({
       <div className="space-y-6">
         <form
           onSubmit={registerPayment}
-          className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"
+          className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm"
         >
-          <h2 className="text-lg font-bold text-slate-900">Registrar pagamento</h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Registrar pagamento</h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Estende o vencimento para a data informada e marca como ativo.
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -311,7 +311,7 @@ export default function ClientForm({
               />
             </label>
           </div>
-          {payMsg && <p className="mt-3 text-sm text-slate-600">{payMsg}</p>}
+          {payMsg && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{payMsg}</p>}
           <button
             type="submit"
             disabled={savingPay}
@@ -321,22 +321,22 @@ export default function ClientForm({
           </button>
         </form>
 
-        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900">Histórico de pagamentos</h2>
+        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Histórico de pagamentos</h2>
           {payments.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-400">Nenhum pagamento registrado.</p>
+            <p className="mt-3 text-sm text-slate-400 dark:text-slate-500">Nenhum pagamento registrado.</p>
           ) : (
-            <ul className="mt-3 divide-y divide-slate-100 text-sm">
+            <ul className="mt-3 divide-y divide-slate-100 dark:divide-slate-800 text-sm">
               {payments.map((p) => (
                 <li key={p.id} className="flex items-center justify-between py-2.5">
                   <div>
-                    <span className="font-semibold text-slate-800">R$ {formatBRL(Number(p.amount))}</span>
-                    <span className="ml-2 text-xs text-slate-400">{p.method ?? "manual"}</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">R$ {formatBRL(Number(p.amount))}</span>
+                    <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">{p.method ?? "manual"}</span>
                   </div>
-                  <div className="text-right text-xs text-slate-500">
+                  <div className="text-right text-xs text-slate-500 dark:text-slate-400">
                     <div>{p.paid_at ? new Date(p.paid_at).toLocaleDateString("pt-BR") : "—"}</div>
                     {p.period_end && (
-                      <div className="text-slate-400">
+                      <div className="text-slate-400 dark:text-slate-500">
                         até {new Date(p.period_end).toLocaleDateString("pt-BR")}
                       </div>
                     )}

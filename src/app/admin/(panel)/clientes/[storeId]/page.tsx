@@ -17,12 +17,12 @@ import VerificationCard from "./VerificationCard";
 export const dynamic = "force-dynamic";
 
 const STATUS_INFO: Record<string, { label: string; cls: string }> = {
-  trial: { label: "Em teste", cls: "bg-slate-100 text-slate-700" },
-  active: { label: "Ativo", cls: "bg-emerald-100 text-emerald-700" },
-  vitalicio: { label: "Vitalício", cls: "bg-purple-100 text-purple-700" },
-  past_due: { label: "Atrasado", cls: "bg-amber-100 text-amber-700" },
-  canceled: { label: "Cancelado", cls: "bg-slate-200 text-slate-600" },
-  expired: { label: "Expirado", cls: "bg-red-100 text-red-700" },
+  trial: { label: "Em teste", cls: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300" },
+  active: { label: "Ativo", cls: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+  vitalicio: { label: "Vitalício", cls: "bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300" },
+  past_due: { label: "Atrasado", cls: "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  canceled: { label: "Cancelado", cls: "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" },
+  expired: { label: "Expirado", cls: "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300" },
 };
 
 function formatDate(iso: string | null): string {
@@ -37,13 +37,13 @@ function fmtInt(n: number): string {
 /** Medição real do consumo da IA desta loja (últimos 30 dias). */
 function StoreAiUsage({ usage }: { usage: AiUsageSummary }) {
   return (
-    <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+    <div className="mt-6 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-bold text-slate-900">
+        <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
           Consumo real da IA (últimos {usage.days} dias)
         </h2>
         {usage.measured && (
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-slate-400 dark:text-slate-500">
             {fmtInt(usage.responses)} respostas · {fmtInt(usage.conversations)} conversas
           </span>
         )}
@@ -51,48 +51,48 @@ function StoreAiUsage({ usage }: { usage: AiUsageSummary }) {
       {usage.measured ? (
         <>
           <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs font-medium text-slate-500">Tokens por conversa (média)</p>
-              <p className="mt-1 text-xl font-extrabold text-slate-900">
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Tokens por conversa (média)</p>
+              <p className="mt-1 text-xl font-extrabold text-slate-900 dark:text-slate-100">
                 {fmtInt(usage.avgTokensPerConversation)}
               </p>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                 {usage.usageVsBudgetPct}% dos 80 mil reservados
               </p>
             </div>
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs font-medium text-slate-500">Tokens por resposta (média)</p>
-              <p className="mt-1 text-xl font-extrabold text-slate-900">
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Tokens por resposta (média)</p>
+              <p className="mt-1 text-xl font-extrabold text-slate-900 dark:text-slate-100">
                 {fmtInt(usage.avgTokensPerResponse)}
               </p>
             </div>
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs font-medium text-slate-500">Custo no período</p>
-              <p className="mt-1 text-xl font-extrabold text-slate-900">
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Custo no período</p>
+              <p className="mt-1 text-xl font-extrabold text-slate-900 dark:text-slate-100">
                 {formatBrlCost(usage.cost.brl)}
               </p>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                 {formatBrlCost(usage.avgCostPerConversationBrl)} por conversa ·{" "}
                 {fmtInt(usage.totalTokens)} tokens
               </p>
             </div>
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs font-medium text-slate-500">
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 Conversas por 80 mi (nesta média)
               </p>
-              <p className="mt-1 text-xl font-extrabold text-emerald-600">
+              <p className="mt-1 text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
                 {fmtInt(usage.conversationsPer80M)}
               </p>
-              <p className="mt-1 text-xs text-slate-400">no ritmo desta loja</p>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">no ritmo desta loja</p>
             </div>
           </div>
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
             {usage.usageVsBudgetPct <= 100
               ? `Esta loja usa em média ${usage.usageVsBudgetPct}% da franquia de 80 mil tokens por conversa — dentro do previsto.`
               : `Atenção: esta loja gasta em média ${fmtInt(usage.avgTokensPerConversation)} tokens/conversa, acima dos 80 mil reservados. Conversas mais longas/pesadas que a média.`}
           </p>
           {usage.cost.byModel.length > 0 && (
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
               Por modelo:{" "}
               {usage.cost.byModel
                 .map((m) => `${m.model} ${formatBrlCost(m.brl)} (${fmtInt(m.responses)} resp.)`)
@@ -101,7 +101,7 @@ function StoreAiUsage({ usage }: { usage: AiUsageSummary }) {
           )}
         </>
       ) : (
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
           Ainda sem dados medidos para esta loja nos últimos {usage.days} dias.
         </p>
       )}
@@ -133,7 +133,7 @@ export default async function AdminClientePage({
     ? plans.find((p) => p.id === subscription.plan_id)?.title ?? subscription.plan_id
     : null;
   const statusInfo =
-    STATUS_INFO[subscription?.status ?? ""] ?? { label: "Sem plano", cls: "bg-slate-100 text-slate-500" };
+    STATUS_INFO[subscription?.status ?? ""] ?? { label: "Sem plano", cls: "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400" };
   const isTrial = subscription?.status === "trial";
   const isVitalicio = subscription?.status === "vitalicio";
 
@@ -141,15 +141,15 @@ export default async function AdminClientePage({
     <div>
       <Link
         href="/admin"
-        className="text-sm font-semibold text-slate-500 transition hover:text-slate-900"
+        className="text-sm font-semibold text-slate-500 dark:text-slate-400 transition hover:text-slate-900 dark:hover:text-slate-100"
       >
         ← Voltar para clientes
       </Link>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{store.name}</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{store.name}</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {ownerEmail ?? "—"}
             {store.phone ? ` · ${store.phone}` : ""}
           </p>
@@ -158,36 +158,36 @@ export default async function AdminClientePage({
           href={`/loja/${store.slug}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           Ver loja ↗
         </Link>
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Plano</p>
-          <p className="mt-1 font-bold text-slate-900">{planTitle ?? "Sem plano"}</p>
+        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Plano</p>
+          <p className="mt-1 font-bold text-slate-900 dark:text-slate-100">{planTitle ?? "Sem plano"}</p>
         </div>
-        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Situação</p>
+        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Situação</p>
           <span
             className={`mt-1 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusInfo.cls}`}
           >
             {statusInfo.label}
           </span>
         </div>
-        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
             {isVitalicio ? "Acesso" : isTrial ? "Teste até" : "Vencimento"}
           </p>
-          <p className="mt-1 font-bold text-slate-900">
+          <p className="mt-1 font-bold text-slate-900 dark:text-slate-100">
             {isVitalicio ? "Nunca vence" : formatDate(subscription?.expires_at ?? null)}
           </p>
         </div>
-        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Valor</p>
-          <p className="mt-1 font-bold text-slate-900">
+        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Valor</p>
+          <p className="mt-1 font-bold text-slate-900 dark:text-slate-100">
             {subscription?.amount != null ? `R$ ${Number(subscription.amount).toFixed(2).replace(".", ",")}` : "—"}
           </p>
         </div>

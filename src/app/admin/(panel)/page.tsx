@@ -35,15 +35,15 @@ function formatDate(dateIso: string | null): string {
 function VencimentoBadge({ expiresAt }: { expiresAt: string | null }) {
   const d = daysUntil(expiresAt);
   if (d == null) {
-    return <span className="text-slate-400">—</span>;
+    return <span className="text-slate-400 dark:text-slate-500">—</span>;
   }
-  let cls = "bg-emerald-100 text-emerald-700";
+  let cls = "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
   let label = formatDate(expiresAt);
   if (d < 0) {
-    cls = "bg-red-100 text-red-700";
+    cls = "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300";
     label = `Vencido há ${Math.abs(d)}d`;
   } else if (d <= 7) {
-    cls = "bg-amber-100 text-amber-700";
+    cls = "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300";
     label = `Vence em ${d}d`;
   }
   return (
@@ -54,16 +54,16 @@ function VencimentoBadge({ expiresAt }: { expiresAt: string | null }) {
 }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  trial: { label: "Teste", cls: "bg-slate-100 text-slate-600" },
-  active: { label: "Ativo", cls: "bg-emerald-100 text-emerald-700" },
-  vitalicio: { label: "Vitalício", cls: "bg-purple-100 text-purple-700" },
-  past_due: { label: "Atrasado", cls: "bg-amber-100 text-amber-700" },
-  canceled: { label: "Cancelado", cls: "bg-slate-200 text-slate-600" },
-  expired: { label: "Expirado", cls: "bg-red-100 text-red-700" },
+  trial: { label: "Teste", cls: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300" },
+  active: { label: "Ativo", cls: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+  vitalicio: { label: "Vitalício", cls: "bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300" },
+  past_due: { label: "Atrasado", cls: "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  canceled: { label: "Cancelado", cls: "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300" },
+  expired: { label: "Expirado", cls: "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300" },
 };
 
 function StatusBadge({ status }: { status: string | undefined }) {
-  const s = STATUS_LABEL[status ?? ""] ?? { label: status ?? "Sem plano", cls: "bg-slate-100 text-slate-500" };
+  const s = STATUS_LABEL[status ?? ""] ?? { label: status ?? "Sem plano", cls: "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400" };
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${s.cls}`}>
       {s.label}
@@ -73,8 +73,8 @@ function StatusBadge({ status }: { status: string | undefined }) {
 
 function SummaryCard({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-      <p className="text-sm font-medium text-slate-500">{label}</p>
+    <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
       <p className={`mt-1 text-2xl font-extrabold ${accent}`}>{value}</p>
     </div>
   );
@@ -88,14 +88,14 @@ function fmtInt(n: number): string {
 function AiUsageMeasurement({ usage }: { usage: AiUsageSummary }) {
   if (!usage.measured) {
     return (
-      <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-bold text-slate-900">
+      <div className="mt-8 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+        <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
           Consumo real da IA (últimos {usage.days} dias)
         </h2>
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
           Ainda sem dados medidos. A medição começa automaticamente assim que a IA
           responder clientes. Se acabou de ativar, aplique a migration{" "}
-          <code className="rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-700">
+          <code className="rounded bg-slate-100 dark:bg-slate-800 px-1 py-0.5 text-xs text-slate-700 dark:text-slate-300">
             supabase-migration-ai-usage-events.sql
           </code>{" "}
           no Supabase para registrar o consumo.
@@ -104,69 +104,69 @@ function AiUsageMeasurement({ usage }: { usage: AiUsageSummary }) {
     );
   }
   return (
-    <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+    <div className="mt-8 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-bold text-slate-900">
+        <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
           Consumo real da IA (últimos {usage.days} dias)
         </h2>
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-slate-400 dark:text-slate-500">
           {fmtInt(usage.responses)} respostas · {fmtInt(usage.conversations)} conversas medidas
         </span>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-xs font-medium text-slate-500">Tokens por conversa (média)</p>
-          <p className="mt-1 text-2xl font-extrabold text-slate-900">
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Tokens por conversa (média)</p>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-slate-100">
             {fmtInt(usage.avgTokensPerConversation)}
           </p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
             {usage.usageVsBudgetPct}% dos 80 mil reservados
           </p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-xs font-medium text-slate-500">Custo por conversa (média)</p>
-          <p className="mt-1 text-2xl font-extrabold text-slate-900">
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Custo por conversa (média)</p>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-slate-100">
             {formatBrlCost(usage.avgCostPerConversationBrl)}
           </p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
             {fmtInt(usage.avgTokensPerResponse)} tokens/resposta
           </p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-xs font-medium text-slate-500">
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
             Conversas por 80 mi (IA Completo)
           </p>
-          <p className="mt-1 text-2xl font-extrabold text-emerald-600">
+          <p className="mt-1 text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
             {fmtInt(usage.conversationsPer80M)}
           </p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
             pela média real (promessa: ~1.000)
           </p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-xs font-medium text-slate-500">Custo no período</p>
-          <p className="mt-1 text-2xl font-extrabold text-slate-900">
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Custo no período</p>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-slate-100">
             {formatBrlCost(usage.cost.brl)}
           </p>
-          <p className="mt-1 text-xs text-slate-400">{fmtInt(usage.totalTokens)} tokens</p>
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{fmtInt(usage.totalTokens)} tokens</p>
         </div>
       </div>
       {usage.cost.byModel.length > 0 && (
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
           Por modelo:{" "}
           {usage.cost.byModel
             .map((m) => `${m.model} ${formatBrlCost(m.brl)} (${fmtInt(m.responses)} resp.)`)
             .join(" · ")}
         </p>
       )}
-      <p className="mt-3 text-xs text-slate-500">
+      <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
         {usage.usageVsBudgetPct <= 100
           ? `Cada conversa real usa em média ${usage.usageVsBudgetPct}% da franquia de 80 mil tokens — a margem está segura e a promessa de ~1.000 conversas se sustenta (dá para ${fmtInt(usage.conversationsPer80M)}).`
           : `Atenção: a média real (${fmtInt(usage.avgTokensPerConversation)} tokens/conversa) está acima dos 80 mil reservados — reveja a franquia ou o número prometido de conversas.`}
       </p>
-      <p className="mt-1 text-xs text-slate-400">
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
         Custo estimado pela tabela de preços da OpenAI, convertido a{" "}
-        <strong className="text-slate-500">
+        <strong className="text-slate-500 dark:text-slate-400">
           R$ {usage.usd.rate.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
         </strong>{" "}
         por dólar
@@ -181,7 +181,7 @@ function AiUsageMeasurement({ usage }: { usage: AiUsageSummary }) {
           <>
             {" "}
             (cotação do dia indisponível — usando o valor fixo de{" "}
-            <code className="rounded bg-slate-100 px-1 py-0.5 text-slate-600">AI_USD_BRL</code>)
+            <code className="rounded bg-slate-100 dark:bg-slate-800 px-1 py-0.5 text-slate-600 dark:text-slate-300">AI_USD_BRL</code>)
           </>
         )}
         . Confira os preços vigentes da OpenAI antes de decidir preço de plano ou de pacote.
@@ -196,26 +196,26 @@ export default async function AdminClientesPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-slate-900">Clientes</h1>
-      <p className="mt-1 text-sm text-slate-500">
+      <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Clientes</h1>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
         Todas as lojas da plataforma, com plano, status, vencimento e consumo da IA.
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
-        <SummaryCard label="Clientes" value={String(total)} accent="text-slate-900" />
-        <SummaryCard label="Ativos" value={String(active)} accent="text-emerald-600" />
-        <SummaryCard label="Vencidos / atrasados" value={String(expired)} accent="text-red-600" />
+        <SummaryCard label="Clientes" value={String(total)} accent="text-slate-900 dark:text-slate-100" />
+        <SummaryCard label="Ativos" value={String(active)} accent="text-emerald-600 dark:text-emerald-400" />
+        <SummaryCard label="Vencidos / atrasados" value={String(expired)} accent="text-red-600 dark:text-red-400" />
         <SummaryCard label="Receita mensal (ativos)" value={`R$ ${formatBRL(mrr)}`} accent="text-landing-primary" />
-        <SummaryCard label="Conversas IA (mês)" value={fmtInt(aiUsed)} accent="text-slate-900" />
-        <SummaryCard label="Saldo IA (total)" value={fmtInt(aiLeft)} accent="text-emerald-600" />
+        <SummaryCard label="Conversas IA (mês)" value={fmtInt(aiUsed)} accent="text-slate-900 dark:text-slate-100" />
+        <SummaryCard label="Saldo IA (total)" value={fmtInt(aiLeft)} accent="text-emerald-600 dark:text-emerald-400" />
       </div>
 
       <AiUsageMeasurement usage={aiUsage} />
 
-      <div className="mt-8 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+      <div className="mt-8 overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
         <div className="overflow-x-auto">
         <table className="w-full min-w-[960px] text-left text-sm">
-          <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
             <tr>
               <th className="px-4 py-3 font-semibold">Loja</th>
               <th className="px-4 py-3 font-semibold">Dono</th>
@@ -228,10 +228,10 @@ export default async function AdminClientesPage() {
               <th className="px-4 py-3 text-right font-semibold">Valor</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {clients.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={9} className="px-4 py-10 text-center text-slate-400 dark:text-slate-500">
                   Nenhuma loja encontrada.
                 </td>
               </tr>
@@ -240,21 +240,21 @@ export default async function AdminClientesPage() {
               const sub = c.subscription;
               const amount = sub?.amount != null ? Number(sub.amount) : null;
               return (
-                <tr key={c.store.id} className="transition hover:bg-slate-50">
+                <tr key={c.store.id} className="transition hover:bg-slate-50 dark:hover:bg-slate-800">
                   <td className="px-4 py-3">
                     <Link
                       href={`/admin/clientes/${c.store.id}`}
-                      className="font-semibold text-slate-900 hover:text-landing-primary"
+                      className="font-semibold text-slate-900 dark:text-slate-100 hover:text-landing-primary"
                     >
                       {c.store.name}
                     </Link>
-                    <div className="text-xs text-slate-400">/{c.store.slug}</div>
+                    <div className="text-xs text-slate-400 dark:text-slate-500">/{c.store.slug}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-slate-700">{c.ownerEmail ?? "—"}</div>
-                    <div className="text-xs text-slate-400">{c.store.phone ?? ""}</div>
+                    <div className="text-slate-700 dark:text-slate-300">{c.ownerEmail ?? "—"}</div>
+                    <div className="text-xs text-slate-400 dark:text-slate-500">{c.store.phone ?? ""}</div>
                   </td>
-                  <td className="px-4 py-3 text-slate-700">
+                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
                     {c.planTitle ?? sub?.plan_id ?? "—"}
                   </td>
                   <td className="px-4 py-3">
@@ -262,7 +262,7 @@ export default async function AdminClientesPage() {
                   </td>
                   <td className="px-4 py-3">
                     {sub?.status === "vitalicio" ? (
-                      <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-1 text-xs font-semibold text-purple-700">
+                      <span className="inline-flex items-center rounded-full bg-purple-100 dark:bg-purple-500/15 px-2.5 py-1 text-xs font-semibold text-purple-700 dark:text-purple-300">
                         Nunca vence
                       </span>
                     ) : (
@@ -278,37 +278,37 @@ export default async function AdminClientesPage() {
                         <span
                           className={`font-semibold ${
                             c.ai.conversationsLeft <= 0
-                              ? "text-red-600"
+                              ? "text-red-600 dark:text-red-400"
                               : c.ai.conversationsLeft <= 20
-                                ? "text-amber-600"
-                                : "text-emerald-600"
+                                ? "text-amber-600 dark:text-amber-400"
+                                : "text-emerald-600 dark:text-emerald-400"
                           }`}
                         >
                           {fmtInt(c.ai.conversationsLeft)} conv.
                         </span>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-slate-400 dark:text-slate-500">
                           {fmtInt(c.ai.usedConversations)} gastas no mês
                         </span>
                       </div>
                     ) : (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-slate-400 dark:text-slate-500">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     {c.aiCost ? (
                       <div className="flex flex-col leading-tight">
-                        <span className="font-semibold text-slate-800">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">
                           {formatBrlCost(c.aiCost.brl)}
                         </span>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-slate-400 dark:text-slate-500">
                           {fmtInt(c.aiCost.responses)} respostas · {fmtInt(c.aiCost.tokens)} tokens
                         </span>
                       </div>
                     ) : (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-slate-400 dark:text-slate-500">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold text-slate-700">
+                  <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">
                     {amount != null ? `R$ ${formatBRL(amount)}` : "—"}
                   </td>
                 </tr>
