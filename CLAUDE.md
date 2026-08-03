@@ -1010,7 +1010,12 @@ visual de e-commerce moderno (inspirado no site de referência): card branco com
 **selo de desconto** vermelho (`-X%`) ou **"Novo"** azul (produto recente, `isRecent`), **selo "Frete
 grátis"** azul, **categoria** (eyebrow), nome, **preço em laranja** + `de` riscado + **selo `-X%`
 laranja** ao lado, **parcelamento estimado**, **5 estrelas douradas (4.9)** e botão **"Adicionar à
-sacola"** que aparece **no hover** (o card inteiro abre o detalhe). **Abre no 1º toque no celular:** o
+sacola"** que aparece **no hover** (o card inteiro abre o detalhe). **O botão do hover é `absolute`
+sobre a FOTO, não um item no fim da coluna de dados:** desliza de baixo (`translate-y-[130%]` →
+`group-hover:translate-y-0`, `pointer-events-none` até o hover, `tabIndex={-1}` para não virar uma
+parada de Tab por card). Como item do fluxo ele **reservava um vão em branco no celular**, onde não
+existe hover e o botão nunca aparecia. Some no "Esgotado" (o overlay já cobre o card). **Abre no 1º
+toque no celular:** o
 card usa **pointer events** (`onPointerDown`/`onPointerUp`, `tapStartRef`) em vez de `onClick` — um toque
 "parado" (down→up com `dx<12 && dy<12`) chama `onOpen` já no **primeiro** toque, ignorando rolagem/arrasto.
 Antes, com `onClick` + estados `group-hover` (botão/vídeo), o 1º toque no celular só ativava o "hover

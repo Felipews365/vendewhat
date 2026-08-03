@@ -1203,6 +1203,23 @@ function ProductCatalogCard({
             </span>
           )}
 
+          {/* Botão: desliza sobre a foto no hover (fora do fluxo, para o card não
+              reservar um vão em branco no celular, onde não existe hover). */}
+          {!soldOut && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen(product);
+              }}
+              tabIndex={-1}
+              className="pointer-events-none absolute inset-x-2 bottom-2 z-[15] flex translate-y-[130%] items-center justify-center gap-1.5 rounded-full py-2 text-xs font-bold text-white opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100"
+              style={{ backgroundColor: accentDeep }}
+            >
+              🛍️ Adicionar ao carrinho
+            </button>
+          )}
+
           {/* Esgotado */}
           {soldOut && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40">
@@ -1278,19 +1295,6 @@ function ProductCatalogCard({
             (product.cardRating ?? 5) > 0 && (
               <StarRating count={product.cardRating ?? 5} />
             )}
-
-          {/* Botão: aparece no hover (igual à referência); abre o detalhe. */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpen(product);
-            }}
-            className="mt-auto flex translate-y-1 items-center justify-center gap-1.5 rounded-full py-2 text-xs font-bold text-white opacity-0 transition-all duration-200 hover:opacity-100 group-hover:translate-y-0 group-hover:opacity-100"
-            style={{ backgroundColor: accentDeep }}
-          >
-            🛍️ {soldOut ? "Ver produto" : "Adicionar ao carrinho"}
-          </button>
         </div>
       </div>
     </div>
