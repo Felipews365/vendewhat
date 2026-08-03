@@ -620,6 +620,9 @@ export async function respondToCustomer(
       const consumed = await consumeTokens(admin, cfg.storeId, reply.tokens, {
         customerPhone,
         kind: "reply",
+        model: reply.model,
+        inputTokens: reply.inputTokens,
+        outputTokens: reply.outputTokens,
       });
       if (consumed.justEmptied) {
         await notifyOwnerCredits(cfg, "empty", 0);

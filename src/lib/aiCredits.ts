@@ -39,12 +39,36 @@ export const PLAN_MONTHLY_TOKENS: Record<string, number> = {
   essencial: 0,
 };
 
-/** Pacotes de recarga (mostrados ao lojista). Usados na Fase 2 (pagamento). */
+/**
+ * Pacotes de recarga (mostrados ao lojista).
+ *
+ * **Repreçados quando o atendimento saiu do `gpt-4o-mini` para o `gpt-4.1-mini`.**
+ * Os pacotes antigos (100/200/450/1.200 conversas nos mesmos preços) davam
+ * ~R$ 0,21–0,30 por conversa; a conversa passou a custar ~R$ 0,23 de OpenAI, então
+ * os dois maiores viravam **prejuízo** (o de R$ 250 perdia ~R$ 25 por venda).
+ *
+ * Base da conta (ver [aiPricing.ts](src/lib/aiPricing.ts)): o `gpt-4.1-mini` sai a
+ * ~$0,52 por 1M tokens na mistura real (~90% entrada / 10% saída) ≈ **R$ 2,86**, ou
+ * **~R$ 0,23 por conversa** de 80 mil tokens. Os preços em reais foram **mantidos**
+ * (R$ 30/50/100/250) e o que mudou foi o **número de conversas** — assim os checkouts
+ * do Mercado Pago e o `findPackage(brl)` continuam valendo, sem migração de nada.
+ *
+ * Margem-alvo: **≥50%** em todos, com desconto por volume honesto (R$ 0,60 → R$ 0,46
+ * por conversa). Fica abaixo dos R$ 0,50/conversa do plano IA Completo (R$ 499,90 por
+ * 80 mi tokens), então recarregar continua valendo a pena para o lojista.
+ *
+ * ⚠️ Se o preço da OpenAI ou o câmbio (`AI_USD_BRL`) mudar, refaça a conta: o custo
+ * por conversa é `custo_por_1M × 0,08`.
+ */
 export const CREDIT_PACKAGES = [
-  { brl: 30, conversations: 100, tokens: 8_000_000 },
-  { brl: 50, conversations: 200, tokens: 16_000_000 },
-  { brl: 100, conversations: 450, tokens: 36_000_000 },
-  { brl: 250, conversations: 1_200, tokens: 96_000_000 },
+  // R$ 0,60/conversa — custo ~R$ 11,44 → margem ~62%
+  { brl: 30, conversations: 50, tokens: 4_000_000 },
+  // R$ 0,50/conversa — custo ~R$ 22,88 → margem ~54%
+  { brl: 50, conversations: 100, tokens: 8_000_000 },
+  // R$ 0,48/conversa — custo ~R$ 48,05 → margem ~52%
+  { brl: 100, conversations: 210, tokens: 16_800_000 },
+  // R$ 0,46/conversa — custo ~R$ 123,55 → margem ~51%
+  { brl: 250, conversations: 540, tokens: 43_200_000 },
 ] as const;
 
 export function includedTokensForPlan(planId: string | null | undefined): number {
@@ -233,6 +257,19 @@ export type ConsumeResult = {
 export type AiUsageKind = "reply" | "followup" | "postsale" | "cart";
 
 /**
+ * Contexto do gasto, gravado só como telemetria. `model`/`inputTokens`/
+ * `outputTokens` vêm do `ReplyResult` e alimentam o custo em R$ do painel admin
+ * (ver [aiPricing.ts](src/lib/aiPricing.ts)); o desconto de saldo não os usa.
+ */
+export type AiUsageMeta = {
+  customerPhone?: string | null;
+  kind?: AiUsageKind;
+  model?: string | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+};
+
+/**
  * Grava uma linha de telemetria por resposta da IA (tokens reais gastos), para o
  * painel admin medir o consumo real por resposta/conversa. É só histórico — não
  * afeta o saldo. Tolera a tabela ausente (migration não aplicada): ignora o erro.
@@ -241,16 +278,29 @@ async function logAiUsage(
   admin: SupabaseClient,
   storeId: string,
   tokens: number,
-  meta?: { customerPhone?: string | null; kind?: AiUsageKind }
+  meta?: AiUsageMeta
 ): Promise<void> {
   if (tokens <= 0) return;
+  const base = {
+    store_id: storeId,
+    customer_phone: meta?.customerPhone ?? null,
+    kind: meta?.kind ?? "reply",
+    tokens,
+  };
   try {
-    await admin.from("ai_usage_events").insert({
-      store_id: storeId,
-      customer_phone: meta?.customerPhone ?? null,
-      kind: meta?.kind ?? "reply",
-      tokens,
+    const { error } = await admin.from("ai_usage_events").insert({
+      ...base,
+      // Colunas da migration de custo (ai-usage-cost). Sem elas não dá para
+      // converter tokens em reais, já que atendimento e crons usam modelos de
+      // preços diferentes e a saída custa 4x a entrada.
+      model: meta?.model ?? null,
+      input_tokens: meta?.inputTokens ?? null,
+      output_tokens: meta?.outputTokens ?? null,
     });
+    if (!error) return;
+    // Migration de custo não aplicada → regrava só com as colunas antigas, para
+    // não perder a telemetria de tokens que já funcionava.
+    await admin.from("ai_usage_events").insert(base);
   } catch {
     // Tabela pode não existir ainda — telemetria é opcional, nunca quebra o fluxo.
   }
@@ -264,7 +314,7 @@ export async function consumeTokens(
   admin: SupabaseClient,
   storeId: string,
   tokens: number,
-  meta?: { customerPhone?: string | null; kind?: AiUsageKind }
+  meta?: AiUsageMeta
 ): Promise<ConsumeResult> {
   const before = await loadCredits(admin, storeId);
   const spend = Math.max(0, Math.round(tokens));

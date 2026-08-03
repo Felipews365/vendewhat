@@ -1,6 +1,8 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { conversationsFromTokens, includedTokensForPlan } from "@/lib/aiCredits";
+import { costBrl } from "@/lib/aiPricing";
 import {
   VERIFICATION_BUCKET,
   normalizeVerificationStatus,
@@ -77,6 +79,11 @@ export type AdminClient = {
   subscription: SubscriptionRow | null;
   planTitle: string | null;
   ai: AdminClientAi | null;
+  /**
+   * Quanto esta loja custou de IA nos últimos 30 dias, em reais. `null` = sem
+   * telemetria (migration ausente) ou nenhuma resposta no período.
+   */
+  aiCost: AdminAiCost | null;
   /** Status da verificação de identidade do dono (KYC). */
   verificationStatus: VerificationStatus;
 };
@@ -150,8 +157,15 @@ export async function getClients(): Promise<AdminClient[]> {
   const db = createAdminSupabase();
   if (!db) return [];
 
-  const [{ data: stores }, { data: subs }, { data: plans }, aiCredits, verifications, emails] =
-    await Promise.all([
+  const [
+    { data: stores },
+    { data: subs },
+    { data: plans },
+    aiCredits,
+    verifications,
+    emails,
+    aiCostByStore,
+  ] = await Promise.all([
       db
         .from("stores")
         .select("id, user_id, name, slug, phone, logo, created_at")
@@ -171,6 +185,8 @@ export async function getClients(): Promise<AdminClient[]> {
           r.error ? [] : ((r.data as { store_id: string; status: string }[] | null) ?? [])
         ),
       ownerEmailMap(db),
+      // Custo de IA dos últimos 30 dias. Tolera telemetria ausente → mapa vazio.
+      getAiCostByStore(30),
     ]);
 
   const subByStore = new Map<string, SubscriptionRow>();
@@ -202,6 +218,7 @@ export async function getClients(): Promise<AdminClient[]> {
       subscription,
       planTitle: subscription?.plan_id ? planTitleById.get(subscription.plan_id) ?? null : null,
       ai: aiFromRow(aiByStore.get(store.id), subscription?.plan_id ?? null, now),
+      aiCost: aiCostByStore.get(store.id) ?? null,
       verificationStatus: verificationByStore.get(store.id) ?? "none",
     };
   });
@@ -373,10 +390,126 @@ export type AiUsageSummary = {
   conversationsPer80M: number;
   /** Qual fração dos 80 mil tokens "reservados" por conversa é usada de fato (%). */
   usageVsBudgetPct: number;
+  /** Custo real em reais no período (e a quebra por modelo). */
+  cost: AdminAiCost;
+  /** Custo médio de uma conversa, em reais — compare com o preço do pacote. */
+  avgCostPerConversationBrl: number;
 };
 
 const AI_BUDGET_PER_CONVERSATION = 80_000;
 const AI_COMPLETO_MONTHLY_TOKENS = 80_000_000;
+
+/** Linha de telemetria já normalizada (colunas de custo podem não existir). */
+type UsageEventRow = {
+  store_id: string;
+  customer_phone: string | null;
+  tokens: number;
+  model: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+};
+
+/** Teto de leitura — a agregação é em JS (supabase-js não faz GROUP BY). */
+const USAGE_READ_LIMIT = 100_000;
+
+/**
+ * Lê os eventos de consumo da IA no período. Tolera **duas** ausências:
+ * a tabela inteira (migration de telemetria não aplicada) e só as colunas de
+ * custo (migration `ai-usage-cost` não aplicada) — nesse caso relê sem elas, e
+ * o `aiPricing` precifica o histórico pelo modelo antigo.
+ */
+async function readUsageEvents(
+  db: SupabaseClient,
+  opts: { days: number; storeId?: string }
+): Promise<UsageEventRow[] | null> {
+  const since = new Date(Date.now() - opts.days * 24 * 60 * 60 * 1000).toISOString();
+  const run = (columns: string) => {
+    let q = db.from("ai_usage_events").select(columns).gte("created_at", since).limit(USAGE_READ_LIMIT);
+    if (opts.storeId) q = q.eq("store_id", opts.storeId);
+    return q;
+  };
+
+  const full = await run("store_id, customer_phone, tokens, model, input_tokens, output_tokens");
+  if (!full.error) return (full.data as unknown as UsageEventRow[] | null) ?? [];
+
+  const legacy = await run("store_id, customer_phone, tokens");
+  if (legacy.error) return null; // tabela ausente → sem medição
+  const rows =
+    (legacy.data as unknown as { store_id: string; customer_phone: string | null; tokens: number }[] | null) ??
+    [];
+  return rows.map((r) => ({ ...r, model: null, input_tokens: null, output_tokens: null }));
+}
+
+/** Custo real da IA de uma loja no período (o que ela te custa de OpenAI). */
+export type AdminAiCost = {
+  /** Custo total em reais no período. */
+  brl: number;
+  /** Tokens somados. */
+  tokens: number;
+  /** Respostas da IA que gastaram tokens. */
+  responses: number;
+  /** Quebra por modelo — mostra o peso do atendimento contra o dos crons. */
+  byModel: { model: string; brl: number; tokens: number; responses: number }[];
+};
+
+function emptyCost(): AdminAiCost {
+  return { brl: 0, tokens: 0, responses: 0, byModel: [] };
+}
+
+/** Soma o custo de um conjunto de eventos, com a quebra por modelo. */
+function aggregateCost(rows: UsageEventRow[]): AdminAiCost {
+  const out = emptyCost();
+  const byModel = new Map<string, { brl: number; tokens: number; responses: number }>();
+  for (const r of rows) {
+    const tokens = Math.max(0, r.tokens || 0);
+    const brl = costBrl({
+      model: r.model,
+      inputTokens: r.input_tokens,
+      outputTokens: r.output_tokens,
+      totalTokens: tokens,
+    });
+    out.brl += brl;
+    out.tokens += tokens;
+    out.responses += 1;
+
+    // Evento antigo não diz o modelo — agrupa num rótulo honesto em vez de
+    // fingir que rodou no modelo que o aiPricing usou para estimar o preço.
+    const key = (r.model ?? "").trim() || "(antes da medição por modelo)";
+    const acc = byModel.get(key) ?? { brl: 0, tokens: 0, responses: 0 };
+    acc.brl += brl;
+    acc.tokens += tokens;
+    acc.responses += 1;
+    byModel.set(key, acc);
+  }
+  // forEach (não spread do iterador): o target de compilação do projeto não
+  // permite iterar Map direto sem `downlevelIteration`.
+  byModel.forEach((v, model) => out.byModel.push({ model, ...v }));
+  out.byModel.sort((a, b) => b.brl - a.brl);
+  return out;
+}
+
+/**
+ * Custo de IA por loja no período (mapa `store_id` → custo). Uma leitura só,
+ * agregada em JS — usada pela lista do admin para a coluna "Custo IA".
+ * Mapa vazio quando não há telemetria.
+ */
+export async function getAiCostByStore(days = 30): Promise<Map<string, AdminAiCost>> {
+  const out = new Map<string, AdminAiCost>();
+  const db = createAdminSupabase();
+  if (!db) return out;
+
+  const rows = await readUsageEvents(db, { days });
+  if (!rows || rows.length === 0) return out;
+
+  const byStore = new Map<string, UsageEventRow[]>();
+  for (const r of rows) {
+    const list = byStore.get(r.store_id);
+    if (list) list.push(r);
+    else byStore.set(r.store_id, [r]);
+  }
+  byStore.forEach((list, storeId) => out.set(storeId, aggregateCost(list)));
+  return out;
+}
 
 /**
  * Lê a telemetria real de consumo da IA e calcula as médias (por resposta e por
@@ -398,25 +531,16 @@ export async function getAiUsageSummary(
     avgTokensPerConversation: 0,
     conversationsPer80M: 0,
     usageVsBudgetPct: 0,
+    cost: emptyCost(),
+    avgCostPerConversationBrl: 0,
   };
   const db = createAdminSupabase();
   if (!db) return empty;
 
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  let query = db
-    .from("ai_usage_events")
-    .select("store_id, customer_phone, tokens")
-    .gte("created_at", since)
-    .limit(100000);
-  if (opts.storeId) query = query.eq("store_id", opts.storeId);
-  const { data, error } = await query;
-  if (error) return empty; // tabela ausente / erro → sem medição
+  const rows = await readUsageEvents(db, { days, storeId: opts.storeId });
+  if (!rows || rows.length === 0) return empty;
 
-  const rows =
-    (data as { store_id: string; customer_phone: string | null; tokens: number }[] | null) ??
-    [];
-  if (rows.length === 0) return empty;
-
+  const cost = aggregateCost(rows);
   let totalTokens = 0;
   const conversationSet = new Set<string>();
   for (const r of rows) {
@@ -446,6 +570,8 @@ export async function getAiUsageSummary(
       avgTokensPerConversation > 0
         ? Math.round((avgTokensPerConversation / AI_BUDGET_PER_CONVERSATION) * 100)
         : 0,
+    cost,
+    avgCostPerConversationBrl: conversations > 0 ? cost.brl / conversations : 0,
   };
 }
 

@@ -1594,9 +1594,41 @@ storage para o dono só mexer na pasta dele).
 ## Atendimento por IA no WhatsApp (Evolution API)
 
 Cada loja conecta o próprio WhatsApp via **QR Code** em `/dashboard/whatsapp` (usando a
-**Evolution API**) e uma IA (**OpenAI gpt-4o-mini**) atende os clientes, tira dúvidas
+**Evolution API**) e uma IA (**OpenAI**) atende os clientes, tira dúvidas
 (catálogo + FAQ que o lojista configura) e envia o link da loja para a compra. Multi-tenant:
 uma instância Evolution e uma config de IA por loja.
+
+- **DOIS modelos, por quanto a tarefa exige de atenção
+  ([attendant.ts](src/lib/ai/attendant.ts), helpers `smartModel()`/`basicModel()`):**
+  - **`OPENAI_MODEL`** (default **`gpt-4.1-mini`**) — só o **atendimento** (`generateReply`). É a
+    única chamada que precisa acertar os marcadores (`[[ENVIAR_PIX]]`, `[[ENVIAR_CATALOGO]]`,
+    `[[NOME_CLIENTE:…]]`) e, principalmente, o **JSON do bloco `[[PEDIDO]]`** — errar ali é venda
+    que **não entra no painel**, e para o JSON não existe rede de segurança determinística (as
+    outras falhas do modelo têm: `customerWantsCatalog`, `linkSentNow`, `customerWantsGroup`).
+  - **`OPENAI_MODEL_BASIC`** (default **`gpt-4o-mini`**) — follow-up, pós-venda, carrinho
+    abandonado e a **descrição de foto** (`describeImage`). São mensagens curtas que não emitem
+    marcador nem JSON, então o modelo barato basta e segura o custo.
+  - **Os fallbacks NÃO se cruzam de propósito:** definir só `OPENAI_MODEL` não arrasta os crons
+    junto (era exatamente isso que a separação queria evitar). Cada variável tem o seu default.
+  - O **Whisper** (`transcribeAudio`) é fixo em `whisper-1` — não entra na separação.
+- **Ordem do system prompt = cache da OpenAI (o que muda na conversa fica no FIM):** o
+  `buildSystemPrompt` ([attendant.ts](src/lib/ai/attendant.ts)) termina com um bloco **"CONTEXTO
+  DESTA CONVERSA"** que concentra as **duas únicas** coisas que mudam dentro de uma mesma conversa —
+  `isFirstContact` (vira `false` já na 2ª resposta) e `custFirst` (aparece quando a IA descobre o
+  nome). Antes elas ficavam **no meio das "Regras"**, e como o cache da OpenAI casa por **prefixo**
+  (qualquer byte que muda invalida tudo o que vem depois), o cache quebrava logo na 2ª mensagem e
+  **nunca mais pegava** — justamente onde havia mais a economizar: uma conversa faz **15-20
+  chamadas** e cada uma reenvia o system prompt inteiro. Com elas no fim, todo o bloco de cima
+  (regras + catálogo + FAQ, ~3-5 mil tokens) vira prefixo estável e é cobrado com desconto da 2ª
+  chamada em diante. Não há nada a ligar: o cache da OpenAI é automático acima de ~1024 tokens.
+  ⚠️ **Ao adicionar campo novo ao prompt, pergunte "muda no meio da conversa?"** — se sim, o lugar é
+  no bloco final; se é por loja (catálogo, FAQ, formas de pagamento…), vai em cima (trocar de loja
+  invalida o cache de qualquer jeito, então não custa nada).
+  - ⚠️ **O custo por conversa NÃO é um prompt gigante:** o `formatCatalog` já é limitado a **60
+    produtos** com descrição cortada em 140 chars, então o catálogo dá ~1.500 tokens e o system
+    prompt inteiro fica em ~3-5 mil. Os ~80 mil tokens de uma conversa vêm da **repetição** (muitas
+    chamadas, cada uma reenviando prompt + histórico), não do tamanho do catálogo — enxugar o
+    catálogo rende bem menos do que parece; o cache do prefixo é que resolve.
 
 - **Plano "Sem IA" bloqueia a IA (`planHasAi` em [plans.ts](src/lib/plans.ts)):** regra **única**
   (`NO_AI_PLAN_IDS` = `essencial`/`sem-ia`) usada pelo painel, pelo aviso do topo
@@ -1790,7 +1822,9 @@ uma instância Evolution e uma config de IA por loja.
   - `EVOLUTION_API_URL` — base da Evolution (ex.: `https://evo.seudominio.com`)
   - `EVOLUTION_API_KEY` — apikey global da Evolution
   - `OPENAI_API_KEY` — chave da OpenAI
-  - `OPENAI_MODEL` — opcional; default `gpt-4o-mini`
+  - `OPENAI_MODEL` — opcional; default `gpt-4.1-mini` (atendimento — ver "dois modelos" acima)
+  - `OPENAI_MODEL_BASIC` — opcional; default `gpt-4o-mini` (crons + descrição de foto)
+  - `AI_USD_BRL` — opcional; câmbio dólar→real do custo em R$ do painel admin (default `5.50`)
   - `APP_BASE_URL` — URL pública do app (monta o link da loja e a URL do webhook;
     o webhook roda no servidor, então não dá pra usar `window.location`). Em dev, use
     um túnel (cloudflared/ngrok) pois a Evolution precisa alcançar o app.
@@ -2325,13 +2359,27 @@ mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.
   conversas + os pacotes de recarga (com preço por conversa); dados de
   [/api/whatsapp/credits](src/app/api/whatsapp/credits/route.ts) (GET). Link em **Conta → Créditos da
   IA**.
-- **Recarga automática (Mercado Pago, na SUA conta):** pacotes em `CREDIT_PACKAGES` (R$30/100 ·
-  R$50/200 · R$100/450 · R$250/1.200 conversas; markup 2–3x, margem 53–65% já com imposto). O botão
+- **Recarga automática (Mercado Pago, na SUA conta):** pacotes em `CREDIT_PACKAGES` (R$30/50 ·
+  R$50/100 · R$100/210 · R$250/540 conversas; margem-alvo ≥50%). O botão
   chama [/api/credits/checkout](src/app/api/credits/checkout/route.ts) (`requireAuth` do dono da loja →
   registra a compra em `ai_credit_purchases` → `createPreference` na sua conta `MP_ACCESS_TOKEN` →
   devolve o `init_point`). O [/api/credits/webhook](src/app/api/credits/webhook/route.ts) reconsulta o
   pagamento e **credita uma única vez** (claim atômico `.neq("status","approved")`) + avisa a loja no
   WhatsApp. **Migration:** [supabase-migration-ai-credit-purchases.sql](supabase-migration-ai-credit-purchases.sql).
+  - **⚠️ Repreçados junto com a troca de modelo (`gpt-4o-mini` → `gpt-4.1-mini` no atendimento):**
+    os pacotes antigos (100/200/450/1.200 conversas) davam R$ 0,21–0,30 por conversa, e a conversa
+    passou a custar **~R$ 0,23** de OpenAI — os dois maiores viravam **prejuízo** (o de R$ 250 perdia
+    ~R$ 25 por venda). Os **preços em reais foram mantidos** (R$ 30/50/100/250) e o que mudou foi o
+    **número de conversas**, então os checkouts do MP e o `findPackage(brl)` seguem valendo, sem
+    migração nem compra antiga quebrada. Ladder: R$ 0,60 → R$ 0,50 → R$ 0,48 → R$ 0,46 por conversa,
+    sempre **abaixo dos R$ 0,50/conversa do plano IA Completo** (R$ 499,90 por 80 mi tokens), para a
+    recarga continuar fazendo sentido para o lojista. **Mexeu no modelo ou no câmbio
+    (`AI_USD_BRL`)? Refaça a conta** — custo por conversa = `custo_por_1M × 0,08`.
+  - **O plano IA Completo (R$ 499,90 / 80 mi tokens) não precisou mexer:** o teto de custo é
+    **rígido em ~R$ 229/mês** justamente porque a franquia é em **tokens**, não em conversas — loja
+    com catálogo gigante chega ao limite com menos conversas, mas nunca custa mais que isso.
+    O risco ali não é custo, é a **promessa** de "~1.000 conversas": ela só se sustenta se a conversa
+    real ficar perto dos 80 mil tokens. O card **"Conversas por 80 mi"** em `/admin` é o termômetro.
   - **⚠️ App do MP (dois tokens):** a aplicação do `MP_ACCESS_TOKEN` precisa ser do produto **Checkout
     Pro** (não "Assinaturas"), senão `createPreference` retorna `At least one policy returned
     UNAUTHORIZED`. Como o produto é **escolha única por aplicação**, esse mesmo token **não** serve
@@ -2370,6 +2418,35 @@ mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.
   [/admin/clientes/[storeId]](src/app/admin/(panel)/clientes/[storeId]/page.tsx). **O lojista NÃO vê
   isso** (é área admin, `requireAdmin`); ele só vê o saldo em **conversas** em `/dashboard/creditos`.
   A medição só conta a partir de quando a migration é aplicada (conversas antigas não têm log).
+- **Custo real em R$ por loja ("quanto cada cliente está gastando", só admin):** além dos tokens, o
+  painel mostra **quanto cada loja te custa de OpenAI**. **Migration:**
+  [supabase-migration-ai-usage-cost.sql](supabase-migration-ai-usage-cost.sql) (adiciona `model`,
+  `input_tokens` e `output_tokens` — todas **nullable** — em `ai_usage_events`, mais um índice
+  `(store_id, created_at)`).
+  - **Por que precisou de colunas novas:** desde a separação de modelos o token **não tem preço
+    único** (o mesmo total custa ~2,6x mais no atendimento que num follow-up) e a **saída custa 4x a
+    entrada**. Só com `tokens` não dá para converter em reais sem mentir sobre a margem.
+  - **Tabela de preços:** [aiPricing.ts](src/lib/aiPricing.ts) (`MODEL_PRICES` em USD por 1M tokens,
+    `costUsd`/`costBrl`/`formatBrlCost`). O câmbio sai de **`AI_USD_BRL`** (default 5,50) porque muda
+    todo dia. ⚠️ Preço da OpenAI muda sem aviso — confira antes de mexer em preço de plano/pacote.
+  - **Histórico antigo continua valendo:** linha sem `model` é precificada como **`gpt-4o-mini`**
+    (era o que rodava na época) e, sem a divisão entrada/saída, assume **10% de saída** (o
+    atendimento manda o catálogo inteiro a cada resposta, então a esmagadora maioria é entrada). No
+    painel essas linhas aparecem agrupadas como **"(antes da medição por modelo)"**, em vez de fingir
+    que rodaram no modelo estimado. Nada é reprocessado.
+  - **Tolera as duas migrations ausentes:** `readUsageEvents` ([adminData.ts](src/lib/adminData.ts))
+    tenta o `select` completo e, se as colunas de custo não existirem, **relê sem elas**; tabela
+    inteira ausente → sem medição. Do lado da escrita, `logAiUsage` ([aiCredits.ts](src/lib/aiCredits.ts))
+    faz o insert com as colunas novas e, no erro, **regrava só com as antigas** — a telemetria de
+    tokens que já funcionava não se perde.
+  - **Onde aparece:** coluna **"Custo IA (30d)"** na lista [/admin](src/app/admin/(panel)/page.tsx)
+    (custo + nº de respostas + tokens por loja, de `getAiCostByStore(30)` embutido no `getClients`),
+    cards **"Custo por conversa"** e **"Custo no período"** no bloco "Consumo real da IA", e o mesmo
+    por loja na página do cliente — todos com a **quebra por modelo**, que mostra o peso do
+    atendimento contra o dos crons. **O lojista não vê nada disso** (é `requireAdmin`).
+  - ⚠️ **Buraco conhecido:** o `describeImage` (visão) gasta tokens mas **não** passa por
+    `consumeTokens`, então não entra nem no saldo nem neste custo — o número real é um pouco maior
+    em lojas onde os clientes mandam muita foto.
 
 ## Notas do ambiente (Windows / OneDrive)
 

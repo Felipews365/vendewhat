@@ -166,6 +166,9 @@ async function runSilenceFollowups(
             await consumeTokens(admin, cfg.storeId, reply.tokens, {
               customerPhone: phone,
               kind: "followup",
+              model: reply.model,
+              inputTokens: reply.inputTokens,
+              outputTokens: reply.outputTokens,
             });
           }
         }
@@ -242,6 +245,9 @@ async function runPostsale(
                 await consumeTokens(admin, cfg.storeId, reply.tokens, {
                   customerPhone: phone,
                   kind: "postsale",
+                  model: reply.model,
+                  inputTokens: reply.inputTokens,
+                  outputTokens: reply.outputTokens,
                 });
               }
             }
@@ -321,6 +327,9 @@ async function runAbandonedCarts(
             await consumeTokens(admin, cfg.storeId, reply.tokens, {
               customerPhone: phone,
               kind: "cart",
+              model: reply.model,
+              inputTokens: reply.inputTokens,
+              outputTokens: reply.outputTokens,
             });
           }
         }

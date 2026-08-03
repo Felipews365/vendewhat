@@ -1,8 +1,9 @@
 /**
  * Atendente de IA (OpenAI) para o WhatsApp da loja.
  * Configurar no ambiente:
- *   OPENAI_API_KEY  -> chave da OpenAI
- *   OPENAI_MODEL    -> opcional; default gpt-4o-mini
+ *   OPENAI_API_KEY      -> chave da OpenAI
+ *   OPENAI_MODEL        -> opcional; default gpt-4.1-mini (atendimento)
+ *   OPENAI_MODEL_BASIC  -> opcional; default gpt-4o-mini (crons + visão)
  */
 import OpenAI, { toFile } from "openai";
 import type { ChatTurn } from "@/lib/whatsappConfig";
@@ -31,6 +32,28 @@ function getClient(): OpenAI {
     client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
   return client;
+}
+
+/**
+ * Dois modelos, separados por quanto a tarefa exige de atenção:
+ *
+ * - `smartModel()` — o **atendimento** (`generateReply`). É a única chamada que
+ *   precisa acertar os marcadores (`[[ENVIAR_PIX]]`, `[[NOME_CLIENTE:…]]`) e o
+ *   JSON do bloco `[[PEDIDO]]`; errar ali significa venda que não entra no
+ *   painel, e não há rede de segurança determinística possível para o JSON.
+ * - `basicModel()` — mensagens curtas dos crons (follow-up, pós-venda, carrinho)
+ *   e a descrição de foto. Não emitem marcador nem JSON e são de poucos tokens,
+ *   então o modelo barato dá conta.
+ *
+ * Sem cruzar os fallbacks de propósito: definir só `OPENAI_MODEL` não deve
+ * arrastar os crons junto (era justamente isso que se queria separar).
+ */
+function smartModel(): string {
+  return process.env.OPENAI_MODEL || "gpt-4.1-mini";
+}
+
+function basicModel(): string {
+  return process.env.OPENAI_MODEL_BASIC || "gpt-4o-mini";
 }
 
 function brl(value: number): string {
@@ -191,12 +214,9 @@ export function buildSystemPrompt(args: {
           offlineMsg || DEFAULT_OFFLINE_MESSAGE
         }". Você pode tirar dúvidas gerais e anotar o interesse do cliente (o que ele procura) para retornar assim que o catálogo voltar, mas NÃO feche pedido nem envie preços/link enquanto durar a manutenção.`
       : "",
-    isFirstContact
-      ? `- Esta é a PRIMEIRA mensagem deste cliente. É OBRIGATÓRIO se apresentar logo na abertura: diga seu nome (${aiName}) E o nome da loja ("${storeName}") ANTES de fazer qualquer pergunta. Só depois faça UMA pergunta que avance a venda. Modelo (espelhe a saudação do cliente): "Boa noite! 😊 Aqui é a ${aiName}, da ${storeName}. Me diz: você tá procurando qual tipo de produto hoje?". Apresente-se apenas uma vez, neste primeiro contato.`
-      : "- Você já se apresentou antes nesta conversa. NÃO repita a apresentação; vá direto ao ponto.",
-    custFirst
-      ? `- Este cliente já é da casa: o primeiro nome dele é ${custFirst}. Trate-o pelo nome (${custFirst}) com naturalidade, sem exagerar (não repita o nome em toda frase). NUNCA invente nem troque o nome.`
-      : "- Você NÃO sabe o nome deste cliente. Não invente um nome nem o chame por um nome qualquer; se fizer sentido, pergunte o nome dele de forma natural.",
+    // ⚠️ `isFirstContact` e `custFirst` NÃO entram aqui — são as duas únicas coisas
+    // que mudam DENTRO de uma conversa e ficam no fim do prompt, pelo cache
+    // (ver "CONTEXTO DESTA CONVERSA" no final desta função).
     '- Espelhe a saudação do cliente: se ele disser "bom dia", comece com "Bom dia"; "boa tarde" → "Boa tarde"; "boa noite" → "Boa noite"; um "oi"/"olá"/algo curto → responda simpático e direto. Não force uma saudação que o cliente não usou.',
     "- Você LIDERA a conversa. Faça NO MÁXIMO UMA pergunta por mensagem (nunca duas), e que essa pergunta sempre avance a venda (categoria, modelo, cor, tamanho, quantidade, disponibilidade ou fechamento). Termine praticamente toda resposta conduzindo para o próximo passo — nunca entregue o controle ao cliente.",
     '- NUNCA abra com pergunta genérica de atendimento ("Como posso te ajudar?", "Em que posso ajudar?", "Posso te ajudar em algo?") — isso é cara de robô de SAC. Abra já qualificando a venda. Perguntas boas (use UMA, adaptando ao contexto): "Você tá procurando qual tipo de produto hoje?"; "Quer ver opções de qual categoria?"; "É pra uso próprio, revenda ou pra loja?"; "Quer algo mais básico, premium ou promocional?"; "Tem alguma cor, tamanho, modelo ou faixa de preço em mente?".',
@@ -317,6 +337,31 @@ export function buildSystemPrompt(args: {
     "",
     "INFORMAÇÕES / POLÍTICAS DA LOJA (FAQ):",
     faq.trim() ? faq.trim() : "(Sem informações adicionais cadastradas.)",
+
+    // ─────────────────────────────────────────────────────────────────────
+    // ÚLTIMO BLOCO, DE PROPÓSITO — é aqui que mora TUDO que muda dentro de
+    // uma mesma conversa. O cache da OpenAI casa por PREFIXO: qualquer byte
+    // que muda invalida tudo o que vem DEPOIS dele. Como `isFirstContact`
+    // vira `false` já na 2ª resposta e `custFirst` aparece quando a IA
+    // descobre o nome, deixá-los no meio das "Regras" quebrava o cache logo
+    // no começo — justamente onde havia mais a economizar, já que uma
+    // conversa faz 15-20 chamadas e cada uma reenvia este prompt inteiro.
+    // No fim, todo o bloco acima (regras + catálogo + FAQ) vira prefixo
+    // estável e é cobrado com desconto da 2ª chamada em diante.
+    //
+    // ⚠️ Ao adicionar campo novo ao prompt, pergunte: "muda no meio da
+    // conversa?" Se sim, o lugar é AQUI embaixo. Se é por loja (catálogo,
+    // FAQ, formas de pagamento…), vai em cima — trocar de loja invalida o
+    // cache de qualquer jeito, então não custa nada.
+    // ─────────────────────────────────────────────────────────────────────
+    "",
+    "CONTEXTO DESTA CONVERSA:",
+    isFirstContact
+      ? `- Esta é a PRIMEIRA mensagem deste cliente. É OBRIGATÓRIO se apresentar logo na abertura: diga seu nome (${aiName}) E o nome da loja ("${storeName}") ANTES de fazer qualquer pergunta. Só depois faça UMA pergunta que avance a venda. Modelo (espelhe a saudação do cliente): "Boa noite! 😊 Aqui é a ${aiName}, da ${storeName}. Me diz: você tá procurando qual tipo de produto hoje?". Apresente-se apenas uma vez, neste primeiro contato.`
+      : "- Você já se apresentou antes nesta conversa. NÃO repita a apresentação; vá direto ao ponto.",
+    custFirst
+      ? `- Este cliente já é da casa: o primeiro nome dele é ${custFirst}. Trate-o pelo nome (${custFirst}) com naturalidade, sem exagerar (não repita o nome em toda frase). NUNCA invente nem troque o nome.`
+      : "- Você NÃO sabe o nome deste cliente. Não invente um nome nem o chame por um nome qualquer; se fizer sentido, pergunte o nome dele de forma natural.",
   ].join("\n");
 }
 
@@ -468,14 +513,40 @@ export type ReplyResult = {
   text: string;
   /** Tokens totais gastos nesta chamada (para o motor de créditos descontar). */
   tokens: number;
+  /**
+   * Modelo e divisão entrada/saída — só para a telemetria de CUSTO do painel
+   * admin (o desconto de saldo segue usando `tokens`). Como o atendimento e os
+   * crons rodam em modelos de preços diferentes, e a saída custa 4x a entrada,
+   * sem estes três campos não dá para converter tokens em reais.
+   */
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
 };
+
+/** Extrai texto + medição de uma resposta da OpenAI. `null` se veio vazia. */
+function toReplyResult(
+  completion: OpenAI.Chat.Completions.ChatCompletion,
+  model: string
+): ReplyResult | null {
+  const text = completion.choices[0]?.message?.content;
+  if (!text) return null;
+  const usage = completion.usage;
+  return {
+    text: text.trim(),
+    tokens: usage?.total_tokens ?? 0,
+    model,
+    inputTokens: usage?.prompt_tokens ?? 0,
+    outputTokens: usage?.completion_tokens ?? 0,
+  };
+}
 
 export async function generateReply(
   systemPrompt: string,
   history: ChatTurn[],
   userMessage: string
 ): Promise<ReplyResult | null> {
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = smartModel();
   const completion = await getClient().chat.completions.create({
     model,
     max_tokens: 400,
@@ -485,14 +556,12 @@ export async function generateReply(
       { role: "user", content: userMessage },
     ],
   });
-  const text = completion.choices[0]?.message?.content;
-  if (!text) return null;
-  return { text: text.trim(), tokens: completion.usage?.total_tokens ?? 0 };
+  return toReplyResult(completion, model);
 }
 
 /**
  * Descreve, em português, o conteúdo de uma foto que o cliente mandou (visão do
- * gpt-4o-mini). Recebe a imagem como data URI base64. A descrição é gravada como
+ * `basicModel()`). Recebe a imagem como data URI base64. A descrição é gravada como
  * texto no histórico para o atendente (que responde só com texto) ter o contexto.
  * Nunca lança: null se falhar.
  */
@@ -501,7 +570,7 @@ export async function describeImage(
   caption: string
 ): Promise<string | null> {
   try {
-    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    const model = basicModel();
     const completion = await getClient().chat.completions.create({
       model,
       max_tokens: 160,
@@ -570,7 +639,7 @@ export async function generateFollowupReply(
   systemPrompt: string,
   history: ChatTurn[]
 ): Promise<ReplyResult | null> {
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = basicModel();
   const completion = await getClient().chat.completions.create({
     model,
     max_tokens: 200,
@@ -584,9 +653,7 @@ export async function generateFollowupReply(
       },
     ],
   });
-  const text = completion.choices[0]?.message?.content;
-  if (!text) return null;
-  return { text: text.trim(), tokens: completion.usage?.total_tokens ?? 0 };
+  return toReplyResult(completion, model);
 }
 
 /** Primeiro nome do cliente (para personalizar a mensagem). */
@@ -618,7 +685,7 @@ export async function generatePostsaleReply(
   customerName: string,
   orderNumber: number | null
 ): Promise<ReplyResult | null> {
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = basicModel();
   const nome = firstName(customerName);
   const completion = await getClient().chat.completions.create({
     model,
@@ -637,9 +704,7 @@ export async function generatePostsaleReply(
       },
     ],
   });
-  const text = completion.choices[0]?.message?.content;
-  if (!text) return null;
-  return { text: text.trim(), tokens: completion.usage?.total_tokens ?? 0 };
+  return toReplyResult(completion, model);
 }
 
 /**
@@ -651,7 +716,7 @@ export async function generateAbandonedCartReply(
   customerName: string,
   items: { name: string; quantity: number }[]
 ): Promise<ReplyResult | null> {
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = basicModel();
   const nome = firstName(customerName);
   const lista = items
     .slice(0, 12)
@@ -675,7 +740,5 @@ export async function generateAbandonedCartReply(
       },
     ],
   });
-  const text = completion.choices[0]?.message?.content;
-  if (!text) return null;
-  return { text: text.trim(), tokens: completion.usage?.total_tokens ?? 0 };
+  return toReplyResult(completion, model);
 }

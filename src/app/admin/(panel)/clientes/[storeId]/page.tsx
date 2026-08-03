@@ -9,6 +9,7 @@ import {
 } from "@/lib/adminData";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { loadCredits, TOKENS_PER_CONVERSATION } from "@/lib/aiCredits";
+import { formatBrlCost } from "@/lib/aiPricing";
 import ClientForm from "./ClientForm";
 import AiCreditsCard from "./AiCreditsCard";
 import VerificationCard from "./VerificationCard";
@@ -66,9 +67,13 @@ function StoreAiUsage({ usage }: { usage: AiUsageSummary }) {
               </p>
             </div>
             <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs font-medium text-slate-500">Tokens no período</p>
+              <p className="text-xs font-medium text-slate-500">Custo no período</p>
               <p className="mt-1 text-xl font-extrabold text-slate-900">
-                {fmtInt(usage.totalTokens)}
+                {formatBrlCost(usage.cost.brl)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                {formatBrlCost(usage.avgCostPerConversationBrl)} por conversa ·{" "}
+                {fmtInt(usage.totalTokens)} tokens
               </p>
             </div>
             <div className="rounded-xl bg-slate-50 p-4">
@@ -86,6 +91,14 @@ function StoreAiUsage({ usage }: { usage: AiUsageSummary }) {
               ? `Esta loja usa em média ${usage.usageVsBudgetPct}% da franquia de 80 mil tokens por conversa — dentro do previsto.`
               : `Atenção: esta loja gasta em média ${fmtInt(usage.avgTokensPerConversation)} tokens/conversa, acima dos 80 mil reservados. Conversas mais longas/pesadas que a média.`}
           </p>
+          {usage.cost.byModel.length > 0 && (
+            <p className="mt-1 text-xs text-slate-400">
+              Por modelo:{" "}
+              {usage.cost.byModel
+                .map((m) => `${m.model} ${formatBrlCost(m.brl)} (${fmtInt(m.responses)} resp.)`)
+                .join(" · ")}
+            </p>
+          )}
         </>
       ) : (
         <p className="mt-2 text-sm text-slate-500">

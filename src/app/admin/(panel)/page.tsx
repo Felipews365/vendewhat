@@ -7,6 +7,7 @@ import {
   type AiUsageSummary,
 } from "@/lib/adminData";
 import { formatBRL } from "@/lib/plans";
+import { formatBrlCost, usdToBrlRate } from "@/lib/aiPricing";
 import { VERIFICATION_STATUS_LABEL, type VerificationStatus } from "@/lib/storeVerification";
 
 export const dynamic = "force-dynamic";
@@ -123,9 +124,12 @@ function AiUsageMeasurement({ usage }: { usage: AiUsageSummary }) {
           </p>
         </div>
         <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-xs font-medium text-slate-500">Tokens por resposta (média)</p>
+          <p className="text-xs font-medium text-slate-500">Custo por conversa (média)</p>
           <p className="mt-1 text-2xl font-extrabold text-slate-900">
-            {fmtInt(usage.avgTokensPerResponse)}
+            {formatBrlCost(usage.avgCostPerConversationBrl)}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            {fmtInt(usage.avgTokensPerResponse)} tokens/resposta
           </p>
         </div>
         <div className="rounded-xl bg-slate-50 p-4">
@@ -140,16 +144,31 @@ function AiUsageMeasurement({ usage }: { usage: AiUsageSummary }) {
           </p>
         </div>
         <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-xs font-medium text-slate-500">Tokens no período</p>
+          <p className="text-xs font-medium text-slate-500">Custo no período</p>
           <p className="mt-1 text-2xl font-extrabold text-slate-900">
-            {fmtInt(usage.totalTokens)}
+            {formatBrlCost(usage.cost.brl)}
           </p>
+          <p className="mt-1 text-xs text-slate-400">{fmtInt(usage.totalTokens)} tokens</p>
         </div>
       </div>
+      {usage.cost.byModel.length > 0 && (
+        <p className="mt-3 text-xs text-slate-500">
+          Por modelo:{" "}
+          {usage.cost.byModel
+            .map((m) => `${m.model} ${formatBrlCost(m.brl)} (${fmtInt(m.responses)} resp.)`)
+            .join(" · ")}
+        </p>
+      )}
       <p className="mt-3 text-xs text-slate-500">
         {usage.usageVsBudgetPct <= 100
           ? `Cada conversa real usa em média ${usage.usageVsBudgetPct}% da franquia de 80 mil tokens — a margem está segura e a promessa de ~1.000 conversas se sustenta (dá para ${fmtInt(usage.conversationsPer80M)}).`
           : `Atenção: a média real (${fmtInt(usage.avgTokensPerConversation)} tokens/conversa) está acima dos 80 mil reservados — reveja a franquia ou o número prometido de conversas.`}
+      </p>
+      <p className="mt-1 text-xs text-slate-400">
+        Custo estimado a partir da tabela de preços da OpenAI e do câmbio em{" "}
+        <code className="rounded bg-slate-100 px-1 py-0.5 text-slate-600">AI_USD_BRL</code> (hoje{" "}
+        {usdToBrlRate().toLocaleString("pt-BR", { minimumFractionDigits: 2 })} por dólar). Confira os
+        preços vigentes antes de decidir preço de plano ou de pacote.
       </p>
     </div>
   );
@@ -189,13 +208,14 @@ export default async function AdminClientesPage() {
               <th className="px-4 py-3 font-semibold">Vencimento</th>
               <th className="px-4 py-3 font-semibold">Verificação</th>
               <th className="px-4 py-3 font-semibold">IA (saldo · gasto mês)</th>
+              <th className="px-4 py-3 font-semibold">Custo IA (30d)</th>
               <th className="px-4 py-3 text-right font-semibold">Valor</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {clients.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={9} className="px-4 py-10 text-center text-slate-400">
                   Nenhuma loja encontrada.
                 </td>
               </tr>
@@ -252,6 +272,20 @@ export default async function AdminClientesPage() {
                         </span>
                         <span className="text-xs text-slate-400">
                           {fmtInt(c.ai.usedConversations)} gastas no mês
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.aiCost ? (
+                      <div className="flex flex-col leading-tight">
+                        <span className="font-semibold text-slate-800">
+                          {formatBrlCost(c.aiCost.brl)}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {fmtInt(c.aiCost.responses)} respostas · {fmtInt(c.aiCost.tokens)} tokens
                         </span>
                       </div>
                     ) : (
