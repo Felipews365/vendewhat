@@ -2376,8 +2376,15 @@ mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.
     **número de conversas**, então os checkouts do MP e o `findPackage(brl)` seguem valendo, sem
     migração nem compra antiga quebrada. Ladder: R$ 0,60 → R$ 0,50 → R$ 0,48 → R$ 0,46 por conversa,
     sempre **abaixo dos R$ 0,50/conversa do plano IA Completo** (R$ 499,90 por 80 mi tokens), para a
-    recarga continuar fazendo sentido para o lojista. **Mexeu no modelo ou no câmbio
-    (`AI_USD_BRL`)? Refaça a conta** — custo por conversa = `custo_por_1M × 0,08`.
+    recarga continuar fazendo sentido para o lojista.
+  - **⚠️ ARMADILHA: o pacote vende TOKEN, não conversa — a margem NÃO depende do
+    `TOKENS_PER_CONVERSATION`.** O pacote de R$ 100 entrega 16,8 mi de tokens, e servir 16,8 mi
+    custa o mesmo quer isso renda 210 conversas ou 2.000. Só o **rótulo** ("N conversas") depende da
+    constante. Errar isso leva a uma conclusão perigosa e plausível — *"medi o consumo real, a
+    conversa é mais barata do que eu achava, logo posso baixar o preço dos pacotes"* — que é
+    **falsa** e faz vender no prejuízo. Ao reprecificar, a conta é sempre
+    `tokens_do_pacote × custo_por_1M`; a medição de consumo serve para decidir **quantas conversas
+    prometer**, nunca a margem. **Mexeu no modelo ou no câmbio? Refaça a conta.**
   - **O plano IA Completo (R$ 499,90 / 80 mi tokens) não precisou mexer:** o teto de custo é
     **rígido em ~R$ 229/mês** justamente porque a franquia é em **tokens**, não em conversas — loja
     com catálogo gigante chega ao limite com menos conversas, mas nunca custa mais que isso.
