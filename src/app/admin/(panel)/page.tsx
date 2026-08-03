@@ -7,7 +7,7 @@ import {
   type AiUsageSummary,
 } from "@/lib/adminData";
 import { formatBRL } from "@/lib/plans";
-import { formatBrlCost, usdToBrlRate } from "@/lib/aiPricing";
+import { formatBrlCost } from "@/lib/aiPricing";
 import { VERIFICATION_STATUS_LABEL, type VerificationStatus } from "@/lib/storeVerification";
 
 export const dynamic = "force-dynamic";
@@ -165,10 +165,26 @@ function AiUsageMeasurement({ usage }: { usage: AiUsageSummary }) {
           : `Atenção: a média real (${fmtInt(usage.avgTokensPerConversation)} tokens/conversa) está acima dos 80 mil reservados — reveja a franquia ou o número prometido de conversas.`}
       </p>
       <p className="mt-1 text-xs text-slate-400">
-        Custo estimado a partir da tabela de preços da OpenAI e do câmbio em{" "}
-        <code className="rounded bg-slate-100 px-1 py-0.5 text-slate-600">AI_USD_BRL</code> (hoje{" "}
-        {usdToBrlRate().toLocaleString("pt-BR", { minimumFractionDigits: 2 })} por dólar). Confira os
-        preços vigentes antes de decidir preço de plano ou de pacote.
+        Custo estimado pela tabela de preços da OpenAI, convertido a{" "}
+        <strong className="text-slate-500">
+          R$ {usage.usd.rate.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+        </strong>{" "}
+        por dólar
+        {usage.usd.source === "api" && usage.usd.spot != null ? (
+          <>
+            {" "}
+            (dólar hoje R${" "}
+            {usage.usd.spot.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} + IOF e spread do
+            cartão)
+          </>
+        ) : (
+          <>
+            {" "}
+            (cotação do dia indisponível — usando o valor fixo de{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5 text-slate-600">AI_USD_BRL</code>)
+          </>
+        )}
+        . Confira os preços vigentes da OpenAI antes de decidir preço de plano ou de pacote.
       </p>
     </div>
   );

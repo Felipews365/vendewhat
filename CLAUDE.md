@@ -1824,7 +1824,10 @@ uma instância Evolution e uma config de IA por loja.
   - `OPENAI_API_KEY` — chave da OpenAI
   - `OPENAI_MODEL` — opcional; default `gpt-4.1-mini` (atendimento — ver "dois modelos" acima)
   - `OPENAI_MODEL_BASIC` — opcional; default `gpt-4o-mini` (crons + descrição de foto)
-  - `AI_USD_BRL` — opcional; câmbio dólar→real do custo em R$ do painel admin (default `5.50`)
+  - `AI_USD_BRL` — opcional; câmbio dólar→real **de emergência** do painel admin (default `5.50`).
+    Só é usado se a cotação do dia não puder ser buscada — ver "câmbio do dia, automático" abaixo
+  - `AI_USD_SPREAD` — opcional; multiplicador de IOF + spread do cartão sobre a cotação comercial
+    (default `1.07`)
   - `APP_BASE_URL` — URL pública do app (monta o link da loja e a URL do webhook;
     o webhook roda no servidor, então não dá pra usar `window.location`). Em dev, use
     um túnel (cloudflared/ngrok) pois a Evolution precisa alcançar o app.
@@ -2427,8 +2430,19 @@ mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.
     único** (o mesmo total custa ~2,6x mais no atendimento que num follow-up) e a **saída custa 4x a
     entrada**. Só com `tokens` não dá para converter em reais sem mentir sobre a margem.
   - **Tabela de preços:** [aiPricing.ts](src/lib/aiPricing.ts) (`MODEL_PRICES` em USD por 1M tokens,
-    `costUsd`/`costBrl`/`formatBrlCost`). O câmbio sai de **`AI_USD_BRL`** (default 5,50) porque muda
-    todo dia. ⚠️ Preço da OpenAI muda sem aviso — confira antes de mexer em preço de plano/pacote.
+    `costUsd`/`costBrl`/`formatBrlCost`). ⚠️ Preço da OpenAI muda sem aviso — confira antes de mexer
+    em preço de plano/pacote.
+  - **Câmbio do dia, automático (`fetchUsdBrlRate`):** busca a cotação comercial na **AwesomeAPI**
+    (grátis, sem chave) e aplica **`AI_USD_SPREAD`** (default `1.07`) por cima — sem esse
+    multiplicador o painel **subestimaria o custo em ~7%**, porque quem paga a OpenAI num cartão
+    brasileiro paga IOF (3,38%) + spread do banco, não a cotação comercial. Cacheado **6h** pelo
+    `fetch` do Next (o `/admin` não pode depender de chamada externa a cada render). **Nunca lança:**
+    timeout de 4s e, em qualquer falha, cai em **`AI_USD_BRL`** (e daí em 5,50) — o campo `source`
+    (`api`/`env`/`default`) vai até a tela, então dá para ver se a cotação é a de hoje ou a fixa.
+    O número exato do seu spread está na fatura: valor lançado em R$ ÷ valor em US$.
+    - **O câmbio é buscado UMA vez por render e passado por parâmetro** (`costBrl(usage, rate)`), não
+      lido dentro da função: ela roda em milhares de eventos na agregação, e torná-la assíncrona
+      contaminaria todo o caminho.
   - **Histórico antigo continua valendo:** linha sem `model` é precificada como **`gpt-4o-mini`**
     (era o que rodava na época) e, sem a divisão entrada/saída, assume **10% de saída** (o
     atendimento manda o catálogo inteiro a cada resposta, então a esmagadora maioria é entrada). No

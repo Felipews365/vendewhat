@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { conversationsFromTokens, includedTokensForPlan } from "@/lib/aiCredits";
-import { costBrl } from "@/lib/aiPricing";
+import { costBrl, fetchUsdBrlRate, usdToBrlRate, type UsdBrlRate } from "@/lib/aiPricing";
 import {
   VERIFICATION_BUCKET,
   normalizeVerificationStatus,
@@ -394,6 +394,8 @@ export type AiUsageSummary = {
   cost: AdminAiCost;
   /** Custo médio de uma conversa, em reais — compare com o preço do pacote. */
   avgCostPerConversationBrl: number;
+  /** Câmbio usado no cálculo (e de onde veio), para o painel ser auditável. */
+  usd: UsdBrlRate;
 };
 
 const AI_BUDGET_PER_CONVERSATION = 80_000;
@@ -457,17 +459,20 @@ function emptyCost(): AdminAiCost {
 }
 
 /** Soma o custo de um conjunto de eventos, com a quebra por modelo. */
-function aggregateCost(rows: UsageEventRow[]): AdminAiCost {
+function aggregateCost(rows: UsageEventRow[], rate: number): AdminAiCost {
   const out = emptyCost();
   const byModel = new Map<string, { brl: number; tokens: number; responses: number }>();
   for (const r of rows) {
     const tokens = Math.max(0, r.tokens || 0);
-    const brl = costBrl({
-      model: r.model,
-      inputTokens: r.input_tokens,
-      outputTokens: r.output_tokens,
-      totalTokens: tokens,
-    });
+    const brl = costBrl(
+      {
+        model: r.model,
+        inputTokens: r.input_tokens,
+        outputTokens: r.output_tokens,
+        totalTokens: tokens,
+      },
+      rate
+    );
     out.brl += brl;
     out.tokens += tokens;
     out.responses += 1;
@@ -498,7 +503,7 @@ export async function getAiCostByStore(days = 30): Promise<Map<string, AdminAiCo
   const db = createAdminSupabase();
   if (!db) return out;
 
-  const rows = await readUsageEvents(db, { days });
+  const [rows, usd] = await Promise.all([readUsageEvents(db, { days }), fetchUsdBrlRate()]);
   if (!rows || rows.length === 0) return out;
 
   const byStore = new Map<string, UsageEventRow[]>();
@@ -507,7 +512,7 @@ export async function getAiCostByStore(days = 30): Promise<Map<string, AdminAiCo
     if (list) list.push(r);
     else byStore.set(r.store_id, [r]);
   }
-  byStore.forEach((list, storeId) => out.set(storeId, aggregateCost(list)));
+  byStore.forEach((list, storeId) => out.set(storeId, aggregateCost(list, usd.rate)));
   return out;
 }
 
@@ -533,14 +538,18 @@ export async function getAiUsageSummary(
     usageVsBudgetPct: 0,
     cost: emptyCost(),
     avgCostPerConversationBrl: 0,
+    usd: { rate: usdToBrlRate(), spot: null, source: "default", fetchedAt: null },
   };
   const db = createAdminSupabase();
   if (!db) return empty;
 
-  const rows = await readUsageEvents(db, { days, storeId: opts.storeId });
-  if (!rows || rows.length === 0) return empty;
+  const [rows, usd] = await Promise.all([
+    readUsageEvents(db, { days, storeId: opts.storeId }),
+    fetchUsdBrlRate(),
+  ]);
+  if (!rows || rows.length === 0) return { ...empty, usd };
 
-  const cost = aggregateCost(rows);
+  const cost = aggregateCost(rows, usd.rate);
   let totalTokens = 0;
   const conversationSet = new Set<string>();
   for (const r of rows) {
@@ -572,6 +581,7 @@ export async function getAiUsageSummary(
         : 0,
     cost,
     avgCostPerConversationBrl: conversations > 0 ? cost.brl / conversations : 0,
+    usd,
   };
 }
 

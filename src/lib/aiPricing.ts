@@ -36,10 +36,79 @@ const LEGACY_MODEL = "gpt-4o-mini";
  */
 const ASSUMED_OUTPUT_SHARE = 0.1;
 
-/** Câmbio dólar→real. Configurável porque muda todo dia (`AI_USD_BRL`). */
-export function usdToBrlRate(): number {
+/** De onde veio a cotação usada — o painel mostra isso para você saber se confia. */
+export type UsdBrlRate = {
+  /** Câmbio efetivo já com IOF + spread (é o que multiplica o custo). */
+  rate: number;
+  /** Cotação comercial pura, quando veio da API. */
+  spot: number | null;
+  source: "api" | "env" | "default";
+  /** Quando a cotação foi lida (ISO). */
+  fetchedAt: string | null;
+};
+
+/**
+ * Multiplicador sobre a cotação comercial para chegar ao que você REALMENTE paga
+ * num cartão brasileiro: **IOF de 3,38%** + spread do banco/emissor (2-4%).
+ * Sem isso o painel subestimaria o custo em ~7%. Ajustável por `AI_USD_SPREAD`.
+ *
+ * O número exato está na sua fatura: divida o valor lançado em R$ pelo valor em
+ * US$ da cobrança da OpenAI e compare com a cotação do dia.
+ */
+function spreadMultiplier(): number {
+  const raw = Number(process.env.AI_USD_SPREAD);
+  return Number.isFinite(raw) && raw > 0 ? raw : 1.07;
+}
+
+/** Câmbio fixo do ambiente (`AI_USD_BRL`), usado como rede de segurança. */
+function envRate(): number | null {
   const raw = Number(process.env.AI_USD_BRL);
-  return Number.isFinite(raw) && raw > 0 ? raw : 5.5;
+  return Number.isFinite(raw) && raw > 0 ? raw : null;
+}
+
+/** Fallback síncrono — `AI_USD_BRL`, ou 5,50 se nem isso houver. */
+export function usdToBrlRate(): number {
+  return envRate() ?? 5.5;
+}
+
+/**
+ * Busca a cotação do dólar e devolve o câmbio **efetivo** (spot × IOF/spread).
+ *
+ * Usa a AwesomeAPI (gratuita, sem chave, cotação comercial do BC). O resultado é
+ * cacheado por 6h pelo `fetch` do Next — o painel do admin não pode depender de
+ * uma chamada externa a cada render, e a cotação não muda o suficiente para
+ * justificar mais frequência.
+ *
+ * **Nunca lança:** timeout de 4s e, em qualquer falha, cai no `AI_USD_BRL` (e daí
+ * no 5,50). Custo de IA é informativo — não vale derrubar o `/admin` por causa
+ * de uma API de câmbio fora do ar. O `source` no retorno diz o que aconteceu.
+ */
+export async function fetchUsdBrlRate(): Promise<UsdBrlRate> {
+  const fallback = (source: "env" | "default"): UsdBrlRate => ({
+    rate: usdToBrlRate(),
+    spot: null,
+    source,
+    fetchedAt: null,
+  });
+
+  try {
+    const res = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL", {
+      signal: AbortSignal.timeout(4000),
+      next: { revalidate: 21_600 }, // 6h
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = (await res.json()) as { USDBRL?: { bid?: string } };
+    const spot = Number(json?.USDBRL?.bid);
+    if (!Number.isFinite(spot) || spot <= 0) throw new Error("cotação inválida");
+    return {
+      rate: spot * spreadMultiplier(),
+      spot,
+      source: "api",
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch {
+    return fallback(envRate() !== null ? "env" : "default");
+  }
 }
 
 export type TokenUsage = {
@@ -67,9 +136,15 @@ export function costUsd(usage: TokenUsage): number {
   return (input * price.input + output * price.output) / 1_000_000;
 }
 
-/** Custo em REAIS de um gasto de tokens. */
-export function costBrl(usage: TokenUsage): number {
-  return costUsd(usage) * usdToBrlRate();
+/**
+ * Custo em REAIS de um gasto de tokens. O câmbio vem por parâmetro (e não de
+ * dentro) porque a cotação é buscada **uma vez** por render do painel e reusada
+ * em milhares de eventos — buscar por evento seria absurdo, e uma função
+ * assíncrona aqui contaminaria toda a agregação.
+ * Omitir o câmbio cai no `AI_USD_BRL`.
+ */
+export function costBrl(usage: TokenUsage, rate = usdToBrlRate()): number {
+  return costUsd(usage) * rate;
 }
 
 /** Formata um valor em reais (aceita centavos de fração, ex.: R$ 0,0834). */
