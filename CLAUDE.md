@@ -1725,6 +1725,27 @@ uma instância Evolution e uma config de IA por loja.
   piloto automático de atendimento. Como o mesmo `systemPrompt` é reusado, a persona se propaga para
   follow-up/pós-venda/carrinho abandonado; as instruções inline desses crons que ainda diziam "à
   disposição" foram trocadas por condução ativa.
+  - **Apresentar ANTES de mandar o link/catálogo (1ª vez da conversa):** uma linha curta com o que a
+    loja vende + a faixa de preço **real** (da lista de produtos do prompt) + o **pedido mínimo**
+    (interpolado do mesmo `minOrderText`), e só então o link, pedindo qual produto chamou atenção.
+    Link seco, sem contexto, faz o cliente sumir sem responder.
+  - **Gatilhos de venda amarrados a FATO, não a bravata:** o roteiro clássico de vendedor manda dizer
+    "tô com estoque limitado", "é o mais vendido", "a promoção acaba hoje" — **proibido aqui** (a
+    frase está no prompt como proibição explícita, senão o modelo cai nela sozinho). Os gatilhos
+    permitidos saem do que já está no prompt: **promoção** (preço de antes + quanto economiza),
+    **disponibilidade** (só quando a lista diz "sem estoque" ou a quantidade pedida não existe),
+    **benefício** (pela descrição do catálogo) e **urgência de processo** (fechar antes = separar
+    antes, sem citar prazo que a loja não informou). Quem responde pelo que a IA promete é o lojista.
+  - **Objeções ("tá caro" / "vou pensar" / "não conheço a loja" / "não tenho dinheiro agora"):** cada
+    uma com uma saída que acolhe e **volta a conduzir**, terminando em UMA pergunta. No "caro" a IA
+    não briga por preço (reforça benefício + formas de pagamento aceitas); no "não conheço" passa
+    segurança **com o que é real** (atendimento, pagamento, envio, retirada) e propõe um pedido menor
+    **respeitando o mínimo**; no "sem dinheiro" não insiste — pergunta para quando pretende comprar.
+  - No **atacado** (`saleMode`), a IA fala a língua do revendedor (giro, margem, recompra), mas **só
+    cita margem/lucro se o próprio cliente disser por quanto revende** — a loja não sabe o preço de
+    revenda dele.
+  - ⚠️ Tudo isso entra na parte **estática** do prompt (acima de "CONTEXTO DESTA CONVERSA"), para não
+    quebrar o cache por prefixo — ver a nota no fim do `buildSystemPrompt`.
 - **Saudar cliente salvo pelo nome:** `findCustomerName`
   ([whatsappConfig.ts](src/lib/whatsappConfig.ts)) busca o nome pelo telefone (compara normalizando
   ambos com `toWhatsAppNumber`, DDI 55), procurando **primeiro no contato salvo**
