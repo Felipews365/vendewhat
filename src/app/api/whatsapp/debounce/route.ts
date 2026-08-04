@@ -18,6 +18,14 @@ export const maxDuration = 60;
 // Tetos por execução (evita timeout) e idade máxima de um agendamento.
 const MAX_PER_RUN = 40;
 const MAX_AGE_MS = 60 * 60_000; // 1h: agendamentos mais velhos são descartados.
+/**
+ * Corte de tempo da execução: cada resposta gasta o "digitando…" humano dos
+ * balões (ver o ritmo em whatsappRespond.ts), então numa hora movimentada as
+ * conversas somam mais que os 60s do `maxDuration`. Ao passar deste ponto, o
+ * loop para e deixa o resto para o próximo minuto (quem não foi reservado
+ * continua vencido; quem foi reservado volta em 5 min pelo lock).
+ */
+const RUN_DEADLINE_MS = 45_000;
 
 /**
  * Cron do debounce: responde às conversas cujo tempo de silêncio já venceu,
@@ -40,9 +48,13 @@ async function run(req: Request) {
 
   const dueBeforeIso = new Date().toISOString();
   const due = await listDuePendingReplies(admin, MAX_PER_RUN);
+  const startedAt = Date.now();
   let sent = 0;
 
   for (const p of due) {
+    // Sem tempo de execução para mais uma conversa: para aqui (as que sobraram
+    // não foram reservadas, então o próximo minuto as pega).
+    if (Date.now() - startedAt > RUN_DEADLINE_MS) break;
     // Descarta agendamentos velhos demais (ex.: conversas abandonadas após queda do cron).
     if (p.createdAt && Date.now() - new Date(p.createdAt).getTime() > MAX_AGE_MS) {
       await deletePendingReply(admin, p.storeId, p.customerPhone);

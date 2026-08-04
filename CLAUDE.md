@@ -1931,10 +1931,22 @@ uma instância Evolution e uma config de IA por loja.
   `splitReplyIntoParts` (por **parágrafos** = linha em branco; parágrafo muito longo é dividido por
   **frases**, tetos de 300 chars; linhas com **link** ficam intactas) e envia **cada bloco como uma
   mensagem separada**, com um "digitando…" proporcional antes de cada uma
-  (`part.length * 45`, entre 1,2s e 5s) — cara de humano mandando aos poucos. A IA é instruída no
+  (`part.length * TYPING_MS_PER_CHAR`) — cara de humano mandando aos poucos. A IA é instruída no
   `buildSystemPrompt` a separar ideias por linha em branco (2 a 4 balões: saudação / resposta /
   link-fechamento). **Cada parte também vira uma linha `assistant` no histórico**, o que importa
   para a detecção de eco do handoff (ver abaixo).
+  - **Ritmo (constantes no topo de [whatsappRespond.ts](src/lib/whatsappRespond.ts)):** **70ms por
+    caractere**, entre **2,2s e 9s** por balão, mais um **respiro de 800ms** (`PAUSE_BETWEEN_MS`, um
+    `sleep` local) **entre** um balão e o outro. Os valores antigos (45ms, teto de 5s, sem respiro)
+    faziam os balões saírem praticamente juntos — a espera antes da 1ª resposta (o debounce) parecia
+    humana, mas o resto estourava de uma vez. Sem o respiro, o "digitando…" do próximo começa no
+    mesmo instante em que o anterior chega e a pausa some.
+  - **`TYPING_BUDGET_MS` (24s por resposta) + `RUN_DEADLINE_MS` (45s por execução do cron):** isso
+    tudo roda no [debounce](src/app/api/whatsapp/debounce/route.ts), que tem `maxDuration = 60` e
+    atende **várias conversas na mesma chamada**. O orçamento impede que uma resposta de 4 balões
+    longos coma a execução inteira (o último balão nunca fica sem tempo — piso de 900ms), e o
+    deadline faz o loop **parar de pegar conversas novas** perto do limite: as que sobraram **não
+    foram reservadas**, então o minuto seguinte as pega. Ao mexer no ritmo, refaça essa conta.
 - **Handoff × resposta em partes:** como a IA agora manda vários balões (cada um volta como `fromMe`
   no `MESSAGES_UPSERT`), o [webhook](src/app/api/whatsapp/webhook/route.ts) compara com as **últimas
   8** mensagens `assistant` (`getLastAssistantMessages`, era 3) para reconhecer os ecos e **não**

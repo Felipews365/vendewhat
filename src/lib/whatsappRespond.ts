@@ -47,6 +47,30 @@ type AnyObj = Record<string, unknown>;
 const SESSION_GAP_MS = 6 * 60 * 60 * 1000;
 
 /**
+ * Ritmo humano dos balões. A Evolution segura a mensagem mostrando "digitando…"
+ * pelo `delay` que mandamos, então é ele que dá o compasso: o cliente vê a IA
+ * digitando, não três balões estourando de uma vez.
+ *
+ * ~70ms por caractere é a velocidade de quem digita rápido no celular (o valor
+ * antigo, 45ms com teto de 5s, deixava tudo praticamente instantâneo). O
+ * `PAUSE_BETWEEN_MS` é o respiro entre um balão e outro — sem ele o "digitando…"
+ * do próximo começa no mesmo instante em que o anterior chega, e a pausa some.
+ *
+ * ⚠️ `TYPING_BUDGET_MS` existe porque isso tudo roda no cron do debounce
+ * (`maxDuration = 60`, várias conversas na mesma execução): sem teto, uma
+ * resposta de 4 balões longos comeria a execução inteira.
+ */
+const TYPING_MS_PER_CHAR = 70;
+const TYPING_MIN_MS = 2200;
+const TYPING_MAX_MS = 9000;
+const PAUSE_BETWEEN_MS = 800;
+const TYPING_BUDGET_MS = 24000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
  * Avisa o DONO da loja (no próprio WhatsApp conectado) quando os créditos de IA
  * estão acabando ou acabaram. Não lança: se o WhatsApp não estiver conectado, só
  * ignora. Nunca vai para o cliente — é uma mensagem interna para o lojista.
@@ -535,9 +559,19 @@ export async function respondToCustomer(
     // Cada balão é isolado num try/catch: se um falhar, os demais (e os anexos de
     // localização/foto/vídeo/catálogo abaixo) ainda saem, sem abortar a resposta.
     const parts = splitReplyIntoParts(finalText);
-    for (const part of parts) {
-      // "Digitando…" proporcional ao tamanho da parte (entre 1,2s e 5s).
-      const typingMs = Math.min(Math.max(part.length * 45, 1200), 5000);
+    let typingBudget = TYPING_BUDGET_MS;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      // "Digitando…" proporcional ao tamanho da parte, respeitando o orçamento
+      // total da resposta (o último balão nunca fica sem nenhum tempo).
+      const want = Math.min(
+        Math.max(part.length * TYPING_MS_PER_CHAR, TYPING_MIN_MS),
+        TYPING_MAX_MS
+      );
+      const typingMs = Math.max(Math.min(want, typingBudget), 900);
+      typingBudget = Math.max(0, typingBudget - typingMs);
+      // Respiro entre um balão e o outro (como quem manda, respira e continua).
+      if (i > 0) await sleep(PAUSE_BETWEEN_MS);
       try {
         await sendText(cfg.evolutionInstance, customerPhone, part, typingMs);
         await appendMessage(admin, cfg.storeId, customerPhone, "assistant", part);
