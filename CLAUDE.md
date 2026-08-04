@@ -432,10 +432,32 @@ cara de "quase pronto".
 - **Ordem manual dos produtos no catálogo (`storefront.productOrder: string[]`, JSONB — sem
   migration):** o lojista escolhe a ordem em que os produtos aparecem na loja, direto no canvas de
   **"Monte sua loja"** (seção **Produtos** do
-  [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)). Cada card ganhou setas
-  **◀ / ▶** (`moveProduct`) que trocam a posição e **salvam na hora** (via `onAutoSaveStorefront`,
-  igual às categorias/destaques); `preventDefault`/`stopPropagation` impedem que a seta abra a edição
-  do produto, e a 1ª/última ficam desabilitadas. `productOrder` guarda só os IDs que o lojista
+  [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx)). O lojista **arrasta a
+  foto** de um produto para cima de outro: o arrastado fica esmaecido, o alvo ganha anel na cor da
+  marca e, ao soltar, `swapProducts(from, to)` **TROCA os dois de lugar** (o de destino volta para a
+  vaga do arrastado; os demais não saem do lugar — decisão do dono, não é "encaixar empurrando a
+  fila") e **salva na hora** (via `onAutoSaveStorefront`, igual às categorias/destaques). Detalhes
+  que importam:
+  - **Pointer events** (`onPointerDown/Move/Up/Cancel` + `setPointerCapture`), então **mouse e toque
+    usam o mesmo caminho**. O alvo sai de `document.elementFromPoint` → `[data-product-slot]` (a
+    grade quebra em 2 ou 4 colunas, então contar índice por geometria seria frágil).
+  - **Mouse arrasta na hora (limiar de 6px); no toque é SEGURAR (`LONG_PRESS_MS` = 300ms).** A foto
+    ocupa quase todo o card: se o dedo arrastasse de cara, não daria mais para **rolar a página**
+    pela grade (mesma lição da bolinha de stories, resolvida por gesto em vez de área). Mexer o dedo
+    antes do tempo (>10px) = rolagem e cancela o arrasto; ao ativar, um `navigator.vibrate(10)` avisa.
+  - **`touch-action: none` NÃO serve aqui** (travaria a rolagem já no toque simples): o scroll é
+    barrado **só enquanto o arrasto está ativo**, por um listener `touchmove` **não passivo** no
+    `document` (um `useEffect` no mount) que dá `preventDefault` — a única forma de cancelar um gesto
+    em andamento. O espelho `dragActiveRef` existe porque esse listener nativo não vê o estado React.
+  - **O `<Link>` do card não pode abrir ao soltar:** `justDraggedRef` (com timeout de 400ms como rede
+    para o toque, onde às vezes **nenhum** clique vem) faz o `onClick` do card dar `preventDefault`.
+    Toque simples/clique continuam abrindo a edição do produto.
+  - **A posição corrente vive no `dragRef`**, que é o que o `pointerup` lê; o estado `drag` só existe
+    para pintar a prévia.
+  - **Selo ⠿** no canto da foto = afordância de "isso se move" **e** o caminho **acessível**: em
+    foco, **←/→** trocam com o vizinho (`moveProduct` → `swapProducts`). Substituiu as antigas setas
+    **◀ / ▶** clicáveis.
+  `productOrder` guarda só os IDs que o lojista
   ordenou (teto `MAX_PRODUCT_ORDER` = 500); produtos fora da lista caem no fim pela **ordem natural**
   (mais novo primeiro) — então **produto novo entra no fim** (o lojista o reposiciona), sem bagunçar
   a curadoria. O helper puro **`orderByIdList(list, order)`** (em

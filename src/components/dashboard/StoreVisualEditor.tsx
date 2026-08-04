@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -564,16 +570,18 @@ export function StoreVisualEditor({
   };
 
   /**
-   * Move um produto na ordem do catálogo (▲/▼) e SALVA na hora — igual às
-   * categorias. Grava a sequência de IDs visíveis na prévia em `productOrder`;
-   * IDs já ordenados que ficam além da prévia (loja com >32 produtos) são
-   * preservados no fim, para não perder a curadoria do que não coube na tela.
+   * TROCA os dois produtos de lugar (o arrastado vai para `to` e o que estava
+   * lá volta para `from` — os demais não saem do lugar) e SALVA na hora, igual
+   * às categorias. Grava a sequência de IDs visíveis na prévia em
+   * `productOrder`; IDs já ordenados que ficam além da prévia (loja com >32
+   * produtos) são preservados no fim, para não perder a curadoria do que não
+   * coube na tela.
    */
-  const moveProduct = (i: number, dir: -1 | 1) => {
-    const j = i + dir;
-    if (j < 0 || j >= productsInPreview.length) return;
+  const swapProducts = (from: number, to: number) => {
+    const n = productsInPreview.length;
+    if (from === to || from < 0 || to < 0 || from >= n || to >= n) return;
     const ids = productsInPreview.map((p) => p.id);
-    [ids[i], ids[j]] = [ids[j]!, ids[i]!];
+    [ids[from], ids[to]] = [ids[to]!, ids[from]!];
     const previewSet = new Set(ids);
     const tail = sf.productOrder.filter((id) => !previewSet.has(id));
     const nextSf: StorefrontSettings = {
@@ -582,6 +590,139 @@ export function StoreVisualEditor({
     };
     setSf(nextSf);
     onAutoSaveStorefront?.(nextSf);
+  };
+
+  /** Ajuste fino pelo teclado (←/→ na alça) — o caminho acessível do arrasto. */
+  const moveProduct = (i: number, dir: -1 | 1) => swapProducts(i, i + dir);
+
+  /**
+   * Arrastar para ordenar, pegando em QUALQUER ponto da foto do card (pointer
+   * events = mouse e toque no mesmo caminho). `drag` só existe para pintar a
+   * prévia; a posição corrente vive no ref, que é o que o `pointerup` lê.
+   *
+   * **Mouse** começa a arrastar já no 1º movimento (limiar de 6px). **No toque
+   * não dá para fazer o mesmo:** a foto ocupa quase todo o card e, se o dedo
+   * arrastasse de cara, o lojista não conseguiria mais rolar a página a partir
+   * da grade. Por isso o toque só vira arrasto depois de **segurar**
+   * (`LONG_PRESS_MS`) — o mesmo gesto de reordenar do celular; mexer o dedo
+   * antes disso é rolagem e cancela o arrasto.
+   */
+  const DRAG_THRESHOLD_PX = 6;
+  const LONG_PRESS_MS = 300;
+  /** Movimento antes do "segurar" = o lojista quer rolar, não arrastar. */
+  const TOUCH_SCROLL_PX = 10;
+  const [drag, setDrag] = useState<{ from: number; over: number } | null>(null);
+  const dragRef = useRef<{
+    from: number;
+    over: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+    isTouch: boolean;
+    timer: number | null;
+  } | null>(null);
+  /** Espelho do "arrastando" para o bloqueio de rolagem (listener nativo). */
+  const dragActiveRef = useRef(false);
+  /** Um arrasto acabou de terminar: o clique seguinte não abre o produto. */
+  const justDraggedRef = useRef(false);
+
+  /**
+   * `touch-action: none` no CSS travaria a rolagem já no toque simples, então o
+   * scroll é barrado só ENQUANTO o arrasto está ativo, por um `touchmove` não
+   * passivo (é a única forma de dar `preventDefault` no gesto em andamento).
+   */
+  useEffect(() => {
+    const block = (e: TouchEvent) => {
+      if (dragActiveRef.current) e.preventDefault();
+    };
+    document.addEventListener("touchmove", block, { passive: false });
+    return () => document.removeEventListener("touchmove", block);
+  }, []);
+
+  /** Índice do card sob o dedo/ponteiro (a grade quebra em 2 ou 4 colunas). */
+  const slotIndexFromPoint = (x: number, y: number): number | null => {
+    const el = document.elementFromPoint(x, y);
+    const slot = el?.closest<HTMLElement>("[data-product-slot]");
+    if (!slot) return null;
+    const i = Number(slot.dataset.productSlot);
+    return Number.isInteger(i) ? i : null;
+  };
+
+  const clearDragTimer = () => {
+    const t = dragRef.current?.timer;
+    if (t !== null && t !== undefined) window.clearTimeout(t);
+  };
+
+  const startProductDrag = (e: React.PointerEvent, index: number) => {
+    if (e.button !== 0) return;
+    const isTouch = e.pointerType !== "mouse";
+    e.currentTarget.setPointerCapture(e.pointerId);
+    // No mouse, impede o drag-and-drop nativo da imagem (que mataria o gesto);
+    // no toque NÃO se cancela nada aqui, senão a rolagem morreria junto.
+    if (!isTouch) e.preventDefault();
+    const d = {
+      from: index,
+      over: index,
+      startX: e.clientX,
+      startY: e.clientY,
+      active: false,
+      isTouch,
+      timer: null as number | null,
+    };
+    dragRef.current = d;
+    if (isTouch) {
+      d.timer = window.setTimeout(() => {
+        if (dragRef.current !== d) return;
+        d.active = true;
+        dragActiveRef.current = true;
+        navigator.vibrate?.(10);
+        setDrag({ from: d.from, over: d.over });
+      }, LONG_PRESS_MS);
+    }
+  };
+
+  const moveProductDrag = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const moved =
+      Math.abs(e.clientX - d.startX) + Math.abs(e.clientY - d.startY);
+    if (!d.active) {
+      // Toque: mexeu antes de segurar → é rolagem, desiste do arrasto.
+      if (d.isTouch) {
+        if (moved > TOUCH_SCROLL_PX) cancelProductDrag();
+        return;
+      }
+      if (moved < DRAG_THRESHOLD_PX) return;
+      d.active = true;
+      dragActiveRef.current = true;
+    }
+    const over = slotIndexFromPoint(e.clientX, e.clientY);
+    if (over !== null) d.over = over;
+    setDrag({ from: d.from, over: d.over });
+  };
+
+  const endProductDrag = () => {
+    const d = dragRef.current;
+    clearDragTimer();
+    dragRef.current = null;
+    dragActiveRef.current = false;
+    setDrag(null);
+    if (!d?.active) return;
+    // Segura o clique que o navegador dispara no fim do gesto (senão soltar o
+    // produto abriria a tela de edição dele). O timer é a rede de segurança
+    // para quando nenhum clique vem — o caso do toque.
+    justDraggedRef.current = true;
+    window.setTimeout(() => {
+      justDraggedRef.current = false;
+    }, 400);
+    swapProducts(d.from, d.over);
+  };
+
+  const cancelProductDrag = () => {
+    clearDragTimer();
+    dragRef.current = null;
+    dragActiveRef.current = false;
+    setDrag(null);
   };
 
   /* ---- Blocos de conteúdo (builder) — hoje só "Destaque com imagem + texto" ---- */
@@ -1389,7 +1530,7 @@ export function StoreVisualEditor({
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-bold text-slate-800">Produtos</span>
             <span className="text-[11px] text-slate-400">
-              Use ◀ ▶ para ordenar
+              Arraste a foto para trocar de lugar
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1402,25 +1543,51 @@ export function StoreVisualEditor({
                   (product.cardRatio ?? sf.productCardRatio) === "1:1"
                     ? "aspect-square"
                     : "aspect-[3/4]";
-                const isFirst = index === 0;
-                const isLast = index === productsInPreview.length - 1;
+                const isDragging = drag?.from === index;
+                const isDropTarget =
+                  drag !== null && drag.over === index && drag.from !== index;
                 return (
                   <Link
                     key={product.id}
                     href={href}
-                    className="relative rounded-xl border border-slate-200 bg-slate-50 p-2 hover:border-landing-primary/40 transition-colors text-center group"
+                    data-product-slot={index}
+                    onClick={(e) => {
+                      // Soltar o produto não pode abrir a edição dele.
+                      if (justDraggedRef.current) {
+                        justDraggedRef.current = false;
+                        e.preventDefault();
+                      }
+                    }}
+                    className={`relative rounded-xl border bg-slate-50 p-2 transition-colors text-center group ${
+                      isDragging
+                        ? "border-landing-primary opacity-60"
+                        : isDropTarget
+                          ? "border-landing-primary ring-2 ring-landing-primary/40"
+                          : "border-slate-200 hover:border-landing-primary/40"
+                    }`}
                   >
                     <div className="absolute top-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-landing-primary text-white text-sm font-light shadow ring-1 ring-white pointer-events-none">
                       +
                     </div>
+                    {/* A FOTO INTEIRA é a área de arrasto (alvo grande no
+                        celular). `-webkit-touch-callout` + `onContextMenu`
+                        seguram o menu de "salvar imagem" no segurar do dedo. */}
                     <div
-                      className={`relative ${ratioClass} rounded-lg bg-slate-200/90 overflow-hidden mb-1.5`}
+                      onPointerDown={(e) => startProductDrag(e, index)}
+                      onPointerMove={moveProductDrag}
+                      onPointerUp={endProductDrag}
+                      onPointerCancel={cancelProductDrag}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className={`relative ${ratioClass} rounded-lg bg-slate-200/90 overflow-hidden mb-1.5 select-none [-webkit-touch-callout:none] ${
+                        isDragging ? "cursor-grabbing" : "cursor-grab"
+                      }`}
                     >
                       {product.imageUrl ? (
                         <Image
                           src={product.imageUrl}
                           alt=""
                           fill
+                          draggable={false}
                           className="object-cover"
                           sizes="(max-width: 640px) 45vw, 180px"
                         />
@@ -1431,38 +1598,27 @@ export function StoreVisualEditor({
                           </span>
                         </div>
                       )}
-                      {/* Setas de ordem (▲/▼ do projeto, aqui ◀/▶ por ser grade).
-                          preventDefault/stopPropagation p/ não abrir a edição. */}
-                      <div className="absolute bottom-1 left-1 z-10 flex gap-1">
-                        <button
-                          type="button"
-                          aria-label="Mover para antes"
-                          title="Mover para antes"
-                          disabled={isFirst}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            moveProduct(index, -1);
-                          }}
-                          className="flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-slate-700 text-xs shadow ring-1 ring-slate-200 transition hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-landing-primary"
-                        >
-                          ◀
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Mover para depois"
-                          title="Mover para depois"
-                          disabled={isLast}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            moveProduct(index, 1);
-                          }}
-                          className="flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-slate-700 text-xs shadow ring-1 ring-slate-200 transition hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-landing-primary"
-                        >
-                          ▶
-                        </button>
-                      </div>
+                      {/* Selo ⠿: mostra que o card se move (o arrasto em si é
+                          na foto toda) e dá o caminho ACESSÍVEL — em foco,
+                          ←/→ trocam com o produto vizinho. */}
+                      <button
+                        type="button"
+                        aria-label={`Mudar a posição de ${product.name}: arraste a foto, ou use as setas ← e → do teclado`}
+                        title="Arraste a foto para trocar de lugar"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight")
+                            return;
+                          e.preventDefault();
+                          moveProduct(index, e.key === "ArrowLeft" ? -1 : 1);
+                        }}
+                        className="absolute bottom-1 left-1 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-slate-600 text-xs leading-none shadow ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-800 select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-landing-primary"
+                      >
+                        ⠿
+                      </button>
                     </div>
                     <p className="text-[10px] text-slate-700 font-medium truncate">
                       {product.name}
