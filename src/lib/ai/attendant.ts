@@ -713,12 +713,9 @@ export async function generateFollowupReply(
       {
         role: "system",
         content: [
-          "O cliente parou de responder. Envie UMA mensagem curta seguindo EXATAMENTE este modelo:",
-          '"[Nome], só uma dúvida rápida: ficou alguma pendência sobre o catálogo ou sobre os valores? Às vezes o pessoal tem dúvida sobre [benefício principal do produto] e eu te explico rapidinho!"',
-          "Como preencher:",
-          "- [Nome]: o primeiro nome do cliente, se você souber. Se não souber, comece a frase sem o nome (nunca escreva \"[Nome]\" nem invente um).",
-          "- [benefício principal do produto]: um benefício REAL do produto que o cliente demonstrou interesse (tecido, caimento, tamanhos, prazo de entrega, forma de pagamento...), tirado da conversa ou da lista de produtos. Nunca invente característica que não está ali. Sem produto claro na conversa, fale das dúvidas sobre o catálogo/valores mesmo.",
-          "Regras: uma mensagem só, um parágrafo, sem saudação (\"oi\", \"bom dia\"), sem link, sem emoji além do que o modelo pede, sem repetir a apresentação e sem encerramento passivo (\"se quiser, é só avisar\").",
+          "O cliente parou de responder. Envie EXATAMENTE esta mensagem, sem mudar nem uma palavra:",
+          '"Gostou de algum modelo específico? Me fala qual e quantos você quer que já te preparo o pedido!"',
+          "Não acrescente nada antes nem depois: sem nome, sem saudação, sem emoji, sem link, sem segunda frase e sem encerramento passivo (\"se quiser, é só avisar\").",
         ].join("\n"),
       },
     ],

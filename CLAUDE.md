@@ -2489,12 +2489,13 @@ tempo é por loja. **Migration:** rode
 - **Configuração:** no painel (aba Atendente de IA), o lojista escolhe o tempo de silêncio
   (30min/1h/2h/3h/6h/1 dia) e, opcionalmente, uma **mensagem fixa**; vazio = a IA gera com base na
   conversa (`generateFollowupReply` em [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts)).
-  - **A mensagem gerada segue um modelo fixo:** `"[Nome], só uma dúvida rápida: ficou alguma
-    pendência sobre o catálogo ou sobre os valores? Às vezes o pessoal tem dúvida sobre [benefício
-    principal do produto] e eu te explico rapidinho!"` — o `[benefício]` sai da conversa/lista de
-    produtos (proibido inventar) e, sem nome salvo, a frase começa sem ele. **Sem link, sem
-    saudação, um parágrafo só:** a instrução antiga pedia "mande o link se ajudar" e rendia um
-    `"Estou aqui! 😊 …"` seguido do balão do catálogo, repetindo o que o cliente já tinha recebido.
+  - **A mensagem gerada é uma FRASE FIXA, palavra por palavra:** `"Gostou de algum modelo
+    específico? Me fala qual e quantos você quer que já te preparo o pedido!"` — o prompt proíbe
+    acrescentar nome, saudação, emoji, link, segunda frase ou encerramento passivo. Substituiu o
+    modelo anterior com placeholders (`[Nome]` + `[benefício principal do produto]`), que soava
+    passivo e ainda deixava o modelo enfeitar a frase. **Sem link, sem saudação, um parágrafo só:**
+    a instrução mais antiga pedia "mande o link se ajudar" e rendia um `"Estou aqui! 😊 …"` seguido
+    do balão do catálogo, repetindo o que o cliente já tinha recebido.
 - **Cron:** um workflow do **n8n** (self-hosted no mesmo VPS da Evolution/debounce) faz um
   `GET /api/whatsapp/followups?key=<CRON_SECRET>` a cada **~5 min** (nó *Schedule Trigger* →
   *HTTP Request*). O endpoint
