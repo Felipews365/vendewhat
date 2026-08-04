@@ -734,8 +734,8 @@ export function defaultPostsaleMessage(
 ): string {
   const nome = firstName(customerName);
   const ola = nome ? `Oi, ${nome}!` : "Oi!";
-  const pedido = orderNumber ? ` (pedido #${orderNumber})` : "";
-  return `${ola} Aqui é da ${storeName} 😊 Passando para saber se o seu pedido${pedido} chegou certinho e se está tudo bem. Qualquer coisa, é só me chamar!`;
+  const pedido = orderNumber ? ` (#${orderNumber})` : "";
+  return `${ola} 😊 Aqui é da ${storeName}. Queria saber se seu pedido${pedido} chegou certinho.`;
 }
 
 /**
@@ -760,8 +760,10 @@ export async function generatePostsaleReply(
           `O cliente${nome ? ` (${nome})` : ""} fez um pedido${
             orderNumber ? ` (#${orderNumber})` : ""
           } há alguns dias e já deve tê-lo recebido.`,
-          "Envie UMA mensagem curta, gentil e natural perguntando se o pedido chegou certinho e se está tudo bem com ele.",
-          "Se algo não estiver certo, diga com firmeza que você resolve rápido para ele. Não tente empurrar novos produtos nem repita uma saudação de primeiro contato.",
+          `Envie UMA mensagem curtíssima, gentil e natural, apenas perguntando se o pedido chegou certinho, EXATAMENTE neste tamanho e formato: "Oi${
+            nome ? `, ${nome}` : ""
+          }! 😊 Queria saber se seu pedido chegou certinho."`,
+          "Uma linha só. NÃO acrescente nada depois da pergunta: nada de \"se algo não estiver certo, me avisa\", \"tudo bem com você?\", \"qualquer coisa é só chamar\", oferta de produto novo ou saudação de primeiro contato. Se ele responder que houve algum problema, aí sim você resolve na conversa.",
         ].join(" "),
       },
     ],
