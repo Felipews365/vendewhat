@@ -217,7 +217,7 @@ export function buildSystemPrompt(args: {
       ? ""
       : `NUNCA pergunte se o cliente quer o catálogo ("quer que eu mande?", "prefere ver alguma categoria específica ou o catálogo?") — perguntar só atrasa a venda. ANUNCIE e mande, assim: "${
           hasCatalogPdf
-            ? "Já vou te enviar o catálogo completo! Vou mandar o link do nosso site e também em PDF caso prefira. Assim você vê todas as opções e me diz o que achou!"
+            ? `Já vou te enviar o catálogo completo! Vou mandar o link do site da ${storeName} e também em PDF caso prefira. Assim você vê todas as opções e me diz o que achou!`
             : "Já vou te enviar o catálogo completo! Assim você vê todas as opções e me diz o que achou!"
         }", e mande o link em seguida.${
           hasCatalogPdf
