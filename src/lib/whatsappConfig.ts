@@ -945,7 +945,16 @@ export async function getConversationTimes(
   return map;
 }
 
-export type ChatTurn = { role: "user" | "assistant"; content: string };
+export type ChatTurn = {
+  role: "user" | "assistant";
+  content: string;
+  /**
+   * Quando a mensagem entrou (ISO). Serve para saber se o cliente está voltando
+   * depois de horas parado — aí a IA cumprimenta e se apresenta de novo. Só o
+   * `role`/`content` vão para a OpenAI.
+   */
+  createdAt?: string;
+};
 
 /** Histórico recente (ordem cronológica) de uma conversa com um cliente. */
 export async function getRecentHistory(
@@ -956,17 +965,22 @@ export async function getRecentHistory(
 ): Promise<ChatTurn[]> {
   const { data } = await db
     .from("whatsapp_messages")
-    .select("role, content")
+    .select("role, content, created_at")
     .eq("store_id", storeId)
     .eq("customer_phone", customerPhone)
     .order("created_at", { ascending: false })
     .limit(limit);
-  const rows = (data ?? []) as { role: string; content: string }[];
+  const rows = (data ?? []) as {
+    role: string;
+    content: string;
+    created_at?: string;
+  }[];
   return rows
     .reverse()
     .map((r) => ({
       role: r.role === "assistant" ? "assistant" : "user",
       content: String(r.content ?? ""),
+      createdAt: typeof r.created_at === "string" ? r.created_at : "",
     }));
 }
 

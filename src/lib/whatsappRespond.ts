@@ -39,6 +39,14 @@ import {
 type AnyObj = Record<string, unknown>;
 
 /**
+ * Silêncio a partir do qual a próxima mensagem do cliente conta como uma
+ * conversa NOVA: a IA cumprimenta e se apresenta outra vez (nome + loja). 6h
+ * cobre o caso comum (falou de manhã, voltou à noite / no dia seguinte) sem
+ * reapresentar no meio de um atendimento que só deu uma pausa para o café.
+ */
+const SESSION_GAP_MS = 6 * 60 * 60 * 1000;
+
+/**
  * Avisa o DONO da loja (no próprio WhatsApp conectado) quando os créditos de IA
  * estão acabando ou acabaram. Não lança: se o WhatsApp não estiver conectado, só
  * ignora. Nunca vai para o cliente — é uma mensagem interna para o lojista.
@@ -374,6 +382,17 @@ export async function respondToCustomer(
   if (!combinedUserText) return false; // nada do cliente para responder
   // Primeiro contato = a IA ainda não falou nada nesta conversa.
   const isFirstContact = !full.some((t) => t.role === "assistant");
+  // Cliente que VOLTA depois de horas parado abre uma conversa nova na cabeça
+  // dele — a IA cumprimenta e se apresenta de novo (nome + loja). Sem isso, quem
+  // já falou com a loja uma vez nunca mais ouvia quem está atendendo.
+  const lastBeforeBatch = splitIdx > 0 ? full[splitIdx - 1] : null;
+  const lastAt = lastBeforeBatch?.createdAt
+    ? Date.parse(lastBeforeBatch.createdAt)
+    : NaN;
+  const conversationRestart =
+    !isFirstContact &&
+    Number.isFinite(lastAt) &&
+    Date.now() - lastAt > SESSION_GAP_MS;
   // Nome salvo (cliente que já comprou antes) — a IA saúda pelo primeiro nome.
   const customerName = await findCustomerName(admin, cfg.storeId, customerPhone);
   // Cliente pediu o catálogo de forma explícita? Serve de gatilho determinístico
@@ -405,6 +424,7 @@ export async function respondToCustomer(
     products,
     baseUrl,
     isFirstContact,
+    conversationRestart,
     storeAddress,
     onlineOnly,
     onlineCity: onlineOnly ? sf.onlineCity : "",

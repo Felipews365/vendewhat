@@ -13,6 +13,7 @@ import { formatBrlCost } from "@/lib/aiPricing";
 import ClientForm from "./ClientForm";
 import AiCreditsCard from "./AiCreditsCard";
 import VerificationCard from "./VerificationCard";
+import ResetConversationCard from "./ResetConversationCard";
 
 export const dynamic = "force-dynamic";
 
@@ -204,6 +205,8 @@ export default async function AdminClientePage({
           usedConversations={Math.floor(credits.usedTokens / TOKENS_PER_CONVERSATION)}
         />
       )}
+
+      <ResetConversationCard storeId={store.id} />
 
       <StoreAiUsage usage={aiUsage} />
 

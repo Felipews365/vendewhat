@@ -1783,6 +1783,18 @@ uma instância Evolution e uma config de IA por loja.
   primeiro contato quando **a IA ainda não falou** na conversa (`!full.some(t => t.role ===
   "assistant")`, robusto ao agrupamento de mensagens) e passa `isFirstContact` para
   `buildSystemPrompt` em [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts).
+  - **Cliente que VOLTA depois de horas também é cumprimentado de novo
+    (`conversationRestart`):** "primeiro contato" é *para sempre* (basta a IA ter falado uma vez e
+    ninguém mais ouve quem está atendendo), então quem sumiu por mais de **6h**
+    (`SESSION_GAP_MS` em [whatsappRespond.ts](src/lib/whatsappRespond.ts)) abre uma **conversa nova**:
+    a IA cumprimenta, repete **nome + loja** de forma curta e, se souber, chama **pelo nome**. O
+    cálculo compara `Date.now()` com o `createdAt` da **última mensagem antes do lote** — por isso
+    `ChatTurn`/`getRecentHistory` ([whatsappConfig.ts](src/lib/whatsappConfig.ts)) passaram a trazer
+    `createdAt` (só `role`/`content` vão para a OpenAI). Fica no bloco final do prompt junto do
+    `isFirstContact`/`custFirst` (é estado da conversa — ver a nota do cache por prefixo).
+  - **Responder o que o cliente falou ANTES de perguntar:** regra estática no `buildSystemPrompt`
+    (a IA respondia "bom dia" e emendava direto na pergunta de qualificação, ignorando o que o
+    cliente disse). Primeiro a resposta útil, depois UMA pergunta que avance a venda.
 - **Envio do link da loja (URL pura, padrão de 3 partes):** o `buildSystemPrompt` instrui a IA a
   mandar o link como **URL pura numa linha só** (nunca markdown `[texto](url)`, que o WhatsApp quebra)
   e num padrão acolhedor de 3 blocos — abertura + link isolado + frase de apoio (ex.: "Claro! 😊
@@ -2514,6 +2526,18 @@ mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.
     (produto Assinaturas) num token dedicado, `MP_SUBSCRIPTION_ACCESS_TOKEN` (ver "Pagamentos"). Os
     dois convivem: `platformAccessToken()` para créditos, `subscriptionAccessToken()` para
     mensalidade.
+- **Zerar a conversa de um cliente (teste da IA, só admin):** card **"Testar a IA — zerar conversa"**
+  ([ResetConversationCard.tsx](src/app/admin/(panel)/clientes/[storeId]/ResetConversationCard.tsx)) na
+  página do cliente — o dono do SaaS digita o telefone e apaga o histórico daquele número **naquela
+  loja**, para o próximo "oi" cair de novo no **primeiro contato** (a IA se apresenta do zero). A rota
+  [/api/admin/reset-conversation](src/app/api/admin/reset-conversation/route.ts) (`requireAdmin` +
+  service role) limpa `whatsapp_messages`, `whatsapp_pending_replies`, `whatsapp_pauses`,
+  `whatsapp_followups`, `whatsapp_abandoned_carts` e `whatsapp_conversation_tags` — tabela ausente
+  não derruba o resto (entra em `skipped`). O casamento é pelos **8 últimos dígitos** (`like
+  '%tail'`), pois o mesmo cliente aparece com/sem DDI 55 e com/sem o 9 do celular. A caixinha
+  **"Esquecer o nome salvo"** também apaga `whatsapp_contacts` (para testar o caminho de cliente
+  novo); **pedidos não são tocados**, então quem já comprou continua sendo chamado pelo nome via
+  `orders`. Sem migration.
 - **Crédito manual (só admin do SaaS):** card **"Créditos da IA"**
   ([AiCreditsCard.tsx](src/app/admin/(panel)/clientes/[storeId]/AiCreditsCard.tsx)) na página do cliente
   [/admin/clientes/[storeId]](src/app/admin/(panel)/clientes/[storeId]/page.tsx) — vê o saldo e credita

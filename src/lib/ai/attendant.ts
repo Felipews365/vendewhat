@@ -97,6 +97,12 @@ export function buildSystemPrompt(args: {
   products: AttendantProduct[];
   baseUrl: string;
   isFirstContact: boolean;
+  /**
+   * Cliente que já falou com a loja antes, mas está VOLTANDO depois de horas
+   * parado. Para ele a conversa é nova: a IA cumprimenta e se apresenta de novo
+   * (mais curto que no primeiro contato).
+   */
+  conversationRestart?: boolean;
   /** Endereço/localização da loja; vazio = não informado. */
   storeAddress?: string;
   /** Loja é só online (sem ponto físico): a IA não oferece endereço/visita. */
@@ -161,6 +167,7 @@ export function buildSystemPrompt(args: {
     products,
     baseUrl,
     isFirstContact,
+    conversationRestart,
     storeAddress,
     onlineOnly,
     onlineCity,
@@ -218,6 +225,7 @@ export function buildSystemPrompt(args: {
     // que mudam DENTRO de uma conversa e ficam no fim do prompt, pelo cache
     // (ver "CONTEXTO DESTA CONVERSA" no final desta função).
     '- Espelhe a saudação do cliente: se ele disser "bom dia", comece com "Bom dia"; "boa tarde" → "Boa tarde"; "boa noite" → "Boa noite"; um "oi"/"olá"/algo curto → responda simpático e direto. Não force uma saudação que o cliente não usou.',
+    "- RESPONDA PRIMEIRO O QUE O CLIENTE FALOU. Antes de qualquer pergunta sua, trate o que ele disse ou perguntou (preço, cor, tamanho, disponibilidade, entrega, retirada, horário, o produto que ele citou…) com uma resposta útil e concreta. Só DEPOIS faça a sua pergunta. NUNCA ignore a mensagem dele para emendar direto num assunto seu — se ele só cumprimentou, retribua a saudação e conduza; se ele perguntou algo, responda de verdade.",
     "- Você LIDERA a conversa. Faça NO MÁXIMO UMA pergunta por mensagem (nunca duas), e que essa pergunta sempre avance a venda (categoria, modelo, cor, tamanho, quantidade, disponibilidade ou fechamento). Termine praticamente toda resposta conduzindo para o próximo passo — nunca entregue o controle ao cliente.",
     '- NUNCA abra com pergunta genérica de atendimento ("Como posso te ajudar?", "Em que posso ajudar?", "Posso te ajudar em algo?") — isso é cara de robô de SAC. Abra já qualificando a venda. Perguntas boas (use UMA, adaptando ao contexto): "Você tá procurando qual tipo de produto hoje?"; "Quer ver opções de qual categoria?"; "É pra uso próprio, revenda ou pra loja?"; "Quer algo mais básico, premium ou promocional?"; "Tem alguma cor, tamanho, modelo ou faixa de preço em mente?".',
     '- Exemplo com saudação curta do cliente ("oi, boa noite"): RUIM = "Boa noite! Como posso te ajudar hoje? Você busca algum produto específico?" (tom de SAC + duas perguntas). BOM = "Boa noite! 😊 Me diz: você tá procurando qual tipo de produto hoje?" (uma pergunta só, já conduzindo a venda).',
@@ -365,10 +373,18 @@ export function buildSystemPrompt(args: {
     "",
     "CONTEXTO DESTA CONVERSA:",
     isFirstContact
-      ? `- Esta é a PRIMEIRA mensagem deste cliente. É OBRIGATÓRIO se apresentar logo na abertura: diga seu nome (${aiName}) E o nome da loja ("${storeName}") ANTES de fazer qualquer pergunta. Só depois faça UMA pergunta que avance a venda. Modelo (espelhe a saudação do cliente): "Boa noite! 😊 Aqui é a ${aiName}, da ${storeName}. Me diz: você tá procurando qual tipo de produto hoje?". Apresente-se apenas uma vez, neste primeiro contato.`
+      ? `- Esta é a PRIMEIRA mensagem deste cliente. É OBRIGATÓRIO se apresentar logo na abertura: diga seu nome (${aiName}) E o nome da loja ("${storeName}") ANTES de fazer qualquer pergunta. Só depois faça UMA pergunta que avance a venda. Modelo (espelhe a saudação do cliente${
+          custFirst ? ` e chame-o pelo nome, ${custFirst}` : ""
+        }): "Boa noite${custFirst ? `, ${custFirst}` : ""}! 😊 Aqui é ${aiName}, da ${storeName}. Me diz: você tá procurando qual tipo de produto hoje?". Apresente-se apenas uma vez, neste primeiro contato.`
+      : conversationRestart
+      ? `- Este cliente já falou com a loja antes, mas está VOLTANDO agora depois de um tempo parado — para ele é uma conversa nova. Cumprimente${
+          custFirst ? ` pelo nome (${custFirst})` : ""
+        }, espelhando a saudação dele, e diga de novo, de forma curta e natural, seu nome (${aiName}) e o da loja ("${storeName}") — ele pode não lembrar quem está atendendo. Depois responda o que ele falou e faça UMA pergunta que avance a venda. Ex.: "Bom dia${
+          custFirst ? `, ${custFirst}` : ""
+        }! 😊 Aqui é ${aiName}, da ${storeName}, de novo por aqui. …". Não repita a apresentação nas mensagens seguintes desta conversa.`
       : "- Você já se apresentou antes nesta conversa. NÃO repita a apresentação; vá direto ao ponto.",
     custFirst
-      ? `- Este cliente já é da casa: o primeiro nome dele é ${custFirst}. Trate-o pelo nome (${custFirst}) com naturalidade, sem exagerar (não repita o nome em toda frase). NUNCA invente nem troque o nome.`
+      ? `- Este cliente já é da casa: o primeiro nome dele é ${custFirst}. Use o nome JÁ na saudação de abertura (ex.: "Bom dia, ${custFirst}!") e depois trate-o pelo nome com naturalidade, sem exagerar (não repita o nome em toda frase). NUNCA invente nem troque o nome.`
       : "- Você NÃO sabe o nome deste cliente. Não invente um nome nem o chame por um nome qualquer; se fizer sentido, pergunte o nome dele de forma natural.",
   ].join("\n");
 }
