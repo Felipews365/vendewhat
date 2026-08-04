@@ -26,6 +26,7 @@ import type { OrderLineInput } from "@/lib/orderLines";
 import {
   type AiOrderDraft,
   type AttendantProduct,
+  STORE_LINK_LABEL,
   buildSystemPrompt,
   generateReply,
   parseReplyDirectives,
@@ -606,7 +607,7 @@ export async function respondToCustomer(
   const mentionsLink = /\b(link|cat[aá]logo)\b/i.test(finalText);
   const hasUrl = /https?:\/\//i.test(finalText);
   if (finalText && baseUrl && (mentionsLink || sendCatalog || customerWantsCatalog) && !hasUrl) {
-    finalText = `${finalText}\n\n${storeUrl}`;
+    finalText = `${finalText}\n\n${STORE_LINK_LABEL}\n${storeUrl}`;
   }
   // Rede de segurança do grupo: se o cliente pediu o grupo e o link ainda não está
   // na resposta, anexa a URL do grupo como bloco próprio (vira um balão clicável).

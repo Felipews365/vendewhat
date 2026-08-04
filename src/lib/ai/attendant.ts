@@ -9,6 +9,13 @@ import OpenAI, { toFile } from "openai";
 import type { ChatTurn } from "@/lib/whatsappConfig";
 import { DEFAULT_OFFLINE_MESSAGE } from "@/lib/storefront";
 
+/**
+ * Chamada que vai na linha logo ACIMA da URL da loja (mesmo balão), para o
+ * cliente entender que aquilo é clicável. Usada no prompt e na rede de
+ * segurança do link em `whatsappRespond.ts` — fonte única.
+ */
+export const STORE_LINK_LABEL = "Nosso site 👇 clica aqui";
+
 export type AttendantProduct = {
   name: string;
   price: number;
@@ -225,6 +232,7 @@ export function buildSystemPrompt(args: {
             : ""
         }`,
     `Ao mandar o link, cole a URL pura numa linha só para ela, exatamente assim: ${storeUrl} — NUNCA use markdown nem o formato [texto](url) (o WhatsApp mostra isso quebrado). Nada de colchetes, "[CATÁLOGO ONLINE]" ou link com texto por cima; só o endereço mesmo.`,
+    `SEMPRE escreva a linha "${STORE_LINK_LABEL}" imediatamente ACIMA da URL, sem nenhuma linha em branco entre as duas (as duas ficam no mesmo balão). Escreva essa chamada exatamente assim, sem mudar as palavras nem o emoji.`,
     "",
     "Regras:",
     storeOffline
@@ -249,7 +257,7 @@ export function buildSystemPrompt(args: {
     "- Seja objetivo: respostas curtas, próprias para WhatsApp.",
     "- Converse como no WhatsApp de verdade: separe ideias diferentes em mensagens curtas, deixando UMA LINHA EM BRANCO entre elas (o sistema envia cada bloco como um balão separado, com 'digitando…' antes, como uma pessoa mandando aos poucos). Ex.: a saudação num bloco, a resposta em outro, o link/fechamento em outro. Não junte tudo num parágrafo gigante nem exagere em muitos balões (2 a 4 no máximo).",
     "- Escreva como um atendente humano de verdade: natural, caloroso, frases curtas e no máximo um emoji. NÃO use markdown (nada de **, ##, listas com [colchetes] ou links [texto](url)). Se precisar destacar algo, use *um asterisco só* para negrito, do jeito do WhatsApp.",
-    `- Ao mandar o link, use um tom acolhedor, a URL numa linha só para ela e uma frase de apoio no final (numa linha separada). Siga EXATAMENTE este padrão de 3 partes (varie um pouco as palavras, mas mantenha a estrutura: abertura + link isolado + frase final):\nClaro! 😊 Segue o link da loja para você conferir nossos produtos já com valores:\n${storeUrl}\n\nDá uma olhada e me diz qual chamou mais sua atenção que eu já te ajudo a fechar!`,
+    `- Ao mandar o link, use um tom acolhedor, a URL numa linha só para ela (com a chamada "${STORE_LINK_LABEL}" logo acima) e uma frase de apoio no final (numa linha separada). Siga EXATAMENTE este padrão de 3 partes (varie um pouco as palavras da abertura e da frase final, mas mantenha a estrutura — abertura + chamada com o link + frase final — e a chamada colada acima da URL):\nClaro! 😊 Segue o link da loja para você conferir nossos produtos já com valores:\n\n${STORE_LINK_LABEL}\n${storeUrl}\n\nDá uma olhada e me diz qual chamou mais sua atenção que eu já te ajudo a fechar!`,
     `- APRESENTE ANTES DE MANDAR O LINK/CATÁLOGO (só na primeira vez desta conversa): numa linha curta, diga o que a loja vende e a partir de quanto (use a faixa de preço REAL da lista de produtos abaixo)${
       minOrderText ? `, e informe o pedido mínimo (${minOrderText})` : ""
     }. Cliente que recebe só o link, sem contexto nenhum, some sem responder. Logo depois do link, peça que ele diga qual produto chamou mais atenção.`,

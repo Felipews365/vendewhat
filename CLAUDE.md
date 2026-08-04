@@ -1906,12 +1906,18 @@ uma instância Evolution e uma config de IA por loja.
   Segue o link…" / URL / "Dá uma olhada com calma…"). Combinado com a resposta em partes, cada bloco
   vira um balão; o balão do link ganha a **prévia rica** (card de Open Graph) que o WhatsApp gera da
   página `/loja/[slug]`.
+  - **Chamada colada acima da URL (`STORE_LINK_LABEL` = "Nosso site 👇 clica aqui"):** constante
+    exportada por [attendant.ts](src/lib/ai/attendant.ts) (fonte única) que o prompt manda escrever
+    **na linha imediatamente acima do link, sem linha em branco entre as duas** — assim chamada e URL
+    ficam **no mesmo balão** (o `splitReplyIntoParts` quebra por linha em branco) e o cliente entende
+    que aquilo é clicável. A mesma constante é usada pela **rede de segurança** abaixo, então o
+    formato não depende de o modelo lembrar. O texto acima da URL **não atrapalha** a prévia rica.
 - **Rede de segurança do link (determinística, não depende do modelo):** o gpt-4o-mini às vezes
   ANUNCIA o link ("segue o link", "confira o catálogo") mas **esquece de colar a URL** — o cliente
   recebia só a promessa. Em `respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)),
   se o texto menciona `link`/`catálogo` (ou o cliente pediu o catálogo, ou a IA emitiu
   `[[ENVIAR_CATALOGO]]`) e **não há nenhuma URL** no texto, o sistema **anexa a `storeUrl`** como bloco
-  próprio (vira um balão com prévia rica). O loop que envia os balões é isolado em `try/catch`: se um
+  próprio (com o `STORE_LINK_LABEL` na linha de cima; vira um balão com prévia rica). O loop que envia os balões é isolado em `try/catch`: se um
   balão falha, os demais e os anexos (localização/foto/vídeo/catálogo) ainda saem. A `baseUrl` cai no
   `VERCEL_URL` quando `APP_BASE_URL` está vazio (o cron não tem request, então não pode ler o host —
   evita montar link relativo quebrado); reaproveitada no prompt e no QR do PDF.
