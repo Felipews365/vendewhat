@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { getConfig, updateConnection } from "@/lib/whatsappConfig";
-import { getConnectionState, isEvolutionConfigured } from "@/lib/evolution";
+import {
+  ensureInstanceSettings,
+  getConnectionState,
+  isEvolutionConfigured,
+} from "@/lib/evolution";
 
 export const runtime = "nodejs";
 
@@ -35,6 +39,12 @@ export async function GET() {
   if (admin && isEvolutionConfigured()) {
     try {
       const info = await getConnectionState(cfg.evolutionInstance);
+      // Auto-conserto das lojas que já estavam conectadas antes do `alwaysOnline`
+      // (é ele que faz o "digitando…" aparecer). Roda uma vez por instância neste
+      // processo e nunca lança.
+      if (info.state === "connected") {
+        await ensureInstanceSettings(cfg.evolutionInstance);
+      }
       if (info.state !== cfg.connectionStatus || info.number) {
         await updateConnection(
           admin,

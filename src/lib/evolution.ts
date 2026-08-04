@@ -130,6 +130,44 @@ export async function createInstance(
     }
   }
   await setWebhook(instance, webhookUrl);
+  await ensureInstanceSettings(instance);
+}
+
+/** Instâncias que já tiveram as settings aplicadas neste processo (evita repetir). */
+const settingsApplied = new Set<string>();
+
+/**
+ * Garante as settings da instância — hoje só o que importa: **`alwaysOnline`**.
+ *
+ * ⚠️ É ele que faz o "digitando…" aparecer. O `delay` do `sendText` manda a
+ * Evolution publicar a presença *composing* antes de entregar a mensagem, mas o
+ * WhatsApp **não mostra "digitando" de um contato que está offline** — e, com
+ * `alwaysOnline: false` (o default da Evolution), a conta fica justamente assim.
+ * Sem isso o compasso existe (a mensagem demora), mas o cliente não vê ninguém
+ * digitando: a mensagem simplesmente aparece depois.
+ *
+ * Idempotente e auto-curável: roda no connect e, para as lojas que já estavam
+ * conectadas, no primeiro `status` que passar por aqui (o `Set` evita repetir na
+ * mesma instância do servidor). Nunca lança — settings são acessório, não podem
+ * derrubar a conexão.
+ */
+export async function ensureInstanceSettings(instance: string): Promise<void> {
+  if (settingsApplied.has(instance)) return;
+  settingsApplied.add(instance);
+  try {
+    await call("POST", `/settings/set/${encodeURIComponent(instance)}`, {
+      rejectCall: false,
+      msgCall: "",
+      groupsIgnore: false,
+      alwaysOnline: true,
+      readMessages: false,
+      readStatus: false,
+      syncFullHistory: false,
+    });
+  } catch (e) {
+    settingsApplied.delete(instance); // deixa tentar de novo na próxima
+    console.error("[evolution] settings", instance, e);
+  }
 }
 
 /** (Re)configura o webhook da instância. */
@@ -270,7 +308,12 @@ export async function sendText(
   await call("POST", `/message/sendText/${encodeURIComponent(instance)}`, {
     number: number.replace(/\D/g, ""),
     text,
-    ...(delayMs && delayMs > 0 ? { delay: Math.round(delayMs) } : {}),
+    // `presence` explícito: versões da Evolution que aceitam o campo mostram
+    // "digitando…" durante o `delay` (as que não aceitam, ignoram). Quem de fato
+    // libera o indicador é o `alwaysOnline` — ver `ensureInstanceSettings`.
+    ...(delayMs && delayMs > 0
+      ? { delay: Math.round(delayMs), presence: "composing" }
+      : {}),
   });
 }
 

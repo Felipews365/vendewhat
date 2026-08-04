@@ -1935,6 +1935,18 @@ uma instância Evolution e uma config de IA por loja.
   `buildSystemPrompt` a separar ideias por linha em branco (2 a 4 balões: saudação / resposta /
   link-fechamento). **Cada parte também vira uma linha `assistant` no histórico**, o que importa
   para a detecção de eco do handoff (ver abaixo).
+  - **⚠️ O "digitando…" só APARECE com `alwaysOnline` ligado na instância:** o `delay` do `sendText`
+    faz a Evolution publicar a presença *composing* antes de entregar a mensagem, mas o **WhatsApp
+    não mostra "digitando" de um contato offline** — e o default da Evolution (`alwaysOnline: false`)
+    deixa a conta exatamente assim. Sem isso o compasso existe (a mensagem demora), mas o cliente não
+    vê ninguém digitando: ela só aparece depois. `ensureInstanceSettings(instance)` em
+    [evolution.ts](src/lib/evolution.ts) grava as settings (`POST /settings/set/{instance}` com
+    `alwaysOnline: true`), é chamada no `createInstance` (connect) **e** na rota
+    [status](src/app/api/whatsapp/status/route.ts) quando a instância aparece `connected` — assim as
+    lojas que já estavam conectadas se auto-consertam sem reconectar. Um `Set` no módulo evita repetir
+    na mesma instância do servidor (em erro, remove do `Set` para tentar de novo); nunca lança. O
+    `sendText` também manda `presence: "composing"` junto do `delay` (versões que não conhecem o campo
+    ignoram).
   - **Ritmo (constantes no topo de [whatsappRespond.ts](src/lib/whatsappRespond.ts)):** **70ms por
     caractere**, entre **2,2s e 9s** por balão, mais um **respiro de 800ms** (`PAUSE_BETWEEN_MS`, um
     `sleep` local) **entre** um balão e o outro. Os valores antigos (45ms, teto de 5s, sem respiro)
