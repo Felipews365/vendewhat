@@ -4,8 +4,10 @@ import {
   getAiUsageSummary,
   summarize,
   type AdminClient,
+  type AdminStoreWhatsapp,
   type AiUsageSummary,
 } from "@/lib/adminData";
+import { formatBrPhone, toWhatsAppNumber } from "@/lib/customerPhone";
 import { formatBRL } from "@/lib/plans";
 import { formatBrlCost } from "@/lib/aiPricing";
 import { VERIFICATION_STATUS_LABEL, type VerificationStatus } from "@/lib/storeVerification";
@@ -248,6 +250,39 @@ function ClientActions({ client, compact }: { client: AdminClient; compact?: boo
   );
 }
 
+/**
+ * WhatsApp de atendimento da loja (o número conectado na Evolution, onde a IA e
+ * o lojista falam com os clientes) — não é o `stores.phone` do cadastro do dono.
+ * Verde = conectado; âmbar = último número conhecido, mas caiu a conexão.
+ */
+function WhatsappLine({ whatsapp }: { whatsapp: AdminStoreWhatsapp | null }) {
+  const number = whatsapp?.number ?? null;
+  if (!number) {
+    return (
+      <div className="truncate text-xs text-slate-400 dark:text-slate-500">
+        {whatsapp ? "WhatsApp não conectado" : "sem WhatsApp"}
+      </div>
+    );
+  }
+  const connected = whatsapp?.status === "connected";
+  return (
+    <a
+      href={`https://wa.me/${toWhatsAppNumber(number)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={connected ? "WhatsApp do atendimento (conectado)" : "Último número conectado — hoje desconectado"}
+      className={`block truncate text-xs font-medium hover:underline ${
+        connected
+          ? "text-emerald-600 dark:text-emerald-400"
+          : "text-amber-600 dark:text-amber-400"
+      }`}
+    >
+      {formatBrPhone(number)}
+      {connected ? "" : " (off)"}
+    </a>
+  );
+}
+
 /** Saldo de conversas + gasto do mês + custo dos 30 dias. */
 function AiSummary({ client }: { client: AdminClient }) {
   const ai = client.ai;
@@ -293,6 +328,7 @@ function ClientCard({ client }: { client: AdminClient }) {
             {client.store.name}
           </Link>
           <div className="truncate text-xs text-slate-400 dark:text-slate-500">/{client.store.slug}</div>
+          <WhatsappLine whatsapp={client.whatsapp} />
         </div>
         <ClientActions client={client} />
       </div>
@@ -341,7 +377,8 @@ export default async function AdminClientesPage() {
     <div>
       <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Clientes</h1>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-        Todas as lojas da plataforma, com plano, status, vencimento e consumo da IA.
+        Todas as lojas da plataforma, com o WhatsApp do atendimento, plano, status,
+        vencimento e consumo da IA.
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
@@ -402,6 +439,7 @@ export default async function AdminClientesPage() {
                       {c.store.name}
                     </Link>
                     <div className="truncate text-xs text-slate-400 dark:text-slate-500">/{c.store.slug}</div>
+                    <WhatsappLine whatsapp={c.whatsapp} />
                   </td>
                   <td className="px-4 py-3">
                     <div className="truncate text-slate-700 dark:text-slate-300" title={c.ownerEmail ?? undefined}>

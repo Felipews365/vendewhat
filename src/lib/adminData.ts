@@ -73,6 +73,16 @@ export type AdminClientAi = {
   includedConversations: number;
 };
 
+/** WhatsApp de atendimento da loja (o número que a IA/lojista usa com os clientes). */
+export type AdminStoreWhatsapp = {
+  /** Número conectado (formato do WhatsApp, com DDI). `null` = nunca capturado. */
+  number: string | null;
+  /** `connected` | `connecting` | `disconnected`. */
+  status: string;
+  /** A IA está ligada nesta loja. */
+  aiEnabled: boolean;
+};
+
 export type AdminClient = {
   store: StoreRow;
   ownerEmail: string | null;
@@ -86,7 +96,25 @@ export type AdminClient = {
   aiCost: AdminAiCost | null;
   /** Status da verificação de identidade do dono (KYC). */
   verificationStatus: VerificationStatus;
+  /** WhatsApp de atendimento da loja. `null` = a loja nunca conectou. */
+  whatsapp: AdminStoreWhatsapp | null;
 };
+
+type WhatsappRow = {
+  store_id: string;
+  connected_number: string | null;
+  connection_status: string | null;
+  ai_enabled: boolean | null;
+};
+
+function whatsappFromRow(row: WhatsappRow | undefined): AdminStoreWhatsapp | null {
+  if (!row) return null;
+  return {
+    number: (row.connected_number ?? "").trim() || null,
+    status: (row.connection_status ?? "disconnected").trim() || "disconnected",
+    aiEnabled: row.ai_enabled === true,
+  };
+}
 
 type AiCreditRow = {
   store_id: string;
@@ -165,6 +193,7 @@ export async function getClients(): Promise<AdminClient[]> {
     verifications,
     emails,
     aiCostByStore,
+    whatsapps,
   ] = await Promise.all([
       db
         .from("stores")
@@ -187,6 +216,11 @@ export async function getClients(): Promise<AdminClient[]> {
       ownerEmailMap(db),
       // Custo de IA dos últimos 30 dias. Tolera telemetria ausente → mapa vazio.
       getAiCostByStore(30),
+      // Tolera a tabela ausente (migration de WhatsApp não aplicada).
+      db
+        .from("store_whatsapp")
+        .select("store_id, connected_number, connection_status, ai_enabled")
+        .then((r) => (r.error ? [] : ((r.data as WhatsappRow[] | null) ?? []))),
     ]);
 
   const subByStore = new Map<string, SubscriptionRow>();
@@ -202,6 +236,11 @@ export async function getClients(): Promise<AdminClient[]> {
   const aiByStore = new Map<string, AiCreditRow>();
   for (const row of aiCredits) {
     aiByStore.set(row.store_id, row);
+  }
+
+  const whatsappByStore = new Map<string, WhatsappRow>();
+  for (const row of whatsapps) {
+    whatsappByStore.set(row.store_id, row);
   }
 
   const verificationByStore = new Map<string, VerificationStatus>();
@@ -220,6 +259,7 @@ export async function getClients(): Promise<AdminClient[]> {
       ai: aiFromRow(aiByStore.get(store.id), subscription?.plan_id ?? null, now),
       aiCost: aiCostByStore.get(store.id) ?? null,
       verificationStatus: verificationByStore.get(store.id) ?? "none",
+      whatsapp: whatsappFromRow(whatsappByStore.get(store.id)),
     };
   });
 }
@@ -231,6 +271,7 @@ export async function getClient(storeId: string): Promise<
       ownerEmail: string | null;
       subscription: SubscriptionRow | null;
       payments: PaymentRow[];
+      whatsapp: AdminStoreWhatsapp | null;
     }
   | null
 > {
@@ -245,7 +286,7 @@ export async function getClient(storeId: string): Promise<
 
   if (!store) return null;
 
-  const [{ data: subscription }, { data: payments }, emails] = await Promise.all([
+  const [{ data: subscription }, { data: payments }, emails, whatsapp] = await Promise.all([
     db.from("subscriptions").select("*").eq("store_id", storeId).maybeSingle(),
     db
       .from("payments")
@@ -253,6 +294,13 @@ export async function getClient(storeId: string): Promise<
       .eq("store_id", storeId)
       .order("paid_at", { ascending: false }),
     ownerEmailMap(db),
+    // Tolera a tabela ausente (migration de WhatsApp não aplicada).
+    db
+      .from("store_whatsapp")
+      .select("store_id, connected_number, connection_status, ai_enabled")
+      .eq("store_id", storeId)
+      .maybeSingle()
+      .then((r) => (r.error ? null : ((r.data as WhatsappRow | null) ?? null))),
   ]);
 
   return {
@@ -260,6 +308,7 @@ export async function getClient(storeId: string): Promise<
     ownerEmail: emails.get((store as StoreRow).user_id) ?? null,
     subscription: (subscription as SubscriptionRow | null) ?? null,
     payments: (payments as PaymentRow[] | null) ?? [],
+    whatsapp: whatsappFromRow(whatsapp ?? undefined),
   };
 }
 

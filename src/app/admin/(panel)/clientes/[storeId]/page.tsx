@@ -5,15 +5,18 @@ import {
   getAiUsageSummary,
   getClient,
   getStoreVerification,
+  type AdminStoreWhatsapp,
   type AiUsageSummary,
 } from "@/lib/adminData";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { loadCredits, TOKENS_PER_CONVERSATION } from "@/lib/aiCredits";
 import { formatBrlCost } from "@/lib/aiPricing";
+import { formatBrPhone, toWhatsAppNumber } from "@/lib/customerPhone";
 import ClientForm from "./ClientForm";
 import AiCreditsCard from "./AiCreditsCard";
 import VerificationCard from "./VerificationCard";
 import ResetConversationCard from "./ResetConversationCard";
+import OpenDashboardCard from "./OpenDashboardCard";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +113,44 @@ function StoreAiUsage({ usage }: { usage: AiUsageSummary }) {
   );
 }
 
+/**
+ * WhatsApp de atendimento da loja (o número conectado na Evolution, onde a IA e
+ * o lojista falam com os clientes) — não confundir com `stores.phone`, que é o
+ * telefone que o DONO digitou no cadastro.
+ */
+function StoreWhatsapp({ whatsapp }: { whatsapp: AdminStoreWhatsapp | null }) {
+  const number = whatsapp?.number ?? null;
+  if (!number) {
+    return (
+      <span className="text-slate-400 dark:text-slate-500">
+        {whatsapp ? "não conectado" : "nunca conectou"}
+      </span>
+    );
+  }
+  const connected = whatsapp?.status === "connected";
+  return (
+    <>
+      <a
+        href={`https://wa.me/${toWhatsAppNumber(number)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+      >
+        {formatBrPhone(number)}
+      </a>
+      <span
+        className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+          connected
+            ? "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+            : "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300"
+        }`}
+      >
+        {connected ? (whatsapp?.aiEnabled ? "IA ligada" : "IA desligada") : "Desconectado"}
+      </span>
+    </>
+  );
+}
+
 export default async function AdminClientePage({
   params,
 }: {
@@ -129,7 +170,7 @@ export default async function AdminClientePage({
   const db = createAdminSupabase();
   const credits = db ? await loadCredits(db, storeId) : null;
 
-  const { store, ownerEmail, subscription, payments } = client;
+  const { store, ownerEmail, subscription, payments, whatsapp } = client;
   const planTitle = subscription?.plan_id
     ? plans.find((p) => p.id === subscription.plan_id)?.title ?? subscription.plan_id
     : null;
@@ -153,6 +194,10 @@ export default async function AdminClientePage({
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {ownerEmail ?? "—"}
             {store.phone ? ` · ${store.phone}` : ""}
+          </p>
+          <p className="mt-1 text-sm">
+            <span className="text-slate-400 dark:text-slate-500">WhatsApp do atendimento: </span>
+            <StoreWhatsapp whatsapp={whatsapp} />
           </p>
         </div>
         <Link
@@ -193,6 +238,8 @@ export default async function AdminClientePage({
           </p>
         </div>
       </div>
+
+      <OpenDashboardCard storeId={store.id} storeName={store.name} ownerEmail={ownerEmail} />
 
       {verification && <VerificationCard storeId={store.id} detail={verification} />}
 

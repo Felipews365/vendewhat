@@ -1630,6 +1630,32 @@ lojista **também paga sozinho** pelo Mercado Pago (assinatura recorrente **ou**
   linha que quebra e os botões em **40×40** (contra 32×32 do desktop, via a prop `compact`). Os dois
   lados **compartilham** `ClientActions`/`AiSummary`/`planLine` no mesmo arquivo — ao mexer numa
   célula, mexa no helper, não em dois lugares. Textos longos usam `truncate` + `min-w-0`.
+- **WhatsApp do atendimento de cada loja (na lista e na página do cliente):** o número que a IA/lojista
+  usa com os clientes é o `store_whatsapp.connected_number` — **não** o `stores.phone`, que é o telefone
+  que o **dono** digitou no cadastro (mesma distinção da gaveta "Informações" da loja pública). O
+  `getClients`/`getClient` ([adminData.ts](src/lib/adminData.ts)) leem `store_whatsapp` em lote
+  (`connected_number`, `connection_status`, `ai_enabled` → `AdminStoreWhatsapp`), **tolerando a tabela
+  ausente**. Aparece como **terceira linha da coluna "Loja"** (e no cartão do celular) — nada de coluna
+  nova, que estouraria a tabela de 7 colunas sem rolagem lateral —, formatado por **`formatBrPhone`**
+  (novo helper em [customerPhone.ts](src/lib/customerPhone.ts): tira o DDI 55 e devolve `(81)
+  99170-1373`) e clicável para `wa.me`. **Verde = conectado; âmbar + "(off)" = último número conhecido,
+  mas a conexão caiu**; sem número, diz "WhatsApp não conectado". Na página do cliente a mesma
+  informação vai no cabeçalho, com chip "IA ligada/desligada". ⚠️ Loja conectada pode ficar **sem
+  número** até a Evolution informar o dono (ver a nota do `connected_number` em "Contato da loja").
+- **Entrar no painel do cliente (suporte):** card **"Entrar no painel deste cliente"**
+  ([OpenDashboardCard.tsx](src/app/admin/(panel)/clientes/[storeId]/OpenDashboardCard.tsx)) na página do
+  cliente → [/api/admin/impersonate](src/app/api/admin/impersonate/route.ts) (`requireAdmin` + service
+  role), para o dono do SaaS ajustar o que o lojista não consegue sozinho.
+  - **Por que é login-como-ele e não um "modo admin":** o painel do lojista roda **no browser** com o
+    client do Supabase e **RLS por `user_id`** — um cookie de "estou vendo a loja X" não daria acesso a
+    dado nenhum, e fazer o painel inteiro ler por service role seria reescrevê-lo. A rota gera um
+    **magic link do dono** (`auth.admin.generateLink`, que **não envia e-mail**) e **consome o token no
+    próprio servidor** (`verifyOtp` no client de servidor), o que troca o cookie de sessão da resposta
+    pela sessão do lojista — **o token nunca chega ao browser**. Depois o card manda para `/dashboard`.
+  - ⚠️ **A sessão de admin do navegador é substituída** (é o mesmo cookie do mesmo domínio; não há como
+    manter as duas). Por isso o card avisa para abrir `/admin` numa **janela anônima** e clicar por lá;
+    ao terminar, sair e entrar de novo em `/admin/login`. Cada uso é logado (`[admin/impersonate]` nos
+    Logs da Vercel: quem entrou, em qual loja).
 - **Plano atual + upgrade (na página do lojista):** [/dashboard/planos](src/app/dashboard/planos/page.tsx)
   mostra qual é o plano ativo da loja e destaca a opção de upgrade. O server component carrega
   `loadPlans()` **e** `loadCurrentSubscription()` ([plans.server.ts](src/lib/plans.server.ts)) — esta
