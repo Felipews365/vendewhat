@@ -1139,11 +1139,34 @@ As **formas de envio** estão em [src/lib/shippingModes.ts](src/lib/shippingMode
 - **Transportadora** → além do endereço, exige o **nome da transportadora** (`carrierName`, validado
   por `carrierComplete`). Vai na mensagem do WhatsApp (`*Transportadora:*`) e em
   `payload.carrierName`.
-- **Retirada** → mostra o **endereço da loja** (`storefront.pickupAddress`) e as **instruções de
-  retirada** (`storefront.pickupInstructions` — "Como retirar"), configurados no editor da vitrine
+- **Retirada** → mostra o **endereço da loja** e as **instruções de retirada**
+  (`storefront.pickupInstructions` — "Como retirar"), configuradas no editor da vitrine
   ([StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx), painel "Rodapé da
-  vitrine"). Se vazio, exibe aviso de combinar pelo WhatsApp. As instruções entram na mensagem
-  (`*Como retirar:*`) **e** no prompt da IA (a IA atendente explica a retirada — ver seção da IA).
+  vitrine"). As instruções entram na mensagem (`*Como retirar:*`) **e** no prompt da IA (a IA
+  atendente explica a retirada — ver seção da IA).
+  - **O endereço tem DUAS fontes (o lojista preenche em qualquer uma):** `storefront.pickupAddress`
+    (rodapé da vitrine) tem prioridade e, sem ele, vale o endereço cadastrado na aba **Configuração
+    IA** (`store_whatsapp.ai_location_address`, o mesmo que a IA manda com o pino). Só cai no aviso
+    "A loja vai combinar o local pelo WhatsApp" quando **nenhum** dos dois foi preenchido — antes o
+    checkout lia só o do rodapé e a loja dizia "vamos combinar" mesmo tendo informado onde fica. A
+    [page.tsx](src/app/loja/[slug]/page.tsx) lê o `ai_location_address` **via service role**, numa
+    **consulta separada** da do `connected_number` (as colunas de localização vêm de migrations
+    posteriores; um erro nelas não pode derrubar o contato da loja) e passa
+    `store.locationAddress` — **`null` quando a loja é só online** (`ai_online_only`: sem ponto
+    físico não há retirada). Em [LojaClient.tsx](src/app/loja/[slug]/LojaClient.tsx) a reserva mora
+    no **único** `pickupAddress`, então vale de uma vez no card do carrinho, na mensagem do pedido
+    (`*Retirada em:*`) e no comprovante; a gaveta "Informações" segue a mesma ordem (rodapé → IA →
+    `onlineCity`). Sem migration (colunas já existiam).
+- **Forma de envio em DUAS COLUNAS (não vira `<select>`):** a lista de rádios usa
+  `grid-cols-[repeat(auto-fit,minmax(150px,1fr))]`, cortando ~100px de altura do checkout no celular
+  com 4 formas habilitadas. Um `<select>` foi **avaliado e recusado**: custaria um toque a mais
+  (roleta nativa no iOS), esconderia "Retirada"/"Excursão" de quem não abre a lista e destoaria dos
+  rádios de pagamento logo abaixo (o ganho de PageSpeed seria **zero** — são ~4 nós de DOM, num
+  painel que só monta após a interação). O `auto-fit` + `minmax` decide pela **largura real do painel
+  do carrinho**, não pelo breakpoint da viewport: em tela estreita (~320px), onde
+  "Transportadora" não caberia na metade, volta sozinho a uma coluna, sem media query. A **forma de
+  pagamento continua em uma coluna** de propósito — "Dinheiro na entrega"/"Mercado Pago (online)"
+  quebrariam em duas linhas a 150px.
 
 A liberação dos botões de finalizar usa `checkoutReady` (junta nome, telefone, forma de envio,
 endereço quando aplicável, nome da excursão/transportadora, **forma de pagamento** e o **pedido

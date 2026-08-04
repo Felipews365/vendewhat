@@ -2141,6 +2141,11 @@ type StoreInfo = {
   phone: string | null;
   /** WhatsApp conectado da loja (onde a IA/lojista atende). É o contato real da loja. */
   whatsappNumber: string | null;
+  /**
+   * Endereço da loja cadastrado na aba "Configuração IA" (store_whatsapp).
+   * Reserva do endereço de retirada quando o lojista só preencheu ali.
+   */
+  locationAddress: string | null;
 };
 
 /** Telefone BR legível: (81) 99170-1373. Aceita com/sem DDI 55. */
@@ -2578,7 +2583,10 @@ function StoreInfoDrawer({
   }, [open, onClose]);
 
   const attendance = describeAttendance(storefront);
-  const address = storefront.pickupAddress.trim() || storefront.onlineCity.trim();
+  const address =
+    storefront.pickupAddress.trim() ||
+    (store.locationAddress ?? "").trim() ||
+    storefront.onlineCity.trim();
   // Contato da loja: o telefone que o lojista pôs no rodapé tem prioridade; senão,
   // o WhatsApp CONECTADO (contato real da loja). O telefone do cadastro (store.phone,
   // do dono) só entra como último recurso, formatado para leitura.
@@ -3457,7 +3465,11 @@ export function LojaClient({
     shippingMode === "excursao" ||
     shippingMode === "correios" ||
     shippingMode === "transportadora";
-  const pickupAddress = storefront.pickupAddress.trim();
+  // Endereço da retirada: o do rodapé tem prioridade; sem ele, o endereço que o lojista
+  // cadastrou na aba "Configuração IA" (mesma loja física) — só cair no "combinar pelo
+  // WhatsApp" quando ele não informou o endereço em lugar nenhum.
+  const pickupAddress =
+    storefront.pickupAddress.trim() || (store.locationAddress ?? "").trim();
   const pickupInstructions = storefront.pickupInstructions.trim();
 
   // Formas de envio/retirada que a loja habilitou (Atendimento → Configurações da IA).
@@ -4851,7 +4863,13 @@ export function LojaClient({
                       <p className="text-xs text-stone-500 -mt-0.5 mb-1">
                         Excursão, Correios ou retirada — selecione uma opção.
                       </p>
-                      <div className="flex flex-col gap-2">
+                      {/*
+                        Duas colunas para encurtar o checkout no celular sem esconder as
+                        opções (select custaria um toque a mais e deixaria retirada/excursão
+                        invisíveis). `auto-fit` + `minmax` cai sozinho para uma coluna em
+                        tela estreita, onde "Transportadora" não caberia na metade.
+                      */}
+                      <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2">
                         {enabledShipModes.length === 0 && (
                           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
                             Combine a forma de envio direto pelo WhatsApp da loja.
@@ -4862,7 +4880,7 @@ export function LojaClient({
                           return (
                             <label
                               key={m.id}
-                              className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                              className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition-colors ${
                                 sel
                                   ? "border-boutique-dark bg-boutique-light/80 ring-2 ring-boutique/30"
                                   : "border-stone-200 bg-white hover:border-stone-300"
@@ -4876,7 +4894,7 @@ export function LojaClient({
                                 onChange={() => setShippingMode(m.id)}
                                 className="h-4 w-4 shrink-0 accent-boutique-dark"
                               />
-                              <span className="font-medium text-stone-800">
+                              <span className="min-w-0 font-medium leading-tight text-stone-800">
                                 {m.label}
                               </span>
                             </label>

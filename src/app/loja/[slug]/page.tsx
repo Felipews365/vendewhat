@@ -185,6 +185,10 @@ export default async function LojaPublicaPage({ params }: Props) {
   // telefone do cadastro (stores.phone, digitado pelo dono no signup). store_whatsapp
   // só é lida via service role. `connected_number` fica nulo quando desconectado.
   let whatsappNumber: string | null = null;
+  // Endereço da loja cadastrado na aba "Configuração IA" (store_whatsapp). Serve de
+  // reserva para a retirada quando o lojista preencheu só ali, e não em
+  // storefront.pickupAddress. Loja só online não tem ponto físico → fica vazio.
+  let locationAddress: string | null = null;
   const admin = createAdminSupabase();
   if (admin) {
     const { data: gw } = await admin
@@ -202,6 +206,19 @@ export default async function LojaPublicaPage({ params }: Props) {
     const n =
       typeof wa?.connected_number === "string" ? wa.connected_number.trim() : "";
     whatsappNumber = n || null;
+
+    // Consulta separada: as colunas de localização vêm de migrations posteriores e
+    // podem não existir — um erro aqui não pode derrubar o connected_number acima.
+    const { data: loc } = await admin
+      .from("store_whatsapp")
+      .select("ai_location_address, ai_online_only")
+      .eq("store_id", store.id)
+      .maybeSingle();
+    const addr =
+      typeof loc?.ai_location_address === "string"
+        ? loc.ai_location_address.trim()
+        : "";
+    locationAddress = loc?.ai_online_only ? null : addr || null;
   }
 
   const list: CatalogProduct[] = (products ?? []).map((p) => {
@@ -285,6 +302,7 @@ export default async function LojaPublicaPage({ params }: Props) {
           logo: store.logo ? String(store.logo) : null,
           phone: store.phone ? String(store.phone) : null,
           whatsappNumber,
+          locationAddress,
         }}
         storefront={storefront}
         products={list}
