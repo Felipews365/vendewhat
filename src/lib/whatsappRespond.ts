@@ -65,6 +65,13 @@ const TYPING_MIN_MS = 2200;
 const TYPING_MAX_MS = 9000;
 const PAUSE_BETWEEN_MS = 800;
 const TYPING_BUDGET_MS = 24000;
+/**
+ * "Digitando…" antes de CADA foto de produto. Não é proporcional ao texto (a
+ * legenda é curtinha): é o tempo de quem escolhe e anexa a foto. Sai do mesmo
+ * `TYPING_BUDGET_MS` do texto, reservado ANTES — senão os balões de texto comem
+ * o orçamento todo e as fotos voltam a despencar de uma vez.
+ */
+const MEDIA_TYPING_MS = 2500;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -625,6 +632,15 @@ export async function respondToCustomer(
     sendCatalog || customerWantsCatalog || (linkSentNow && !linkSentBefore);
 
   let sent = false;
+  // Orçamento de "digitando…" COMPARTILHADO entre os balões de texto e os de
+  // foto, para o ritmo humano valer na resposta inteira sem estourar o tempo do
+  // cron. A fatia das fotos é reservada primeiro: sem isso o texto consome tudo
+  // e as fotos saem instantâneas, que é justamente o que queremos evitar.
+  const mediaBalloons = baseUrl ? Math.min(productNames.length, 3) : 0;
+  let typingBudget = Math.max(
+    0,
+    TYPING_BUDGET_MS - mediaBalloons * MEDIA_TYPING_MS
+  );
   if (finalText) {
     // Manda em partes (vários balões), com "digitando…" antes de cada uma, para
     // parecer um atendente humano digitando aos poucos. Cada parte também vira uma
@@ -632,7 +648,6 @@ export async function respondToCustomer(
     // Cada balão é isolado num try/catch: se um falhar, os demais (e os anexos de
     // localização/foto/vídeo/catálogo abaixo) ainda saem, sem abortar a resposta.
     const parts = splitReplyIntoParts(finalText);
-    let typingBudget = TYPING_BUDGET_MS;
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       // "Digitando…" proporcional ao tamanho da parte, respeitando o orçamento
@@ -660,22 +675,55 @@ export async function respondToCustomer(
   // não sabe a URL da foto nem o id), então produto inventado simplesmente não
   // rende balão nenhum. Teto de 3 para não virar spam de fotos.
   if (productNames.length > 0 && baseUrl) {
+    // Devolve a fatia que foi reservada para as fotos (o texto acima rodou com o
+    // orçamento já descontado dela).
+    typingBudget += mediaBalloons * MEDIA_TYPING_MS;
+    // Produtos JÁ mostrados nesta conversa: a legenda de cada balão carrega o
+    // link `?p=<id>` e vai para o histórico, então dá para saber quais foram sem
+    // guardar nada novo. O prompt já pede para não repetir, mas o modelo reemite
+    // os marcadores ao responder uma dúvida sobre o que acabou de mandar ("qual
+    // o tecido?") e o cliente leva as mesmas fotos de novo. Como o histórico é
+    // uma janela (as últimas 20 mensagens), a trava se solta sozinha numa
+    // conversa longa — o que é bom: lá na frente remostrar já não é spam.
+    const alreadyShown = new Set<string>();
+    const linkRe = /\?p=([\w-]+)/g;
+    for (const turn of full) {
+      if (turn.role !== "assistant") continue;
+      linkRe.lastIndex = 0;
+      let lm: RegExpExecArray | null;
+      while ((lm = linkRe.exec(turn.content)) !== null) alreadyShown.add(lm[1]);
+    }
+    const askedFor = normalizeName(combinedUserText);
     const shown = new Set<string>();
     for (const raw of productNames.slice(0, 3)) {
       const found = findCatalogProduct(catalogRows, raw);
       if (!found || shown.has(found.id)) continue;
+      // Já mostrado antes só repete se o cliente pediu AQUELE produto pelo nome
+      // ("manda a foto do Body Laura de novo") — senão a foto some da conversa
+      // por causa da trava, o que seria pior que o spam.
+      if (
+        alreadyShown.has(found.id) &&
+        !askedFor.includes(normalizeName(found.name))
+      ) {
+        continue;
+      }
       shown.add(found.id);
       const caption = productCaption(found, `${storeUrl}?p=${found.id}`);
+      // Cada foto também sai no ritmo: respiro, "digitando…", foto — igual aos
+      // balões de texto. O piso de 900ms vale se o orçamento já acabou.
+      const typingMs = Math.max(Math.min(MEDIA_TYPING_MS, typingBudget), 900);
+      typingBudget = Math.max(0, typingBudget - typingMs);
       try {
         await sleep(PAUSE_BETWEEN_MS);
         if (found.image) {
           await sendMedia(cfg.evolutionInstance, customerPhone, {
             url: found.image,
             caption,
+            delayMs: typingMs,
           });
         } else {
           // Sem foto cadastrada, o link ainda vale (abre o produto na loja).
-          await sendText(cfg.evolutionInstance, customerPhone, caption);
+          await sendText(cfg.evolutionInstance, customerPhone, caption, typingMs);
         }
         await appendMessage(admin, cfg.storeId, customerPhone, "assistant", caption);
         sent = true;

@@ -369,6 +369,12 @@ export async function sendMedia(
     fileName?: string;
     /** MIME do arquivo. Documentos no Evolution v2 exigem (ex.: application/pdf). */
     mimetype?: string;
+    /**
+     * Mostra "digitando…" por este tempo antes de entregar a mídia — mesma
+     * mecânica do `sendText`. Sem isso as fotos caem todas de uma vez, enquanto
+     * o texto sai no ritmo de quem digita.
+     */
+    delayMs?: number;
   }
 ): Promise<void> {
   await call("POST", `/message/sendMedia/${encodeURIComponent(instance)}`, {
@@ -378,5 +384,8 @@ export async function sendMedia(
     caption: media.caption ?? "",
     ...(media.fileName ? { fileName: media.fileName } : {}),
     ...(media.mimetype ? { mimetype: media.mimetype } : {}),
+    ...(media.delayMs && media.delayMs > 0
+      ? { delay: Math.round(media.delayMs), presence: "composing" }
+      : {}),
   });
 }

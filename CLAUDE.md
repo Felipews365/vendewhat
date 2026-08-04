@@ -1825,6 +1825,28 @@ uma instância Evolution e uma config de IA por loja.
   - **Teto de 3 por mensagem** (+ dedup por id) para não virar spam de fotos; produto **sem foto**
     cadastrada cai num balão de texto, que ainda leva o link. Cada balão vai para o histórico como
     `assistant` (importante para a detecção de eco do handoff) e respeita o `PAUSE_BETWEEN_MS`.
+  - **Não repete foto já mostrada na conversa (determinístico, não é só o prompt):** o modelo reemite
+    os marcadores ao responder uma dúvida sobre o que acabou de mandar ("qual o tecido?") e o cliente
+    levava as mesmas 3 fotos de novo. Como a legenda carrega o link `?p=<id>` e **vai para o
+    histórico**, o `respondToCustomer` varre as mensagens `assistant` anteriores, monta o conjunto de
+    ids já enviados e **descarta o repetido antes de virar balão** — sem tabela nem migration.
+    **Exceção:** repete se o cliente pediu **aquele produto pelo nome** ("manda de novo a foto do Body
+    Laura" — casa `normalizeName` do nome contra o texto do cliente), senão a IA anunciaria "vou te
+    enviar" e nada chegaria, o que é pior que o spam. Como o histórico lido é uma **janela de 20
+    mensagens**, a trava se solta sozinha numa conversa longa (remostrar 30 mensagens depois é útil,
+    não spam). ⚠️ A citação (*reply*) do WhatsApp **não** entra no texto que a IA recebe, então
+    perguntar "qual o tecido?" citando um produto **não** conta como pedir pelo nome — e é justamente
+    o caso que a trava resolve.
+  - **Cada foto sai com "digitando…" antes (ritmo humano):** o `sendMedia`
+    ([evolution.ts](src/lib/evolution.ts)) ganhou `delayMs` (manda `delay` + `presence: "composing"`,
+    igual ao `sendText`) e cada balão de produto usa `MEDIA_TYPING_MS` (2,5s). Antes só o **texto**
+    tinha ritmo e as fotos despencavam em sequência. O tempo é **fixo, não proporcional** (a legenda é
+    curta — o que se imita é escolher e anexar a foto, não digitar). **Sai do MESMO
+    `TYPING_BUDGET_MS`** do texto, com a fatia das fotos **reservada antes** do loop de texto e
+    devolvida ao entrar no loop de fotos — sem a reserva os balões de texto comeriam o orçamento
+    inteiro e as fotos voltariam a despencar. Total inalterado (24s), então a conta do cron não muda.
+    Se a versão da Evolution ignorar o `delay` no `sendMedia`, a foto sai na hora (degrada para o
+    comportamento antigo). Depende do `alwaysOnline`, como o texto.
   - **A leitura de `products` passou a trazer `id` e `images`**, com **relê sem `images`** se a coluna
     não existir na base (o catálogo do prompt não pode cair por causa da foto). O select montado em
     runtime derruba a inferência do supabase-js, daí o `catalogRows` com cast único.
@@ -1992,6 +2014,9 @@ uma instância Evolution e uma config de IA por loja.
     longos coma a execução inteira (o último balão nunca fica sem tempo — piso de 900ms), e o
     deadline faz o loop **parar de pegar conversas novas** perto do limite: as que sobraram **não
     foram reservadas**, então o minuto seguinte as pega. Ao mexer no ritmo, refaça essa conta.
+    ⚠️ O orçamento é **compartilhado com os balões de foto** (`MEDIA_TYPING_MS` — ver "Mostrar o
+    PRODUTO citado"), cuja fatia é reservada **antes** do loop de texto. Ao acrescentar um novo tipo
+    de balão com "digitando…", tire-o desse mesmo orçamento em vez de somar tempo novo.
 - **Handoff × resposta em partes:** como a IA agora manda vários balões (cada um volta como `fromMe`
   no `MESSAGES_UPSERT`), o [webhook](src/app/api/whatsapp/webhook/route.ts) compara com as **últimas
   8** mensagens `assistant` (`getLastAssistantMessages`, era 3) para reconhecer os ecos e **não**
