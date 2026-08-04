@@ -36,6 +36,21 @@ horizontal; sem quebra de layout; áreas de toque boas; nada "mais ou menos" no 
 lazy load quando fizer sentido; **imagens sempre via `next/image`** (o repo já cuida de LCP/CLS —
 ver notas de banner/favicon/categorias); não piorar o carregamento inicial.
 
+> ⚠️ **A otimização de imagem está DESLIGADA (`images.unoptimized: true` em
+> [next.config.mjs](next.config.mjs)).** A Vercel cobra por **transformação** (cada foto × cada
+> largura) e a cota do plano gratuito acabou: **todo `/_next/image` passou a responder `402
+> OPTIMIZED_IMAGE_REQUEST_PAYMENT_REQUIRED`** e as fotos de **todas** as lojas ficaram quebradas
+> para os clientes (banner, cards, categorias, favicon) — quem tinha cache no navegador não via o
+> problema, e por isso o sintoma apareceu num produto novo aberto pelo link da IA. Como a cota
+> reseta no ciclo de cobrança, o site voltaria sozinho e **quebraria de novo no meio do mês**.
+> **Continue usando `next/image`** (ele passou a servir a URL do Supabase direto, e volta a otimizar
+> no dia em que houver cota), mas: **(1) NUNCA monte uma URL `/_next/image` à mão** — era o que o
+> favicon da loja fazia em [loja/[slug]/page.tsx](src/app/loja/[slug]/page.tsx) e foi o único ponto
+> que precisou voltar para a URL crua; **(2)** o que segura o peso agora é a **origem já ser leve**
+> (o recorte re-encoda tudo em WebP com teto de 1600px nos produtos e 1920px no banner, inclusive no
+> "usar foto inteira" — não afrouxe isso); **(3)** se o carregamento pesar, o caminho é **gerar uma
+> miniatura no upload**, não religar a flag sem cota paga.
+
 **Acessibilidade:** contraste bom, foco visível (`focus-visible`), navegação por teclado quando
 aplicável, labels corretos, HTML semântico, `aria` só quando necessário.
 

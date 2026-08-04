@@ -36,11 +36,30 @@ const nextConfig = {
 
 if (host) {
   nextConfig.images = {
-    // Entrega moderna: o next/image negocia AVIF (mais leve) e cai para WebP;
-    // gera automaticamente as larguras responsivas (celular → desktop) a partir
-    // da única origem, então banners e fotos ficam leves e nítidos em cada tela.
+    /**
+     * ⚠️ OTIMIZAÇÃO DESLIGADA DE PROPÓSITO — o `next/image` serve a URL original
+     * do Supabase, sem passar pelo `/_next/image`.
+     *
+     * A Vercel cobra por "transformação" (cada foto × cada largura), e a cota do
+     * plano gratuito acabou: TODO `/_next/image` passou a responder **402
+     * OPTIMIZED_IMAGE_REQUEST_PAYMENT_REQUIRED** e as fotos de todas as lojas
+     * ficaram quebradas para os clientes (banner, cards, categorias, favicon) —
+     * quem já tinha cache não via o problema. Como a cota reseta no ciclo de
+     * cobrança, o site voltaria sozinho e quebraria de novo no meio do mês; daí a
+     * escolha por não depender dela.
+     *
+     * Isso só é seguro porque **a origem já é leve**: o recorte
+     * ([ProductImageCropModal]) re-encoda tudo para WebP com teto de 1600px
+     * (produtos) / 1920px (banner), inclusive no "usar foto inteira". O que se
+     * perde é o AVIF e o corte por tamanho de tela (a bolinha de 48px baixa o
+     * arquivo inteiro). Se um dia isso pesar, o caminho é gerar uma miniatura no
+     * upload — não religar esta flag sem cota paga.
+     */
+    unoptimized: true,
+    // Mantidos para o dia em que houver cota (a `unoptimized` acima os ignora).
+    // Menos larguras = menos transformações por foto = a cota rende muito mais.
     formats: ["image/avif", "image/webp"],
-    deviceSizes: [360, 640, 828, 1080, 1280, 1600, 1920],
+    deviceSizes: [640, 1080, 1920],
     remotePatterns: [
       {
         protocol: "https",

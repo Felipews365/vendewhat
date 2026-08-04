@@ -44,16 +44,14 @@ export async function generateMetadata({ params }: Props) {
 
   const logo = typeof store.logo === "string" ? store.logo.trim() : "";
 
-  /* O favicon é a logo da loja, mas o lojista às vezes sobe um PNG de >1 MB — e o
-     navegador baixa esse arquivo INTEIRO só pra desenhar o ícone da aba (peso puro
-     no PageSpeed/payload). Servimos a logo pelo next/image (redimensionada +
-     AVIF/WebP conforme o Accept do navegador), então o favicon vira poucos KB em
-     qualquer loja. Larguras precisam estar na lista do next.config (64 e 256 estão
-     em imageSizes). Só otimiza URL http(s) do nosso storage; data:/vazio passa direto. */
-  const optimizedIcon = (w: number) =>
-    logo.startsWith("http")
-      ? `/_next/image?url=${encodeURIComponent(logo)}&w=${w}&q=75`
-      : logo;
+  /* O favicon é a logo da loja, servida direto do storage.
+     ⚠️ Já passou pelo `/_next/image` (a logo às vezes tem >1 MB e o navegador
+     baixava o arquivo inteiro só pra desenhar o ícone da aba). Voltou a ser a URL
+     crua quando a cota de otimização da Vercel acabou e o otimizador passou a
+     responder 402 — aí o ícone sumia em todas as lojas. Ver a nota em
+     next.config.mjs: enquanto `images.unoptimized` estiver ligado, NÃO monte URL
+     de `/_next/image` à mão em lugar nenhum. */
+  const storeIcon = logo;
 
   return {
     title: `${store.name} | Catálogo VendeWhat`,
@@ -64,9 +62,9 @@ export async function generateMetadata({ params }: Props) {
     ...(logo
       ? {
           icons: {
-            icon: optimizedIcon(64),
-            shortcut: optimizedIcon(64),
-            apple: optimizedIcon(256),
+            icon: storeIcon,
+            shortcut: storeIcon,
+            apple: storeIcon,
           },
         }
       : null),
