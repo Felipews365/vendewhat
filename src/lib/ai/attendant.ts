@@ -292,6 +292,9 @@ export function buildSystemPrompt(args: {
       (hasPickup ? " (a loja oferece), combine a retirada no local usando as informações em RETIRADA DE PEDIDOS" : ", só ofereça se a loja aceitar retirada") +
       "; 3) a forma de pagamento (só as que a loja aceita). Depois faça um resumo curto do pedido (itens + envio/endereço + pagamento) e finalize." +
       (hasPix ? " Se for Pix, envie a chave pelo marcador." : ""),
+    products.length > 0
+      ? "- MOSTRE O PRODUTO, NÃO SÓ O NOME: sempre que você citar, listar ou recomendar produtos específicos do catálogo, inclua no FINAL da mensagem um marcador por produto citado, assim: [[PRODUTO:NOME EXATO DO PRODUTO]] (ex.: [[PRODUTO:Bermuda Brim]]). O sistema envia em seguida a FOTO real de cada um, com o preço e o link direto daquele item — é o que faz o cliente escolher. Use o nome EXATO como está em PRODUTOS DA LOJA e no MÁXIMO 3 marcadores por mensagem (mande os mais indicados para o que o cliente pediu). Não use o marcador quando estiver falando da loja em geral (aí vale o link do catálogo) nem repita o mesmo produto que você já mostrou nesta conversa. NUNCA escreva você um link de produto ou de foto: só o marcador."
+      : "",
     "- SALVAR O NOME DO CLIENTE: assim que souber o nome do cliente (ele se apresentar, disser o nome, ou o nome vier na mensagem do pedido do site), inclua UMA única vez, no final da mensagem, o marcador [[NOME_CLIENTE:nome do cliente]] (ex.: [[NOME_CLIENTE:Maria Silva]]) para o sistema salvar o contato. Use o nome exatamente como o cliente informou. NÃO repita esse marcador nas mensagens seguintes e NUNCA o mostre ou explique ao cliente.",
     products.length > 0
       ? [
@@ -403,6 +406,12 @@ export type ReplyDirectives = {
   /** A IA pediu para enviar a chave Pix (fechamento do pedido). */
   sendPix: boolean;
   /**
+   * Produtos que a IA citou e quer MOSTRAR ([[PRODUTO:nome]]). O sistema resolve
+   * cada nome no catálogo e manda a foto real com preço e o link direto do item —
+   * a IA nunca monta esse balão sozinha (não sabe a URL da foto nem o id).
+   */
+  productNames: string[];
+  /**
    * Nome do cliente que a IA identificou (apresentação ou pedido vindo do site).
    * Vazio = nada a salvar. O sistema persiste no contato para saudar pelo nome
    * nas próximas conversas.
@@ -501,6 +510,15 @@ export function parseReplyDirectives(reply: string): ReplyDirectives {
   const sendVideo = /\[\[\s*ENVIAR_VIDEO\s*\]\]/i.test(reply);
   const sendCatalog = /\[\[\s*ENVIAR_CATALOGO\s*\]\]/i.test(reply);
   const sendPix = /\[\[\s*ENVIAR_PIX\s*\]\]/i.test(reply);
+  // Produtos a mostrar: [[PRODUTO:Bermuda Brim]] (um por produto citado). O
+  // sistema resolve o nome no catálogo e manda foto + preço + link do item.
+  const productNames: string[] = [];
+  const productRe = /\[\[\s*PRODUTO\s*:\s*([^\]]+?)\s*\]\]/gi;
+  let pm: RegExpExecArray | null;
+  while ((pm = productRe.exec(reply)) !== null) {
+    const name = (pm[1] ?? "").trim().slice(0, 120);
+    if (name && !productNames.includes(name)) productNames.push(name);
+  }
   // Nome do cliente: [[NOME_CLIENTE:João Silva]] — captura até o "]]".
   const nameMatch = reply.match(/\[\[\s*NOME_CLIENTE\s*:\s*([^\]]+?)\s*\]\]/i);
   const customerName = (nameMatch?.[1] ?? "").trim().slice(0, 80);
@@ -517,6 +535,7 @@ export function parseReplyDirectives(reply: string): ReplyDirectives {
     .replace(/\[\[\s*ENVIAR_CATALOGO\s*\]\]/gi, "")
     .replace(/\[\[\s*ENVIAR_PIX\s*\]\]/gi, "")
     .replace(/\[\[\s*NOME_CLIENTE\s*:[^\]]*\]\]/gi, "")
+    .replace(/\[\[\s*PRODUTO\s*:[^\]]*\]\]/gi, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -527,6 +546,7 @@ export function parseReplyDirectives(reply: string): ReplyDirectives {
     sendVideo,
     sendCatalog,
     sendPix,
+    productNames,
     customerName,
     orderDraft,
   };

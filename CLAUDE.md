@@ -1795,6 +1795,24 @@ uma instância Evolution e uma config de IA por loja.
   - **Responder o que o cliente falou ANTES de perguntar:** regra estática no `buildSystemPrompt`
     (a IA respondia "bom dia" e emendava direto na pergunta de qualificação, ignorando o que o
     cliente disse). Primeiro a resposta útil, depois UMA pergunta que avance a venda.
+- **Mostrar o PRODUTO citado (foto + preço + link do item, marcador `[[PRODUTO:nome]]`):** quando a IA
+  cita/lista/recomenda produtos específicos, ela emite um marcador por produto e o sistema manda, em
+  balões próprios, a **foto de capa real** com legenda `*Nome*` + preço (com o "de" quando é promoção)
+  + o **link direto daquele item** (`{storeUrl}?p={id}`, o mesmo deep-link do "compartilhar produto",
+  que abre o detalhe na loja). Antes a IA só listava nome e preço em texto — o cliente não via a peça
+  nem tinha para onde clicar.
+  - **A IA nunca monta esse balão sozinha:** ela não sabe a URL da foto nem o `id`, então só emite o
+    nome. `parseReplyDirectives` ([attendant.ts](src/lib/ai/attendant.ts)) devolve `productNames` (e
+    tira os marcadores do texto) e o `respondToCustomer`
+    ([whatsappRespond.ts](src/lib/whatsappRespond.ts)) resolve cada nome contra o catálogo com
+    `findCatalogProduct` (exato sem acento/caixa → parcial, como no `[[PEDIDO]]`). **Produto
+    inventado não rende balão nenhum** — o casamento falha e nada é enviado.
+  - **Teto de 3 por mensagem** (+ dedup por id) para não virar spam de fotos; produto **sem foto**
+    cadastrada cai num balão de texto, que ainda leva o link. Cada balão vai para o histórico como
+    `assistant` (importante para a detecção de eco do handoff) e respeita o `PAUSE_BETWEEN_MS`.
+  - **A leitura de `products` passou a trazer `id` e `images`**, com **relê sem `images`** se a coluna
+    não existir na base (o catálogo do prompt não pode cair por causa da foto). O select montado em
+    runtime derruba a inferência do supabase-js, daí o `catalogRows` com cast único.
 - **Envio do link da loja (URL pura, padrão de 3 partes):** o `buildSystemPrompt` instrui a IA a
   mandar o link como **URL pura numa linha só** (nunca markdown `[texto](url)`, que o WhatsApp quebra)
   e num padrão acolhedor de 3 blocos — abertura + link isolado + frase de apoio (ex.: "Claro! 😊

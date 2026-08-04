@@ -173,6 +173,64 @@ function mapProducts(rows: AnyObj[]): AttendantProduct[] {
   });
 }
 
+/** Produto resolvido a partir do marcador [[PRODUTO:nome]] da IA. */
+type CatalogMatch = {
+  id: string;
+  name: string;
+  price: number;
+  compareAtPrice: number | null;
+  isPromotion: boolean;
+  /** Foto de capa (`images[0]`); vazio = produto sem foto. */
+  image: string;
+};
+
+/**
+ * Acha no catálogo o produto que a IA citou. Casa pelo nome exato (sem acento e
+ * sem caixa) e, se não achar, por conter/estar contido — o modelo às vezes
+ * escreve "Bermuda Brim masculina". `null` = produto que não existe (a IA
+ * inventou), e aí nada é enviado.
+ */
+function findCatalogProduct(
+  rows: AnyObj[] | null,
+  given: string
+): CatalogMatch | null {
+  const g = normalizeName(given);
+  if (!g || !rows?.length) return null;
+  const named = rows.filter((r) => typeof r.name === "string" && r.name);
+  const row =
+    named.find((r) => normalizeName(String(r.name)) === g) ??
+    named.find((r) => {
+      const n = normalizeName(String(r.name));
+      return n.includes(g) || g.includes(n);
+    });
+  if (!row?.id) return null;
+  const images = Array.isArray(row.images) ? row.images : [];
+  const cover = images.find((u) => typeof u === "string" && u.trim());
+  const compare =
+    row.compare_at_price == null
+      ? null
+      : Number(row.compare_at_price) || null;
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    price: Number(row.price) || 0,
+    compareAtPrice: compare,
+    isPromotion: row.is_promotion === true,
+    image: typeof cover === "string" ? cover.trim() : "",
+  };
+}
+
+/** Legenda da foto do produto: nome, preço (com o "de" quando é promoção) e link. */
+function productCaption(p: CatalogMatch, link: string): string {
+  const money = (v: number) =>
+    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const price =
+    p.isPromotion && p.compareAtPrice && p.compareAtPrice > p.price
+      ? `${money(p.price)} (de ${money(p.compareAtPrice)})`
+      : money(p.price);
+  return `*${p.name}*\n${price}\n\n${link}`;
+}
+
 /** Normaliza para comparação: minúsculas, sem acento, espaços colapsados. */
 function normalizeName(s: string): string {
   return s
@@ -353,16 +411,30 @@ export async function respondToCustomer(
   const hasStorePhoto = !onlineOnly && Boolean(cfg.aiStorePhotoUrl);
   const hasStoreVideo = !onlineOnly && Boolean(cfg.aiStoreVideoUrl);
 
-  const { data: productRows } = await admin
-    .from("products")
-    .select("name, price, stock, description, category, is_promotion, compare_at_price")
-    .eq("store_id", cfg.storeId)
-    .eq("active", true)
-    .order("created_at", { ascending: false })
-    .limit(60);
+  // `images` veio de migration posterior: se a coluna não existir nesta base, relê
+  // sem ela (o catálogo do prompt não pode cair só por causa da foto do produto).
+  const productSelect = (cols: string) =>
+    admin
+      .from("products")
+      .select(cols)
+      .eq("store_id", cfg.storeId)
+      .eq("active", true)
+      .order("created_at", { ascending: false })
+      .limit(60);
+  const BASE_COLS =
+    "id, name, price, stock, description, category, is_promotion, compare_at_price";
+  let { data: productRows, error: productsError } = await productSelect(
+    `${BASE_COLS}, images`
+  );
+  if (productsError) {
+    ({ data: productRows } = await productSelect(BASE_COLS));
+  }
+  // O select montado em runtime derruba a inferência do supabase-js — o formato
+  // real é sempre uma linha de `products`.
+  const catalogRows = (productRows ?? []) as unknown as AnyObj[];
 
   // Tem produto = a IA pode anexar o catálogo em PDF.
-  const hasCatalogPdf = (productRows?.length ?? 0) > 0;
+  const hasCatalogPdf = catalogRows.length > 0;
 
   // Pix: a IA só oferece/envia a chave se a loja preencheu a chave E ativou o
   // envio pela IA no painel. Sem chave, nunca envia (e o prompt proíbe inventar).
@@ -375,7 +447,7 @@ export async function respondToCustomer(
 
   // Loja sem controle de estoque: a IA não deve dizer "sem estoque" (trata tudo
   // como disponível, igual à loja pública). Só afeta o texto do catálogo no prompt.
-  let products = mapProducts((productRows ?? []) as AnyObj[]);
+  let products = mapProducts(catalogRows);
   if (!sf.stockControlEnabled) {
     products = products.map((p) => ({ ...p, stock: p.stock > 0 ? p.stock : 999999 }));
   }
@@ -481,6 +553,7 @@ export async function respondToCustomer(
     sendVideo,
     sendCatalog,
     sendPix,
+    productNames,
     customerName: identifiedName,
     orderDraft,
   } = parseReplyDirectives(reply.text);
@@ -578,6 +651,36 @@ export async function respondToCustomer(
         sent = true;
       } catch (e) {
         console.error("[whatsappRespond] sendText parte", e);
+      }
+    }
+  }
+  // Vitrine do produto citado: foto real + preço + link direto daquele item
+  // ([[PRODUTO:nome]]). É o que transforma "temos a Bermuda Brim por R$ 47,90"
+  // em algo que o cliente vê e clica. O nome é resolvido contra o catálogo (a IA
+  // não sabe a URL da foto nem o id), então produto inventado simplesmente não
+  // rende balão nenhum. Teto de 3 para não virar spam de fotos.
+  if (productNames.length > 0 && baseUrl) {
+    const shown = new Set<string>();
+    for (const raw of productNames.slice(0, 3)) {
+      const found = findCatalogProduct(catalogRows, raw);
+      if (!found || shown.has(found.id)) continue;
+      shown.add(found.id);
+      const caption = productCaption(found, `${storeUrl}?p=${found.id}`);
+      try {
+        await sleep(PAUSE_BETWEEN_MS);
+        if (found.image) {
+          await sendMedia(cfg.evolutionInstance, customerPhone, {
+            url: found.image,
+            caption,
+          });
+        } else {
+          // Sem foto cadastrada, o link ainda vale (abre o produto na loja).
+          await sendText(cfg.evolutionInstance, customerPhone, caption);
+        }
+        await appendMessage(admin, cfg.storeId, customerPhone, "assistant", caption);
+        sent = true;
+      } catch (e) {
+        console.error("[whatsappRespond] produto", found.name, e);
       }
     }
   }
