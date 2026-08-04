@@ -184,10 +184,19 @@ cara de "quase pronto".
   chame `showToast("... salvo!")` no sucesso para manter o feedback consistente (já usado em
   categoria, configurações, produtos, WhatsApp e admin).
 - **Imagens prontas de categoria:** [src/lib/categoryPresets.ts](src/lib/categoryPresets.ts) tem
-  `CATEGORY_PRESETS` (emoji + cor) e `emojiCategoryImage()`, que gera um SVG embutido (data URI)
-  usado como `imageUrl` da categoria — sem hospedagem. A galeria fica no
+  `CATEGORY_PRESETS` (emoji + cor + `group`) e `emojiCategoryImage()`, que gera um SVG embutido
+  (data URI) usado como `imageUrl` da categoria — sem hospedagem. O fundo do círculo sai do
+  `circleBackdrop()` (cor + brilho de cima p/ baixo + aro claro), compartilhado pelos presets de
+  emoji **e** pelas peças desenhadas à mão — `shortsCategoryImage()` e `pantsCategoryImage()`
+  (short/bermuda e calça/legging/jeans), que existem porque 🩳 e 👖 têm cor fixa e não dá para
+  diferenciar as variantes só pelo fundo. A galeria fica no
   [CategoryFormModal.tsx](src/components/CategoryFormModal.tsx) (variant `store`), ao lado do upload
-  e do campo de URL.
+  e do campo de URL, **agrupada por seção** (Roupas · Fitness e praia · Calçados e acessórios ·
+  Infantil · Beleza e saúde · Casa · Tecnologia · Alimentos · Outros — a ordem sai da própria
+  ordem do array) e com **campo de busca** (`presetQuery`, sem acento/caixa) + área rolável
+  `max-h-64`, pois são ~90 opções. ⚠️ Ao mexer no desenho do SVG a data URI muda, então categorias
+  **já salvas** continuam com a arte antiga (renderizam normal; só não aparecem marcadas na
+  galeria até o lojista reclicar no preset).
 - **Categorias salvam na hora:** no editor da loja, salvar/excluir uma categoria pelo modal
   **persiste imediatamente** (não espera o "Salvar loja"). As categorias moram no JSONB
   `storefront.categories`; o `onSave`/`onDelete` em

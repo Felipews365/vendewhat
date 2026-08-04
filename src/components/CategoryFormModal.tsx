@@ -1,9 +1,21 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
-import { CATEGORY_PRESETS, emojiCategoryImage } from "@/lib/categoryPresets";
+import {
+  CATEGORY_PRESETS,
+  emojiCategoryImage,
+  type CategoryPreset,
+} from "@/lib/categoryPresets";
+
+/** Busca sem acento e sem caixa (mesma convenção das conversas). */
+const normalizePresetSearch = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
 
 const pillInputClass =
   "w-full rounded-full border-0 bg-slate-100 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-landing-primary/35";
@@ -60,6 +72,20 @@ export function CategoryFormModal({
   const [touchedSave, setTouchedSave] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [presetQuery, setPresetQuery] = useState("");
+
+  /** Presets filtrados pela busca, já divididos nas seções da lista. */
+  const presetSections = useMemo(() => {
+    const q = normalizePresetSearch(presetQuery);
+    const sections: { group: string; items: CategoryPreset[] }[] = [];
+    for (const p of CATEGORY_PRESETS) {
+      if (q && !normalizePresetSearch(p.label).includes(q)) continue;
+      const last = sections[sections.length - 1];
+      if (last && last.group === p.group) last.items.push(p);
+      else sections.push({ group: p.group, items: [p] });
+    }
+    return sections;
+  }, [presetQuery]);
 
   useEffect(() => {
     if (!open) return;
@@ -70,6 +96,7 @@ export function CategoryFormModal({
     setTouchedSave(false);
     setFormError("");
     setUploading(false);
+    setPresetQuery("");
     pendingImageFileRef.current = null;
     setBlobPreview((prev) => {
       if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
@@ -297,38 +324,60 @@ export function CategoryFormModal({
                   (toque para usar)
                 </span>
               </label>
-              <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
-                {CATEGORY_PRESETS.map((p) => {
-                  const uri = p.image ?? emojiCategoryImage(p.emoji, p.bg);
-                  const selected = imageUrl.trim() === uri;
-                  return (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => handlePresetPick(p.label, uri)}
-                      title={p.label}
-                      className={`aspect-square rounded-full overflow-hidden flex items-center justify-center text-xl transition-transform hover:scale-105 ${
-                        selected
-                          ? "ring-2 ring-landing-primary ring-offset-2"
-                          : "ring-1 ring-slate-200"
-                      }`}
-                      style={{ backgroundColor: p.bg }}
-                    >
-                      {p.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.image}
-                          alt=""
-                          aria-hidden
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span aria-hidden>{p.emoji}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              <input
+                type="search"
+                value={presetQuery}
+                onChange={(e) => setPresetQuery(e.target.value)}
+                placeholder="Buscar imagem (ex.: body, fitness, bebê)"
+                aria-label="Buscar imagem pronta"
+                className={`${pillInputClass} mb-3`}
+              />
+              {presetSections.length === 0 ? (
+                <p className="text-xs text-slate-400 py-4 text-center">
+                  Nenhuma imagem com esse nome. Você pode enviar a sua foto no
+                  círculo acima.
+                </p>
+              ) : (
+                <div className="max-h-64 overflow-y-auto pr-1 space-y-4">
+                  {presetSections.map((section) => (
+                    <div key={section.group}>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
+                        {section.group}
+                      </p>
+                      <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
+                        {section.items.map((p) => {
+                          const uri =
+                            p.image ?? emojiCategoryImage(p.emoji, p.bg);
+                          const selected = imageUrl.trim() === uri;
+                          return (
+                            <button
+                              key={p.label}
+                              type="button"
+                              onClick={() => handlePresetPick(p.label, uri)}
+                              title={p.label}
+                              aria-label={p.label}
+                              aria-pressed={selected}
+                              className={`aspect-square rounded-full overflow-hidden transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-primary ${
+                                selected
+                                  ? "ring-2 ring-landing-primary ring-offset-2"
+                                  : "ring-1 ring-slate-200"
+                              }`}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={uri}
+                                alt=""
+                                aria-hidden
+                                className="h-full w-full object-cover"
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
