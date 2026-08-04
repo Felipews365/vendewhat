@@ -1810,6 +1810,30 @@ uma instância Evolution e uma config de IA por loja.
   - **Responder o que o cliente falou ANTES de perguntar:** regra estática no `buildSystemPrompt`
     (a IA respondia "bom dia" e emendava direto na pergunta de qualificação, ignorando o que o
     cliente disse). Primeiro a resposta útil, depois UMA pergunta que avance a venda.
+  - **Cliente novo: a pergunta da abertura é o NOME, não a qualificação.** Sem nome salvo
+    (`!custFirst`), o modelo de abertura é `"Boa tarde! 😊 Tudo bem? Me chamo {ai_name}, da {loja}.
+    Com quem eu tenho o prazer de falar?"` e a qualificação ("procura qual tipo de produto?") fica
+    para a **mensagem seguinte** — as duas juntas violariam a regra de **UMA pergunta por mensagem**
+    e o modelo escolhia sozinho qual cortar (cortava justamente a do nome). Com nome salvo, a
+    abertura segue a de sempre: cumprimenta pelo nome e já qualifica. Quando o cliente responde, a
+    IA emite o `[[NOME_CLIENTE:…]]` que já existia e o `respondToCustomer` salva em
+    `whatsapp_contacts` — o marcador e a persistência **já estavam prontos**; o que faltava era
+    *pedir* o nome (a regra antiga dizia só "se fizer sentido, pergunte"). Fora do 1º contato, a
+    linha do `custFirst` vazio manda perguntar **uma vez** na primeira oportunidade e **não
+    insistir** se o cliente não responder.
+  - **Gentileza de cumprimento não gasta a pergunta:** regra estática ao lado da de "uma pergunta
+    por mensagem" dizendo que `"Tudo bem?"`/`"Como vai?"`/`"Tudo certo?"` são **educação, não
+    pergunta**. Sem ela o modelo tratava o "Tudo bem?" da abertura como a pergunta da mensagem e
+    cortava a que realmente avança a venda.
+  - **NUNCA perguntar se o cliente quer o catálogo** ("quer que eu mande?", "prefere ver alguma
+    categoria específica ou o catálogo?" — as duas estão no prompt como exemplo ruim): a IA
+    **anuncia e manda**, com a frase `"Já vou te enviar o catálogo completo! Vou mandar o link do
+    site da {loja} e também em PDF caso prefira. Assim você vê todas as opções e me diz o que
+    achou!"`, seguida do link. **Duas condições para não prometer o que não chega:** sem
+    `hasCatalogPdf` (loja sem produto) usa a versão curta, só do link; e o PDF só é prometido na
+    **1ª vez** que o catálogo sai na conversa, porque o sistema anexa o PDF junto do link uma vez só
+    (`linkSentBefore`). A regra inteira é **desligada em `storeOffline`** (na manutenção o link não
+    funciona).
 - **Mostrar o PRODUTO citado (foto + preço + link do item, marcador `[[PRODUTO:nome]]`):** quando a IA
   cita/lista/recomenda produtos específicos, ela emite um marcador por produto e o sistema manda, em
   balões próprios, a **foto de capa real** com legenda `*Nome*` + preço (com o "de" quando é promoção)
@@ -2391,6 +2415,12 @@ tempo é por loja. **Migration:** rode
 - **Configuração:** no painel (aba Atendente de IA), o lojista escolhe o tempo de silêncio
   (30min/1h/2h/3h/6h/1 dia) e, opcionalmente, uma **mensagem fixa**; vazio = a IA gera com base na
   conversa (`generateFollowupReply` em [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts)).
+  - **A mensagem gerada segue um modelo fixo:** `"[Nome], só uma dúvida rápida: ficou alguma
+    pendência sobre o catálogo ou sobre os valores? Às vezes o pessoal tem dúvida sobre [benefício
+    principal do produto] e eu te explico rapidinho!"` — o `[benefício]` sai da conversa/lista de
+    produtos (proibido inventar) e, sem nome salvo, a frase começa sem ele. **Sem link, sem
+    saudação, um parágrafo só:** a instrução antiga pedia "mande o link se ajudar" e rendia um
+    `"Estou aqui! 😊 …"` seguido do balão do catálogo, repetindo o que o cliente já tinha recebido.
 - **Cron:** um workflow do **n8n** (self-hosted no mesmo VPS da Evolution/debounce) faz um
   `GET /api/whatsapp/followups?key=<CRON_SECRET>` a cada **~5 min** (nó *Schedule Trigger* →
   *HTTP Request*). O endpoint
@@ -2421,6 +2451,13 @@ Alguns **dias** depois do pedido, a IA manda uma mensagem perguntando se chegou 
   opcionalmente, uma **mensagem fixa**; vazio = a IA gera (`generatePostsaleReply`, com fallback
   `defaultPostsaleMessage` quando a OpenAI não está configurada) — ambos em
   [src/lib/ai/attendant.ts](src/lib/ai/attendant.ts).
+  - **É UMA LINHA SÓ:** `"Oi, {Nome}! 😊 Queria saber se seu pedido chegou certinho."` e **nada
+    depois** — o prompt proíbe nominalmente os complementos que o modelo emendava sozinho ("se algo
+    não estiver certo, me avisa", "tudo bem com você?", "qualquer coisa é só chamar") e oferta de
+    produto novo. Se o cliente responder que houve problema, aí sim a IA resolve na conversa. ⚠️ O
+    fallback `defaultPostsaleMessage` foi encurtado junto (senão a versão antiga voltaria nas lojas
+    sem saldo de crédito/sem OpenAI); só ele cita o **nome da loja** e o **nº do pedido**, porque sai
+    sem nenhum contexto de conversa.
 - **Mesmo cron do follow-up:** o endpoint [followups/route.ts](src/app/api/whatsapp/followups/route.ts)
   roda `runPostsale` junto. Varre as lojas com pós-venda ligado (`listPostsaleConfigs`) e os pedidos
   elegíveis (`listDuePostsaleOrders`: `postsale_sent_at IS NULL`, com `customer_phone`, criados entre
