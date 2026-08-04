@@ -51,6 +51,27 @@ function formatBRL(value: number) {
   }).format(value);
 }
 
+/**
+ * Paleta fixa dos cartões de produto da loja (a constante `EC` do LojaClient).
+ * Repetida aqui para a prévia do editor mostrar o MESMO cartão que o cliente vê.
+ */
+const CARD_EC = {
+  accent: "#FF6B00",
+  gold: "#F5A623",
+  border: "#DCE3EC",
+  foreground: "#1A1A2E",
+  muted: "#4A5E78",
+  imgBg: "#E8ECF2",
+} as const;
+
+/** Preço no formato do card da loja: `R$69,00` (sem espaço, com vírgula). */
+function formatCardPrice(value: number) {
+  return `R$${new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)}`;
+}
+
 /** ISO → valor de `<input type="datetime-local">` (no fuso do navegador). */
 function isoToLocalInput(iso: string): string {
   if (!iso) return "";
@@ -495,6 +516,8 @@ export function StoreVisualEditor({
     ...productsInPreview,
     null,
   ];
+  /** Mesma regra da loja: com tema escolhido o preço segue a cor da marca. */
+  const cardAccent = sf.themeId ? sf.themePrimary : CARD_EC.accent;
   /**
    * Prévia da faixa "Produtos em destaque" (na loja fica logo abaixo dos cards
    * promocionais). Com escolha manual (`featuredProductIds`), mostra esses
@@ -1533,7 +1556,7 @@ export function StoreVisualEditor({
               Arraste a foto para trocar de lugar
             </span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {previewSlots.map((product, index) => {
               if (product) {
                 const href = `/dashboard/produtos/${product.id}`;
@@ -1558,13 +1581,20 @@ export function StoreVisualEditor({
                         e.preventDefault();
                       }
                     }}
-                    className={`relative rounded-xl border bg-slate-50 p-2 transition-colors text-center group ${
+                    // Mesmo cartão que o cliente vê na loja (branco, borda clara,
+                    // foto no topo, categoria › nome › preço › estrelas).
+                    className={`group relative flex h-full flex-col overflow-hidden rounded-xl border bg-white text-left transition-colors ${
                       isDragging
                         ? "border-landing-primary opacity-60"
                         : isDropTarget
                           ? "border-landing-primary ring-2 ring-landing-primary/40"
-                          : "border-slate-200 hover:border-landing-primary/40"
+                          : "hover:border-landing-primary/40"
                     }`}
+                    style={
+                      isDragging || isDropTarget
+                        ? undefined
+                        : { borderColor: CARD_EC.border }
+                    }
                   >
                     <div className="absolute top-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-landing-primary text-white text-sm font-light shadow ring-1 ring-white pointer-events-none">
                       +
@@ -1578,9 +1608,10 @@ export function StoreVisualEditor({
                       onPointerUp={endProductDrag}
                       onPointerCancel={cancelProductDrag}
                       onContextMenu={(e) => e.preventDefault()}
-                      className={`relative ${ratioClass} rounded-lg bg-slate-200/90 overflow-hidden mb-1.5 select-none [-webkit-touch-callout:none] ${
+                      className={`relative ${ratioClass} overflow-hidden select-none [-webkit-touch-callout:none] ${
                         isDragging ? "cursor-grabbing" : "cursor-grab"
                       }`}
+                      style={{ backgroundColor: CARD_EC.imgBg }}
                     >
                       {product.imageUrl ? (
                         <Image
@@ -1588,7 +1619,7 @@ export function StoreVisualEditor({
                           alt=""
                           fill
                           draggable={false}
-                          className="object-cover"
+                          className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
                           sizes="(max-width: 640px) 45vw, 180px"
                         />
                       ) : (
@@ -1620,18 +1651,45 @@ export function StoreVisualEditor({
                         ⠿
                       </button>
                     </div>
-                    <p className="text-[10px] text-slate-700 font-medium truncate">
-                      {product.name}
-                    </p>
-                    <p className="text-[10px] font-semibold text-slate-800">
-                      {formatBRL(product.price)}
-                    </p>
-                    <span
-                      className="mt-1.5 block w-full py-1 rounded text-[10px] font-bold text-white"
-                      style={{ backgroundColor: sf.themePrimary }}
-                    >
-                      Comprar
-                    </span>
+                    <div className="flex flex-1 flex-col gap-1 p-2.5">
+                      {product.category?.trim() && (
+                        <p
+                          className="truncate text-[0.6rem] uppercase tracking-wider"
+                          style={{ color: CARD_EC.muted }}
+                        >
+                          {product.category.trim()}
+                        </p>
+                      )}
+                      <h3
+                        className="line-clamp-2 min-h-[2.4em] text-xs font-medium leading-snug"
+                        style={{ color: CARD_EC.foreground }}
+                      >
+                        {product.name}
+                      </h3>
+                      <p
+                        className="text-sm font-bold"
+                        style={{ color: cardAccent }}
+                      >
+                        {formatCardPrice(product.price)}
+                      </p>
+                      {sf.cardShowRatings && (
+                        <div className="flex items-center gap-1">
+                          <span
+                            className="text-[11px] leading-none tracking-tight"
+                            style={{ color: CARD_EC.gold }}
+                            aria-hidden
+                          >
+                            ★★★★★
+                          </span>
+                          <span
+                            className="text-[0.6rem]"
+                            style={{ color: CARD_EC.muted }}
+                          >
+                            (4.9)
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </Link>
                 );
               }
@@ -1639,7 +1697,8 @@ export function StoreVisualEditor({
                 <Link
                   key="slot-novo-produto"
                   href="/dashboard/produtos/novo"
-                  className="relative rounded-xl border border-slate-200 bg-slate-50 p-2 hover:border-landing-primary/40 transition-colors text-center group"
+                  className="group relative flex h-full flex-col overflow-hidden rounded-xl border bg-white text-left transition-colors hover:border-landing-primary/40"
+                  style={{ borderColor: CARD_EC.border }}
                 >
                   <div className="absolute top-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-landing-primary text-white text-sm font-light shadow ring-1 ring-white">
                     +
@@ -1650,24 +1709,24 @@ export function StoreVisualEditor({
                       sf.productCardRatio === "1:1"
                         ? "aspect-square"
                         : "aspect-[3/4]"
-                    } rounded-lg bg-slate-200/90 flex flex-col items-center justify-center mb-1.5`}
+                    } flex flex-col items-center justify-center`}
+                    style={{ backgroundColor: CARD_EC.imgBg }}
                   >
-                    <span className="text-[10px] text-slate-500 px-1">
+                    <span className="px-1 text-[10px] text-slate-500">
                       Adicione aqui
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-500 truncate">
-                    Nome do produto
-                  </p>
-                  <p className="text-[10px] font-semibold text-slate-700">
-                    R$ 0,00
-                  </p>
-                  <span
-                    className="mt-1.5 block w-full py-1 rounded text-[10px] font-bold text-white"
-                    style={{ backgroundColor: sf.themePrimary }}
-                  >
-                    Comprar
-                  </span>
+                  <div className="flex flex-1 flex-col gap-1 p-2.5">
+                    <h3
+                      className="line-clamp-2 min-h-[2.4em] text-xs font-medium leading-snug"
+                      style={{ color: CARD_EC.muted }}
+                    >
+                      Nome do produto
+                    </h3>
+                    <p className="text-sm font-bold" style={{ color: cardAccent }}>
+                      {formatCardPrice(0)}
+                    </p>
+                  </div>
                 </Link>
               );
             })}

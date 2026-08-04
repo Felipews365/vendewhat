@@ -958,7 +958,13 @@ sf.productCardRatio` em [StoreVisualEditor.tsx](src/components/dashboard/StoreVi
 antes era `aspect-square` fixo, mentindo sobre o 3:4): para isso o `CatalogPreviewProduct` ganhou
 `cardRatio`, lido de `card_ratio` em [configuracoes/page.tsx](src/app/dashboard/configuracoes/page.tsx)
 (**tolera a coluna ausente** → `null` = padrão da loja). O slot vazio "Adicione aqui" segue o padrão
-da loja, senão ficaria torto ao lado dos outros. A foto grande no **detalhe** do produto também usa **`object-cover`**
+da loja, senão ficaria torto ao lado dos outros. **O cartão da prévia é o MESMO que o cliente vê:**
+cartão branco de borda clara, foto no topo e, embaixo, **categoria (eyebrow) › nome (2 linhas) ›
+preço na cor de destaque › estrelas** (só com `cardShowRatings`) — substituiu o antigo mini-card
+cinza com botão "Comprar" (que não existe na loja: lá o "Adicionar ao carrinho" só aparece no hover,
+sobre a foto). A paleta fixa dos cards (`EC` do LojaClient) está repetida como **`CARD_EC`** no
+editor e o preço segue a mesma regra de cor (`sf.themeId ? themePrimary : laranja`), então prévia e
+loja não divergem. A foto grande no **detalhe** do produto também usa **`object-cover`**
 (preenche o quadro 3:4 respeitando o ponto de foco, sem barras cinzas de letterbox); só o **zoom
 (lightbox)** mostra a foto inteira (`object-contain`), para quem quiser ver 100% sem corte.
 
