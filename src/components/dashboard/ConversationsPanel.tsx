@@ -16,6 +16,12 @@ type ConversationMessage = {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  /** Quem falou de verdade: o cliente, a IA ou você (celular ou painel). */
+  sender?: "customer" | "ai" | "owner";
+  /** image | audio | video | document | sticker | location — "" = só texto. */
+  mediaType?: string;
+  mediaUrl?: string;
+  mediaName?: string;
 };
 
 type Props = {
@@ -69,6 +75,20 @@ const TAG_SEP = "¦"; // separador nome¦cor (não digitável no teclado comum)
 // Até esta quantidade os chips do filtro ficam à mostra; acima disso eles se
 // recolhem atrás do botão "Filtrar por etiqueta" para não engolir a lista.
 const TAG_FILTER_INLINE_MAX = 5;
+
+// Rótulo de cada tipo de mídia no balão (espelha o que o cliente vê no celular).
+const MEDIA_LABEL: Record<string, string> = {
+  image: "📷 Foto",
+  audio: "🎤 Áudio",
+  video: "🎥 Vídeo",
+  document: "📄 Documento",
+  sticker: "🩶 Figurinha",
+  location: "📍 Localização",
+};
+
+// Por quanto tempo a conversa fica guardada (igual ao MESSAGE_RETENTION_DAYS do
+// servidor, que é quem de fato apaga — aqui é só o aviso ao lojista).
+const RETENTION_DAYS = 30;
 
 // Durações da pausa da IA (minutes null = até o lojista reativar).
 const PAUSE_DURATIONS: { label: string; minutes: number | null }[] = [
@@ -140,6 +160,71 @@ function samePhone(a: string, b: string): boolean {
   if (!da || !db) return false;
   if (da === db) return true;
   return da.slice(-8) === db.slice(-8);
+}
+
+/**
+ * Mídia dentro do balão — é o que faz a aba ser um espelho do WhatsApp em vez de
+ * só o texto que a IA enxerga. Sem `mediaUrl` (mídia antiga importada, ou arquivo
+ * que não deu para guardar) mostra só a etiqueta do tipo, para o lojista saber
+ * que ali passou uma foto/áudio.
+ *
+ * Usa `<img>`/`<video>` crus de propósito: são arquivos de proporção desconhecida,
+ * dentro do painel do dono (não é a loja pública, não é LCP), então o
+ * `next/image` só atrapalharia — ele precisa de dimensões conhecidas.
+ */
+function MessageMedia({ m }: { m: ConversationMessage }) {
+  const kind = m.mediaType ?? "";
+  if (!kind) return null;
+  const url = m.mediaUrl ?? "";
+  const label = MEDIA_LABEL[kind] ?? "Anexo";
+
+  if (!url) {
+    return (
+      <p className="mb-1 rounded-lg bg-black/5 px-2 py-1 text-xs font-medium opacity-70 dark:bg-white/10">
+        {label}
+        <span className="ml-1 font-normal opacity-70">(arquivo não guardado)</span>
+      </p>
+    );
+  }
+
+  if (kind === "image" || kind === "sticker") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt={label}
+        loading="lazy"
+        className={`mb-1 block rounded-lg ${
+          kind === "sticker" ? "max-h-32 w-auto" : "max-h-72 w-full object-cover"
+        }`}
+      />
+    );
+  }
+  if (kind === "video") {
+    return (
+      <video
+        src={url}
+        controls
+        preload="metadata"
+        className="mb-1 block max-h-72 w-full rounded-lg"
+      />
+    );
+  }
+  if (kind === "audio") {
+    return <audio src={url} controls preload="none" className="mb-1 block w-56 max-w-full" />;
+  }
+  // Documento e localização: link para abrir (PDF, mapa…).
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mb-1 inline-flex items-center gap-1.5 rounded-lg bg-black/5 px-2 py-1 text-xs font-semibold underline-offset-2 hover:underline dark:bg-white/10"
+    >
+      {label}
+      {m.mediaName ? <span className="font-normal opacity-80">· {m.mediaName}</span> : null}
+    </a>
+  );
 }
 
 function formatTime(iso: string): string {
@@ -222,6 +307,7 @@ export default function ConversationsPanel({
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("blue");
   const [pauseMenuOpen, setPauseMenuOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   // Nome renomeado pelo lojista (sobrepõe o nome vindo de pedidos). Override
   // local para refletir na hora, antes do recarregamento do pai.
@@ -374,6 +460,40 @@ export default function ConversationsPanel({
       setSending(false);
     }
   }, [selected, text, sending, connected, showToast, onSent, loadThread, scrollToBottom]);
+
+  // Traz para o painel o que a Evolution guardou desta conversa antes de o
+  // VendeWhat entrar. É reimportável à vontade (o `key.id` dedupe), mas só
+  // funciona se a sua Evolution guardou o histórico — daí o aviso quando vem 0.
+  const importHistory = useCallback(
+    async (phone: string) => {
+      if (importing) return;
+      setImporting(true);
+      try {
+        const res = await fetch("/api/whatsapp/import-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone }),
+        });
+        const data = await res.json();
+        if (!data?.ok) {
+          showToast(data?.error || "Não foi possível importar.", "error");
+        } else if (data.imported > 0) {
+          showToast(`${data.imported} mensagem(ns) importada(s)!`);
+          loadThread(phone, true);
+        } else {
+          showToast(
+            "Nada para importar — o WhatsApp não guardou conversas anteriores desse contato.",
+            "error"
+          );
+        }
+      } catch {
+        showToast("Falha de conexão ao importar.", "error");
+      } finally {
+        setImporting(false);
+      }
+    },
+    [importing, showToast, loadThread]
+  );
 
   // Pausar / reativar a IA para o contato selecionado (até reativar).
   const togglePause = useCallback(
@@ -1051,6 +1171,24 @@ export default function ConversationsPanel({
             ref={scrollRef}
             className="flex-1 space-y-2 overflow-y-auto bg-stone-50 px-3 py-4 dark:bg-slate-950/40"
           >
+            {/* Topo da thread: buscar o que veio antes + o que fica guardado.
+                Fica aqui (e não no cabeçalho, já cheio) porque é a mesma posição
+                do "carregar mensagens antigas" a que todo mundo está acostumado. */}
+            {!loadingThread && (
+              <div className="mb-2 flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => importHistory(selected)}
+                  disabled={importing}
+                  className="rounded-full border border-stone-200 bg-white px-3 py-1 text-[11px] font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  {importing ? "Buscando…" : "⬆️ Buscar conversas anteriores"}
+                </button>
+                <p className="text-[10px] text-stone-400 dark:text-slate-500">
+                  As conversas ficam guardadas por {RETENTION_DAYS} dias.
+                </p>
+              </div>
+            )}
             {loadingThread ? (
               <p className="py-8 text-center text-sm text-stone-400 dark:text-slate-500">
                 Carregando…
@@ -1062,6 +1200,11 @@ export default function ConversationsPanel({
             ) : (
               messages.map((m, i) => {
                 const mine = m.role === "assistant";
+                // A IA e você saem os dois do lado direito (as duas falas são "da
+                // loja"), então o balão precisa dizer QUEM foi — senão o lojista
+                // não distingue o que ele mandou pelo celular do que a IA
+                // respondeu sozinha.
+                const who = mine ? (m.sender === "owner" ? "Você" : "IA") : "";
                 const prevDay = i > 0 ? formatDay(messages[i - 1].createdAt) : "";
                 const day = formatDay(m.createdAt);
                 const showDay = day && day !== prevDay;
@@ -1084,14 +1227,18 @@ export default function ConversationsPanel({
                             : "rounded-bl-sm border border-orange-100 bg-orange-50 text-stone-800 dark:border-orange-900/40 dark:bg-orange-950/40 dark:text-orange-50"
                         }`}
                       >
-                        <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                        <MessageMedia m={m} />
+                        {m.content && (
+                          <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                        )}
                         <p
-                          className={`mt-1 text-right text-[10px] ${
+                          className={`mt-1 flex items-center justify-end gap-1.5 text-[10px] ${
                             mine
                               ? "text-emerald-700/60 dark:text-emerald-200/60"
                               : "text-orange-700/60 dark:text-orange-200/50"
                           }`}
                         >
+                          {who && <span className="font-semibold uppercase">{who}</span>}
                           {formatTime(m.createdAt)}
                         </p>
                       </div>

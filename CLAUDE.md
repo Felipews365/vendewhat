@@ -2310,18 +2310,12 @@ Tudo por loja. **Migration:** rode
     dono assumindo — pausa direto, sem checar eco. A comparação de texto ficou **só** para o
     `fromMe` de texto, que é o único formato em que os balões da IA voltam. Antes o handoff exigia
     `text`, então assumir por áudio não pausava nada e a IA seguia respondendo por cima do lojista.
-  - **Foto/vídeo/figurinha do dono NÃO pausam (limitação consciente):** a IA também envia foto,
-    vídeo, PDF do catálogo e o pino de localização, e todos voltam como `fromMe` **sem texto**,
-    indistinguíveis dos do dono — pausar em qualquer mídia faria a IA **se auto-pausar** ao mandar
-    a localização/catálogo (ficaria muda pelo tempo do handoff, que numa loja real já está em
-    180 min). Resolver de verdade exige guardar o `key.id` que a Evolution devolve no envio (hoje a
-    resposta é descartada em [evolution.ts](src/lib/evolution.ts)) numa tabela nova, e comparar com
-    o `key.id` do webhook: id conhecido = IA, desconhecido = dono. **Avaliado e adiado** (jul/2026)
-    por causa da migration; se for feito, resolve junto o espelho do painel (abaixo).
-  - **O que o dono manda pelo celular não entra no histórico:** o ramo `fromMe` só cria a pausa e
-    dá `return` — não chama `appendMessage`. Por isso a aba **Conversas** mostra só cliente + IA, e
-    não é um espelho completo do WhatsApp. Depende da mesma distinção de `key.id` acima (sem ela,
-    gravar o `fromMe` duplicaria os balões da própria IA no painel).
+  - **Foto/vídeo/figurinha do dono TAMBÉM pausam, e tudo que ele manda pelo celular entra no
+    histórico** — ver **"Espelho do WhatsApp"** na seção "Responder na mão" abaixo. A distinção
+    entre o eco da própria IA e o dono passou a ser pelo **`key.id`** que a Evolution devolve no
+    envio (guardado em `whatsapp_messages.wa_message_id`), e não mais só pela comparação de texto,
+    que nunca conseguia separar mídia da IA de mídia do dono. Antes disso, o ramo `fromMe` só criava
+    a pausa e dava `return`, então a aba Conversas mostrava só cliente + IA.
 - **Onde o webhook checa**: só responde se a IA está ligada (`aiEnabled`), **não** há pausa global
   ativa e **não** há pausa do cliente.
 - **API/UI:** `src/app/api/whatsapp/pause/route.ts` (`GET` lista estado **+ conversas recentes**;
@@ -2351,7 +2345,8 @@ só com a folga do `p-6`, para ver as conversas melhor; as outras abas ficam `ma
 desktop** (lista de conversas `lg:w-96` + thread) e **uma coluna no celular** (lista → toca no
 contato → thread em tela cheia com seta de voltar). **Balões estilo WhatsApp:** cliente à esquerda
 (`role === "user"`, fundo **laranja suave**), loja/IA à direita (`role === "assistant"`, **verde
-WhatsApp** `#d9fdd3`), ambos dark-aware. Acentos (enviar, item ativo, botões) em **emerald**.
+WhatsApp** `#d9fdd3`), ambos dark-aware, com **foto/áudio/vídeo/documento renderizados no balão** e
+o selo **"IA"/"Você"** no rodapé (ver "Espelho do WhatsApp" abaixo). Acentos (enviar, item ativo, botões) em **emerald**.
 **Sem scroll externo:** a aba é uma coluna de altura travada na viewport
 (`h-[calc(100dvh-7rem)]` no celular = desconta o header sticky + `p-4`; **`lg:h-[calc(100dvh-3rem)]`**
 no desktop, que casa exatamente com o `p-6` de cima/baixo do wrapper — no desktop não há header, então
@@ -2376,6 +2371,53 @@ própria, ver abaixo).
   `listContactNames` (mapa telefone→nome) é lido pelo `listRecentCustomers` com `try/catch` (tolera a
   tabela ausente até a migration ser aplicada).
 
+- **Espelho do WhatsApp (o que o dono manda pelo celular, mídia e histórico antigo).**
+  **Migration:** [supabase-migration-whatsapp-mirror.sql](supabase-migration-whatsapp-mirror.sql)
+  (colunas `wa_message_id`, `sender`, `media_type`, `media_url`, `media_name` em
+  `whatsapp_messages` + índice único `(store_id, wa_message_id)`). **Tudo tolera a migration
+  ausente** (selects e o `appendMessage` regravam só com as colunas antigas).
+  - **`key.id` é o que distingue o ECO do DONO.** Os envios em [evolution.ts](src/lib/evolution.ts)
+    (`sendText`/`sendMedia`/`sendLocation`) agora **devolvem o `key.id`** (`extractSentId`) e todo
+    `appendMessage` o grava. No [webhook](src/app/api/whatsapp/webhook/route.ts), um `fromMe` cujo
+    id **já está no histórico** é eco nosso e é descartado; o que sobra é o dono digitando no
+    celular → vira balão (`sender: "owner"`) **e** dispara o handoff. Isso resolve a limitação
+    antiga: a comparação de texto nunca distinguia **foto/PDF/localização** da IA das do dono, e por
+    isso mídia do dono não pausava nada (e pausar em qualquer mídia faria a IA **se auto-pausar** ao
+    mandar o catálogo). Há uma 3ª rede para a **corrida** (eco chegando antes de gravarmos o envio):
+    mídia sem id conhecido espera 1,5s e reconfere.
+  - ⚠️ **O índice único é SEM `where wa_message_id is not null`**: dois NULLs não colidem no
+    Postgres (mensagens antigas convivem), e um índice **parcial** não seria inferido pelo
+    `on conflict (store_id, wa_message_id)` que o supabase-js emite no upsert — a gravação passaria
+    a falhar. O upsert com `ignoreDuplicates` é o que torna webhook + importação idempotentes.
+  - **`sender` (`customer`|`ai`|`owner`) x `role`:** o `role` continua sendo o que vai para a OpenAI
+    (user/assistant) — **não mexa nele**. O `sender` é só para o painel escrever **"IA"** ou
+    **"Você"** no rodapé do balão: as duas falas saem do lado direito e sem isso o lojista não
+    distingue o que ele mandou pelo celular do que a IA respondeu sozinha. Mensagem antiga (sem
+    `sender`) cai em `assistant → ai`, `user → customer`.
+  - **Mídia de verdade nos balões ([whatsappMedia.ts](src/lib/whatsappMedia.ts)):** o webhook baixa
+    o arquivo pelo `getMediaBase64` **uma vez só** e sobe para `product-images/whatsapp/{storeId}/{phone}/{key.id}.{ext}`
+    (bucket que já existe, sem policy nova); a URL pública vai em `media_url`. Detecta
+    **image/audio/video/document/sticker/location** (antes só image/audio); o `content` continua
+    sendo o texto que a IA lê (transcrição do Whisper, descrição da visão, ou um marcador como
+    `[Vídeo enviado pelo cliente]`). Os anexos que a **IA** manda (foto de produto, foto/vídeo da
+    loja, pino, catálogo em PDF) **também** viram balão — antes não entravam no histórico.
+  - **O cliente é gravado SEMPRE, mesmo com a IA desligada ou pausada.** O webhook antes dava
+    `return` antes do `appendMessage` nesses casos, então a conversa nem aparecia no painel. Agora a
+    flag `aiWillReply` só decide o **agendamento da resposta** (e a transcrição/visão, que custam
+    dinheiro e só servem à IA). Figurinha nunca agenda resposta.
+  - **Retenção de 30 dias (`MESSAGE_RETENTION_DAYS`):** `purgeOldMessages` apaga as mensagens
+    vencidas **e os arquivos de mídia delas** no Storage (`storagePathFromPublicUrl` só devolve
+    caminho dentro de `whatsapp/`, então nunca apagaria foto de produto). Roda em lotes de 500 no
+    **cron que já existe** ([followups](src/app/api/whatsapp/followups/route.ts), ~5 min). Os
+    arquivos saem **antes** das linhas: se o storage falhar, a linha fica e a próxima passada tenta
+    de novo, em vez de deixar arquivo órfão sem referência.
+  - **Importar conversa anterior:** botão **"⬆️ Buscar conversas anteriores"** no topo da thread →
+    [/api/whatsapp/import-history](src/app/api/whatsapp/import-history/route.ts), que lê o
+    `/chat/findMessages` da Evolution (`findMessages` trata os 3 formatos de resposta da v2) e grava
+    o que couber na janela de 30 dias. ⚠️ **Depende do que a SUA Evolution guardou** — instalação
+    sem store de mensagens devolve vazio, e aí a rota responde `imported: 0` (o painel avisa) em vez
+    de erro. **Não baixa mídia antiga** (o arquivo costuma ter expirado no servidor do WhatsApp): o
+    balão entra identificado ("📷 Foto") sem o arquivo.
 - **Buscar conversa (`query`) + filtrar por etiqueta (`tagFilter`):** no cabeçalho da lista há um
   campo **"Pesquisar conversa"** (pílula com lupa + ✕ para limpar) e, abaixo, os **chips de etiqueta**.
   A busca casa **nome, telefone, última mensagem e etiquetas**, sem acento e sem caixa

@@ -295,26 +295,51 @@ export async function logoutInstance(instance: string): Promise<void> {
 }
 
 /**
+ * `key.id` da mensagem que a Evolution acabou de enviar. É o que permite ao
+ * webhook reconhecer o **eco** do que nós mandamos (a Evolution reflete os
+ * próprios envios como `fromMe`) e, por exclusão, saber quando é o **dono**
+ * digitando no celular. Devolve `null` se a resposta não trouxer o id — aí o
+ * webhook cai na comparação de texto de sempre.
+ */
+export function extractSentId(res: unknown): string | null {
+  if (!res || typeof res !== "object") return null;
+  const obj = res as Record<string, unknown>;
+  const key =
+    obj.key && typeof obj.key === "object"
+      ? (obj.key as Record<string, unknown>)
+      : null;
+  const id = key?.id ?? obj.id;
+  return typeof id === "string" && id ? id : null;
+}
+
+/**
  * Envia uma mensagem de texto. `number` deve conter DDI + DDD + número (só dígitos).
  * `delayMs` (opcional): a Evolution mostra "digitando…" (presence composing) por esse
  * tempo antes de entregar a mensagem — deixa o atendimento com cara de humano.
+ *
+ * Devolve o `key.id` da mensagem enviada (ou null) — ver `extractSentId`.
  */
 export async function sendText(
   instance: string,
   number: string,
   text: string,
   delayMs?: number
-): Promise<void> {
-  await call("POST", `/message/sendText/${encodeURIComponent(instance)}`, {
-    number: number.replace(/\D/g, ""),
-    text,
-    // `presence` explícito: versões da Evolution que aceitam o campo mostram
-    // "digitando…" durante o `delay` (as que não aceitam, ignoram). Quem de fato
-    // libera o indicador é o `alwaysOnline` — ver `ensureInstanceSettings`.
-    ...(delayMs && delayMs > 0
-      ? { delay: Math.round(delayMs), presence: "composing" }
-      : {}),
-  });
+): Promise<string | null> {
+  const res = await call<unknown>(
+    "POST",
+    `/message/sendText/${encodeURIComponent(instance)}`,
+    {
+      number: number.replace(/\D/g, ""),
+      text,
+      // `presence` explícito: versões da Evolution que aceitam o campo mostram
+      // "digitando…" durante o `delay` (as que não aceitam, ignoram). Quem de fato
+      // libera o indicador é o `alwaysOnline` — ver `ensureInstanceSettings`.
+      ...(delayMs && delayMs > 0
+        ? { delay: Math.round(delayMs), presence: "composing" }
+        : {}),
+    }
+  );
+  return extractSentId(res);
 }
 
 /**
@@ -347,14 +372,55 @@ export async function sendLocation(
   instance: string,
   number: string,
   loc: { latitude: number; longitude: number; name?: string; address?: string }
-): Promise<void> {
-  await call("POST", `/message/sendLocation/${encodeURIComponent(instance)}`, {
-    number: number.replace(/\D/g, ""),
-    name: loc.name ?? "",
-    address: loc.address ?? "",
-    latitude: loc.latitude,
-    longitude: loc.longitude,
-  });
+): Promise<string | null> {
+  const res = await call<unknown>(
+    "POST",
+    `/message/sendLocation/${encodeURIComponent(instance)}`,
+    {
+      number: number.replace(/\D/g, ""),
+      name: loc.name ?? "",
+      address: loc.address ?? "",
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+    }
+  );
+  return extractSentId(res);
+}
+
+/**
+ * Mensagens que a Evolution guardou de uma conversa (para importar o que é
+ * anterior à conexão com o VendeWhat). O formato da resposta muda entre versões
+ * da v2 (`messages.records`, `messages`, ou a lista crua), então tratamos os
+ * três. Nunca lança: sem histórico guardado, devolve lista vazia.
+ */
+export async function findMessages(
+  instance: string,
+  remoteJid: string,
+  limit = 200
+): Promise<Record<string, unknown>[]> {
+  try {
+    const res = await call<unknown>(
+      "POST",
+      `/chat/findMessages/${encodeURIComponent(instance)}`,
+      { where: { key: { remoteJid } }, limit, page: 1, offset: limit }
+    );
+    const obj = res && typeof res === "object" ? (res as Record<string, unknown>) : null;
+    const messages = obj?.messages;
+    const list = Array.isArray(res)
+      ? res
+      : Array.isArray(messages)
+      ? messages
+      : messages && typeof messages === "object" &&
+        Array.isArray((messages as Record<string, unknown>).records)
+      ? ((messages as Record<string, unknown>).records as unknown[])
+      : [];
+    return list.filter(
+      (m): m is Record<string, unknown> => Boolean(m) && typeof m === "object"
+    );
+  } catch (e) {
+    console.error("[evolution] findMessages", e);
+    return [];
+  }
 }
 
 /** Envia uma mídia por URL (foto, por padrão) com legenda opcional. */
@@ -376,16 +442,21 @@ export async function sendMedia(
      */
     delayMs?: number;
   }
-): Promise<void> {
-  await call("POST", `/message/sendMedia/${encodeURIComponent(instance)}`, {
-    number: number.replace(/\D/g, ""),
-    mediatype: media.mediatype ?? "image",
-    media: media.url,
-    caption: media.caption ?? "",
-    ...(media.fileName ? { fileName: media.fileName } : {}),
-    ...(media.mimetype ? { mimetype: media.mimetype } : {}),
-    ...(media.delayMs && media.delayMs > 0
-      ? { delay: Math.round(media.delayMs), presence: "composing" }
-      : {}),
-  });
+): Promise<string | null> {
+  const res = await call<unknown>(
+    "POST",
+    `/message/sendMedia/${encodeURIComponent(instance)}`,
+    {
+      number: number.replace(/\D/g, ""),
+      mediatype: media.mediatype ?? "image",
+      media: media.url,
+      caption: media.caption ?? "",
+      ...(media.fileName ? { fileName: media.fileName } : {}),
+      ...(media.mimetype ? { mimetype: media.mimetype } : {}),
+      ...(media.delayMs && media.delayMs > 0
+        ? { delay: Math.round(media.delayMs), presence: "composing" }
+        : {}),
+    }
+  );
+  return extractSentId(res);
 }

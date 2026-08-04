@@ -662,8 +662,11 @@ export async function respondToCustomer(
       // Respiro entre um balão e o outro (como quem manda, respira e continua).
       if (i > 0) await sleep(PAUSE_BETWEEN_MS);
       try {
-        await sendText(cfg.evolutionInstance, customerPhone, part, typingMs);
-        await appendMessage(admin, cfg.storeId, customerPhone, "assistant", part);
+        const id = await sendText(cfg.evolutionInstance, customerPhone, part, typingMs);
+        await appendMessage(admin, cfg.storeId, customerPhone, "assistant", part, {
+          waMessageId: id,
+          sender: "ai",
+        });
         sent = true;
       } catch (e) {
         console.error("[whatsappRespond] sendText parte", e);
@@ -716,31 +719,56 @@ export async function respondToCustomer(
       typingBudget = Math.max(0, typingBudget - typingMs);
       try {
         await sleep(PAUSE_BETWEEN_MS);
+        let id: string | null = null;
         if (found.image) {
-          await sendMedia(cfg.evolutionInstance, customerPhone, {
+          id = await sendMedia(cfg.evolutionInstance, customerPhone, {
             url: found.image,
             caption,
             delayMs: typingMs,
           });
         } else {
           // Sem foto cadastrada, o link ainda vale (abre o produto na loja).
-          await sendText(cfg.evolutionInstance, customerPhone, caption, typingMs);
+          id = await sendText(cfg.evolutionInstance, customerPhone, caption, typingMs);
         }
-        await appendMessage(admin, cfg.storeId, customerPhone, "assistant", caption);
+        await appendMessage(admin, cfg.storeId, customerPhone, "assistant", caption, {
+          waMessageId: id,
+          sender: "ai",
+          mediaType: found.image ? "image" : null,
+          mediaUrl: found.image || null,
+        });
         sent = true;
       } catch (e) {
         console.error("[whatsappRespond] produto", found.name, e);
       }
     }
   }
+  // Os anexos abaixo (pino, foto/vídeo da loja, catálogo) também são gravados no
+  // histórico: é o que faz o painel mostrar exatamente o que o cliente recebeu —
+  // e é pelo `key.id` que o webhook reconhece o eco deles e NÃO trata como o dono
+  // assumindo a conversa (a IA se auto-pausaria ao mandar a localização).
   if (wantLocation && hasLocationPin) {
     try {
-      await sendLocation(cfg.evolutionInstance, customerPhone, {
-        latitude: cfg.aiLocationLat as number,
-        longitude: cfg.aiLocationLng as number,
+      const lat = cfg.aiLocationLat as number;
+      const lng = cfg.aiLocationLng as number;
+      const id = await sendLocation(cfg.evolutionInstance, customerPhone, {
+        latitude: lat,
+        longitude: lng,
         name: storeName,
         address: storeAddress,
       });
+      await appendMessage(
+        admin,
+        cfg.storeId,
+        customerPhone,
+        "assistant",
+        `📍 Localização da loja enviada${storeAddress ? ` — ${storeAddress}` : ""}`,
+        {
+          waMessageId: id,
+          sender: "ai",
+          mediaType: "location",
+          mediaUrl: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+        }
+      );
       sent = true;
     } catch (e) {
       console.error("[whatsappRespond] sendLocation", e);
@@ -748,9 +776,17 @@ export async function respondToCustomer(
   }
   if (sendPhoto && hasStorePhoto) {
     try {
-      await sendMedia(cfg.evolutionInstance, customerPhone, {
+      const id = await sendMedia(cfg.evolutionInstance, customerPhone, {
         url: cfg.aiStorePhotoUrl,
       });
+      await appendMessage(
+        admin,
+        cfg.storeId,
+        customerPhone,
+        "assistant",
+        "📷 Foto da loja enviada",
+        { waMessageId: id, sender: "ai", mediaType: "image", mediaUrl: cfg.aiStorePhotoUrl }
+      );
       sent = true;
     } catch (e) {
       console.error("[whatsappRespond] sendMedia", e);
@@ -758,10 +794,18 @@ export async function respondToCustomer(
   }
   if (sendVideo && hasStoreVideo) {
     try {
-      await sendMedia(cfg.evolutionInstance, customerPhone, {
+      const id = await sendMedia(cfg.evolutionInstance, customerPhone, {
         url: cfg.aiStoreVideoUrl,
         mediatype: "video",
       });
+      await appendMessage(
+        admin,
+        cfg.storeId,
+        customerPhone,
+        "assistant",
+        "🎥 Vídeo da loja enviado",
+        { waMessageId: id, sender: "ai", mediaType: "video", mediaUrl: cfg.aiStoreVideoUrl }
+      );
       sent = true;
     } catch (e) {
       console.error("[whatsappRespond] sendMedia video", e);
@@ -780,12 +824,27 @@ export async function respondToCustomer(
         baseUrl,
       });
       if (url) {
-        await sendMedia(cfg.evolutionInstance, customerPhone, {
+        const fileName = `Catálogo - ${storeName}.pdf`;
+        const id = await sendMedia(cfg.evolutionInstance, customerPhone, {
           url,
           mediatype: "document",
-          fileName: `Catálogo - ${storeName}.pdf`,
+          fileName,
           mimetype: "application/pdf",
         });
+        await appendMessage(
+          admin,
+          cfg.storeId,
+          customerPhone,
+          "assistant",
+          "📄 Catálogo em PDF enviado",
+          {
+            waMessageId: id,
+            sender: "ai",
+            mediaType: "document",
+            mediaUrl: url,
+            mediaName: fileName,
+          }
+        );
         sent = true;
       }
     } catch (e) {
@@ -810,8 +869,11 @@ export async function respondToCustomer(
         .join("\n")
         .replace(/\n{3,}/g, "\n\n")
         .trim();
-      await sendText(cfg.evolutionInstance, customerPhone, pixMsg, 1200);
-      await appendMessage(admin, cfg.storeId, customerPhone, "assistant", pixMsg);
+      const id = await sendText(cfg.evolutionInstance, customerPhone, pixMsg, 1200);
+      await appendMessage(admin, cfg.storeId, customerPhone, "assistant", pixMsg, {
+        waMessageId: id,
+        sender: "ai",
+      });
       sent = true;
     } catch (e) {
       console.error("[whatsappRespond] sendPix", e);

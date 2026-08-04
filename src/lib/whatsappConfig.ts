@@ -5,6 +5,11 @@
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toWhatsAppNumber } from "@/lib/customerPhone";
+import {
+  MEDIA_BUCKET,
+  mediaKindLabel,
+  storagePathFromPublicUrl,
+} from "@/lib/whatsappMedia";
 
 export type AiTone = "simpatico" | "formal" | "descontraido";
 export const AI_TONES: AiTone[] = ["simpatico", "formal", "descontraido"];
@@ -404,19 +409,29 @@ export async function listRecentCustomers(
   storeId: string,
   limit = 30
 ): Promise<RecentCustomer[]> {
-  const { data } = await db
-    .from("whatsapp_messages")
-    .select("customer_phone, content, created_at")
-    .eq("store_id", storeId)
-    .order("created_at", { ascending: false })
-    .limit(200);
+  // `media_type` veio da migration do espelho: se a coluna não existir nesta
+  // base, relê sem ela (a lista de conversas não pode cair por causa disso).
+  const listSelect = (cols: string) =>
+    db
+      .from("whatsapp_messages")
+      .select(cols)
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false })
+      .limit(200);
+  let { data, error } = await listSelect(
+    "customer_phone, content, created_at, media_type"
+  );
+  if (error) ({ data } = await listSelect("customer_phone, content, created_at"));
+
   const seen = new Map<string, RecentCustomer>();
-  for (const r of (data ?? []) as Record<string, unknown>[]) {
+  for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
     const phone = String(r.customer_phone ?? "");
     if (!phone || seen.has(phone)) continue; // 1ª ocorrência = mensagem mais recente
+    // Mídia sem legenda não tem texto nenhum — mostra "📷 Foto" em vez de vazio.
+    const content = String(r.content ?? "").trim();
     seen.set(phone, {
       customerPhone: phone,
-      lastMessage: String(r.content ?? ""),
+      lastMessage: content || mediaKindLabel(r.media_type as string | null),
       lastAt: typeof r.created_at === "string" ? r.created_at : "",
       customerName: "",
     });
@@ -988,12 +1003,23 @@ export type ConversationMessage = {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  /** Quem falou: cliente, IA ou o dono (pelo celular ou pelo painel). */
+  sender: MessageSender;
+  /** image | audio | video | document | sticker | location — "" = só texto. */
+  mediaType: string;
+  /** URL pública do arquivo, para o painel mostrar a mídia de verdade. */
+  mediaUrl: string;
+  /** Nome do arquivo (documentos). */
+  mediaName: string;
 };
 
 /**
  * Conversa completa (ordem cronológica) com um cliente, para exibir no painel de
- * conversas. Traz o horário de cada mensagem. Limite alto por ser uma única
- * conversa aberta pelo lojista.
+ * conversas. Traz o horário, quem falou e a mídia de cada mensagem — é o que faz
+ * a aba ser um espelho do WhatsApp e não só o texto que a IA enxerga.
+ *
+ * As colunas do espelho vêm de migration posterior: sem elas, relê só o que
+ * sempre existiu (o painel volta ao comportamento antigo, sem quebrar).
  */
 export async function getFullConversation(
   db: SupabaseClient,
@@ -1001,21 +1027,39 @@ export async function getFullConversation(
   customerPhone: string,
   limit = 200
 ): Promise<ConversationMessage[]> {
-  const { data } = await db
-    .from("whatsapp_messages")
-    .select("role, content, created_at")
-    .eq("store_id", storeId)
-    .eq("customer_phone", customerPhone)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  const rows = (data ?? []) as Record<string, unknown>[];
-  return rows
-    .reverse()
-    .map((r) => ({
-      role: r.role === "assistant" ? "assistant" : "user",
+  const pick = (cols: string) =>
+    db
+      .from("whatsapp_messages")
+      .select(cols)
+      .eq("store_id", storeId)
+      .eq("customer_phone", customerPhone)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+  let { data, error } = await pick(
+    "role, content, created_at, sender, media_type, media_url, media_name"
+  );
+  if (error) ({ data } = await pick("role, content, created_at"));
+
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  return rows.reverse().map((r) => {
+    const role = r.role === "assistant" ? "assistant" : "user";
+    const rawSender = String(r.sender ?? "");
+    return {
+      role,
       content: String(r.content ?? ""),
       createdAt: typeof r.created_at === "string" ? r.created_at : "",
-    })) as ConversationMessage[];
+      // Mensagem antiga (antes do espelho) não tem `sender`: assistant = IA,
+      // user = cliente, que é exatamente o que existia até aqui.
+      sender: (["customer", "ai", "owner"].includes(rawSender)
+        ? rawSender
+        : role === "assistant"
+        ? "ai"
+        : "customer") as MessageSender,
+      mediaType: typeof r.media_type === "string" ? r.media_type : "",
+      mediaUrl: typeof r.media_url === "string" ? r.media_url : "",
+      mediaName: typeof r.media_name === "string" ? r.media_name : "",
+    };
+  });
 }
 
 /** Conteúdo das últimas respostas da IA (para reconhecer o eco da própria loja). */
@@ -1038,20 +1082,146 @@ export async function getLastAssistantMessages(
   );
 }
 
-/** Registra uma mensagem da conversa. */
+/**
+ * Quem realmente falou. O `role` continua sendo o que a OpenAI enxerga
+ * (user/assistant); isto é só para o painel distinguir "IA" de "Você" — o dono
+ * respondendo pelo celular também é `assistant`, mas não é a IA.
+ */
+export type MessageSender = "customer" | "ai" | "owner";
+
+export type AppendMessageExtras = {
+  /** `key.id` no WhatsApp — torna a gravação idempotente e identifica o eco. */
+  waMessageId?: string | null;
+  sender?: MessageSender;
+  mediaType?: string | null;
+  mediaUrl?: string | null;
+  mediaName?: string | null;
+};
+
+/**
+ * Registra uma mensagem da conversa.
+ *
+ * As colunas do espelho (`wa_message_id`, `sender`, `media_*`) vêm de uma
+ * migration posterior: se elas não existirem nesta base, regrava só com as
+ * colunas antigas — o atendimento nunca pode parar por falta de migration.
+ */
 export async function appendMessage(
   db: SupabaseClient,
   storeId: string,
   customerPhone: string,
   role: "user" | "assistant",
-  content: string
+  content: string,
+  extras: AppendMessageExtras = {}
 ): Promise<void> {
-  await db.from("whatsapp_messages").insert({
+  const base = {
     store_id: storeId,
     customer_phone: customerPhone,
     role,
     content: content.slice(0, 4000),
-  });
+  };
+  const hasExtras =
+    extras.waMessageId != null ||
+    extras.sender != null ||
+    extras.mediaType != null ||
+    extras.mediaUrl != null ||
+    extras.mediaName != null;
+
+  if (hasExtras) {
+    const { error } = await db.from("whatsapp_messages").upsert(
+      {
+        ...base,
+        wa_message_id: extras.waMessageId ?? null,
+        sender: extras.sender ?? (role === "assistant" ? "ai" : "customer"),
+        media_type: extras.mediaType ?? null,
+        media_url: extras.mediaUrl ?? null,
+        media_name: extras.mediaName ? extras.mediaName.slice(0, 200) : null,
+      },
+      // Mesma mensagem chegando duas vezes (eco + importação) não vira dois balões.
+      { onConflict: "store_id,wa_message_id", ignoreDuplicates: true }
+    );
+    if (!error) return;
+  }
+  await db.from("whatsapp_messages").insert(base);
+}
+
+/**
+ * Esta mensagem (pelo `key.id`) já está no histórico? É como o webhook sabe que
+ * um `fromMe` é o ECO de algo que nós enviamos (IA ou painel) e não o dono
+ * digitando no celular — inclusive para foto/PDF/localização, que a comparação
+ * de texto nunca conseguiu distinguir.
+ */
+export async function messageExistsByWaId(
+  db: SupabaseClient,
+  storeId: string,
+  waMessageId: string
+): Promise<boolean> {
+  if (!waMessageId) return false;
+  try {
+    const { data, error } = await db
+      .from("whatsapp_messages")
+      .select("id")
+      .eq("store_id", storeId)
+      .eq("wa_message_id", waMessageId)
+      .maybeSingle();
+    if (error) return false; // coluna ainda não existe (migration pendente)
+    return Boolean(data);
+  } catch {
+    return false;
+  }
+}
+
+// --- Retenção (não acumular conversa velha) ----------------------------------
+
+/** Por quanto tempo a conversa fica guardada no painel. */
+export const MESSAGE_RETENTION_DAYS = 30;
+
+/**
+ * Apaga as mensagens mais velhas que `days` **e os arquivos de mídia delas** no
+ * Storage. Sem isso, espelhar foto/áudio/vídeo faria o bucket crescer para
+ * sempre. Roda em lotes (o cron chama a cada 5 min), então uma base grande vai
+ * sendo limpa aos poucos em vez de estourar o tempo da execução.
+ *
+ * Devolve quantas mensagens foram apagadas. Nunca lança.
+ */
+export async function purgeOldMessages(
+  db: SupabaseClient,
+  days = MESSAGE_RETENTION_DAYS,
+  limit = 500
+): Promise<number> {
+  try {
+    const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+    const pick = (cols: string) =>
+      db
+        .from("whatsapp_messages")
+        .select(cols)
+        .lt("created_at", cutoff)
+        .limit(limit);
+    let { data, error } = await pick("id, media_url");
+    if (error) ({ data } = await pick("id")); // migration do espelho pendente
+    const rows = (data ?? []) as unknown as Record<string, unknown>[];
+    if (rows.length === 0) return 0;
+
+    // Os arquivos saem ANTES das linhas: se a remoção do storage falhar, as
+    // linhas continuam lá e a próxima passada tenta de novo (em vez de deixar
+    // arquivo órfão sem nenhuma referência).
+    const paths = rows
+      .map((r) => storagePathFromPublicUrl(r.media_url as string | null))
+      .filter((p): p is string => Boolean(p));
+    if (paths.length > 0) {
+      const { error: rmError } = await db.storage.from(MEDIA_BUCKET).remove(paths);
+      if (rmError) {
+        console.error("[whatsappConfig] purge storage", rmError.message);
+        return 0;
+      }
+    }
+
+    const ids = rows.map((r) => String(r.id));
+    await db.from("whatsapp_messages").delete().in("id", ids);
+    return ids.length;
+  } catch (e) {
+    console.error("[whatsappConfig] purgeOldMessages", e);
+    return 0;
+  }
 }
 
 // --- Debounce (agrupamento de mensagens seguidas) ----------------------------

@@ -110,8 +110,9 @@ export async function POST(req: Request) {
     );
   }
 
+  let sentId: string | null = null;
   try {
-    await sendText(cfg.evolutionInstance, phone, text.slice(0, 4000));
+    sentId = await sendText(cfg.evolutionInstance, phone, text.slice(0, 4000));
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Falha ao enviar." },
@@ -121,7 +122,12 @@ export async function POST(req: Request) {
 
   // Registra a mensagem como fala da loja e pausa a IA para este cliente
   // (você assumiu a conversa). Usa o tempo de handoff; se desativado, 30 min.
-  await appendMessage(admin, storeId, phone, "assistant", text.slice(0, 4000));
+  // `sender: "owner"` = foi VOCÊ, não a IA (o painel mostra a diferença); o
+  // `waMessageId` faz o webhook reconhecer o eco em vez de gravar duas vezes.
+  await appendMessage(admin, storeId, phone, "assistant", text.slice(0, 4000), {
+    waMessageId: sentId,
+    sender: "owner",
+  });
   const pauseMinutes = cfg.aiHandoffMinutes > 0 ? cfg.aiHandoffMinutes : 30;
   const until = new Date(Date.now() + pauseMinutes * 60_000).toISOString();
   await setCustomerPause(admin, storeId, phone, until, "handoff");

@@ -15,6 +15,7 @@ import {
   markCartRecovered,
   markFollowup,
   markPostsaleSent,
+  purgeOldMessages,
   type WhatsAppConfig,
 } from "@/lib/whatsappConfig";
 import { toWhatsAppNumber } from "@/lib/customerPhone";
@@ -174,8 +175,11 @@ async function runSilenceFollowups(
         }
         if (!message) continue;
 
-        await sendText(cfg.evolutionInstance, phone, message);
-        await appendMessage(admin, cfg.storeId, phone, "assistant", message);
+        const sentId = await sendText(cfg.evolutionInstance, phone, message);
+        await appendMessage(admin, cfg.storeId, phone, "assistant", message, {
+          waMessageId: sentId,
+          sender: "ai",
+        });
         await markFollowup(admin, cfg.storeId, phone);
         sent += 1;
       } catch (err) {
@@ -262,8 +266,11 @@ async function runPostsale(
         }
         if (!message) continue;
 
-        await sendText(cfg.evolutionInstance, phone, message);
-        await appendMessage(admin, cfg.storeId, phone, "assistant", message);
+        const sentId = await sendText(cfg.evolutionInstance, phone, message);
+        await appendMessage(admin, cfg.storeId, phone, "assistant", message, {
+          waMessageId: sentId,
+          sender: "ai",
+        });
         await markPostsaleSent(admin, order.id);
         sent += 1;
       } catch (err) {
@@ -335,8 +342,11 @@ async function runAbandonedCarts(
         }
         if (!message) continue;
 
-        await sendText(cfg.evolutionInstance, phone, message);
-        await appendMessage(admin, cfg.storeId, phone, "assistant", message);
+        const sentId = await sendText(cfg.evolutionInstance, phone, message);
+        await appendMessage(admin, cfg.storeId, phone, "assistant", message, {
+          waMessageId: sentId,
+          sender: "ai",
+        });
         await markCartRecovered(admin, cart.id);
         sent += 1;
       } catch (err) {
@@ -370,7 +380,12 @@ async function run(req: Request) {
   sent += await runPostsale(admin);
   sent += await runAbandonedCarts(admin);
 
-  return NextResponse.json({ ok: true, sent });
+  // Retenção: apaga conversa (e mídia) mais velha que 30 dias. Roda aqui porque
+  // este cron já existe e passa de 5 em 5 min — em lotes, para não acumular nem
+  // estourar o tempo da execução.
+  const purged = await purgeOldMessages(admin);
+
+  return NextResponse.json({ ok: true, sent, purged });
 }
 
 export async function POST(req: Request) {
