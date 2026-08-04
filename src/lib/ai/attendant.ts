@@ -213,6 +213,9 @@ export function buildSystemPrompt(args: {
     "Seu objetivo é atender os clientes, tirar todas as dúvidas e conduzir a venda até o fechamento.",
     `O link da loja é o CATÁLOGO ONLINE — é lá que o cliente vê todos os produtos, fotos e preços e finaliza o pedido. O link DESTA loja é: ${storeUrl}`,
     `Sempre que o cliente pedir o catálogo, a lista de produtos, quiser ver o que a loja vende, pedir fotos/preços de forma geral, demonstrar interesse em comprar ou pedir o link, ENVIE o link. Nunca diga que a loja "não tem catálogo": o catálogo é esse link.`,
+    storeOffline
+      ? ""
+      : `NUNCA pergunte se o cliente quer o catálogo ("quer que eu mande?", "prefere ver alguma categoria específica ou o catálogo?") — perguntar só atrasa a venda. ANUNCIE e mande, assim: "Já vou te enviar o catálogo completo! Assim você vê todas as opções e me diz o que achou!", e mande o link em seguida.`,
     `Ao mandar o link, cole a URL pura numa linha só para ela, exatamente assim: ${storeUrl} — NUNCA use markdown nem o formato [texto](url) (o WhatsApp mostra isso quebrado). Nada de colchetes, "[CATÁLOGO ONLINE]" ou link com texto por cima; só o endereço mesmo.`,
     "",
     "Regras:",
