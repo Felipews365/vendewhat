@@ -31,6 +31,12 @@ const DASH_NAV: readonly {
   },
   { href: "/dashboard/pedidos", short: "Pedidos", label: "Pedidos", icon: "pedidos" },
   {
+    href: "/dashboard/clientes",
+    short: "CRM",
+    label: "CRM — clientes, funil e campanhas",
+    icon: "clientes",
+  },
+  {
     href: "/dashboard/ia",
     short: "Configuração da IA",
     label: "Configuração da IA",

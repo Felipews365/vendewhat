@@ -19,6 +19,8 @@ import {
   type WhatsAppConfig,
 } from "@/lib/whatsappConfig";
 import { toWhatsAppNumber } from "@/lib/customerPhone";
+import { runCampaigns } from "@/lib/crm/campaigns";
+import { runCrmAutomations } from "@/lib/crm/automations";
 import { consumeTokens, hasAiBalance, storePlanHasAi } from "@/lib/aiCredits";
 import { isEvolutionConfigured, sendText } from "@/lib/evolution";
 import {
@@ -33,6 +35,13 @@ import {
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+/**
+ * Prazo das campanhas dentro desta execução. `maxDuration` é 60s e o resto do
+ * cron (follow-up, pós-venda, carrinho, purga) já consumiu parte dele; 45s dá
+ * folga para a resposta HTTP sair antes de a Vercel cortar.
+ */
+const CAMPAIGNS_DEADLINE_MS = 45_000;
 
 type AnyObj = Record<string, unknown>;
 
@@ -367,6 +376,7 @@ async function run(req: Request) {
     return NextResponse.json({ ok: false, error: "Não autorizado." }, { status: 401 });
   }
 
+  const startedAt = Date.now();
   const admin = createAdminSupabase();
   if (!admin || !isEvolutionConfigured()) {
     return NextResponse.json({ ok: true, skipped: true, sent: 0 });
@@ -385,7 +395,16 @@ async function run(req: Request) {
   // estourar o tempo da execução.
   const purged = await purgeOldMessages(admin);
 
-  return NextResponse.json({ ok: true, sent, purged });
+  // Campanhas por ÚLTIMO e com prazo: elas têm `sleep` de 12-25s entre envios
+  // (ritmo anti-banimento) e não podem comer o tempo do follow-up nem da purga,
+  // que são o que o lojista já paga. O que sobrar fica para daqui a 5 min.
+  const campaigns = await runCampaigns(admin, startedAt + CAMPAIGNS_DEADLINE_MS);
+
+  // Automações do CRM: só etiquetam e criam tarefa (nunca enviam mensagem),
+  // então são baratas e podem rodar mesmo depois das campanhas.
+  const automations = await runCrmAutomations(admin);
+
+  return NextResponse.json({ ok: true, sent, purged, campaigns, automations });
 }
 
 export async function POST(req: Request) {

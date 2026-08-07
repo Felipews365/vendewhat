@@ -14,6 +14,7 @@ import { isShippingModeId, shippingModeLabel } from "@/lib/shippingModes";
 import { isPaymentMethodId } from "@/lib/paymentMethods";
 import { markCartConverted } from "@/lib/whatsappConfig";
 import { toWhatsAppNumber } from "@/lib/customerPhone";
+import { syncCrmCustomerFromOrder } from "@/lib/crm/customers";
 import { notifyNewSale } from "@/lib/saleAlert";
 
 export type CreateStoreOrderInput = {
@@ -203,6 +204,9 @@ export async function createStoreOrder(
     } catch (err) {
       console.error("[orders.server] markCartConverted", err);
     }
+    // CRM: cria/atualiza o cliente e recalcula LTV e nº de pedidos. É o ponto
+    // único por onde passam o checkout do site E o fechamento pela IA.
+    await syncCrmCustomerFromOrder(admin, storeId, { customerPhone, customerName });
   }
 
   // Aviso de venda para o lojista (WhatsApp), se configurado no painel. Não

@@ -1570,6 +1570,232 @@ load via `useRef`, gravação por service role). Migration:
   (a policy "Donos veem visitas da loja" já dá o SELECT ao dono) e **agrupa por dia em JS**, no fuso
   local do lojista — por isso os dias batem com o que ele vê no relógio, e não em UTC.
 
+## CRM (clientes, funil, campanhas, tarefas)
+
+Item **"CRM"** do `DASH_NAV` (entre Pedidos e Configuração da IA, ícone `clientes` = duas
+pessoas), em [/dashboard/clientes](src/app/dashboard/clientes/page.tsx) — a **rota** continua
+`/clientes` (só o rótulo do menu virou CRM). Quatro abas pelo
+[CrmTabs.tsx](src/components/dashboard/CrmTabs.tsx): **Clientes · Funil · Campanhas · Tarefas**.
+**Disponível em todos os planos, inclusive o "Sem IA"** — o CRM lê pedidos (que existem em
+qualquer plano) e **não consome crédito de IA**, então não há gate por `planHasAi`.
+
+**Migrations (rode NESTA ordem):**
+[crm-customers](supabase-migration-crm-customers.sql) → [crm-funnel](supabase-migration-crm-funnel.sql)
+→ [crm-campaigns](supabase-migration-crm-campaigns.sql) → [crm-notes-tasks](supabase-migration-crm-notes-tasks.sql).
+Todas são idempotentes (rodar de novo é seguro). Para conferir o que já foi aplicado:
+
+```sql
+select
+  case when to_regclass('public.crm_customers') is not null then 'OK' else 'FALTA' end as fase_1,
+  case when exists (select 1 from information_schema.columns
+       where table_name='crm_customers' and column_name='stage') then 'OK' else 'FALTA' end as fase_2,
+  case when to_regclass('public.crm_campaigns') is not null then 'OK' else 'FALTA' end as fase_3,
+  case when to_regclass('public.crm_tasks') is not null then 'OK' else 'FALTA' end as fase_4;
+```
+
+> **As 4 fases estão implementadas.** O que **não** existe (e não está planejado): tela de
+> mesclar clientes duplicados, agenda/calendário, múltiplos atendentes (é um usuário por loja) e
+> canais além do WhatsApp.
+
+### Base de clientes (fase 1)
+
+- **`crm_customers` é uma TABELA materializada, não uma view — e o motivo é a purga:**
+  `whatsapp_messages` é apagada a cada 30 dias (`MESSAGE_RETENTION_DAYS`), então derivar a base
+  por query faria **quem só conversou desaparecer** depois de um mês, junto com o "cliente
+  desde". Materializar também dá o `id` estável que funil/anotações/campanha vão precisar e
+  torna "ordenar por LTV" um índice em vez de um full-scan agregando `orders` (cuja chave de
+  join é uma *expressão* sobre o telefone, portanto não indexável do outro jeito).
+- **A chave canônica (`crm_phone_key`) unificou as TRÊS estratégias de telefone que conviviam:**
+  `toWhatsAppNumber()` (prefixa o DDI), o `samePhone()` do painel de conversas (últimos 8
+  dígitos) e a chave crua das tabelas (`replace(/\D/g,"")`). A regra é `toWhatsAppNumber` + a
+  correção do 9: 12 dígitos com `55` cujo **5º dígito é 6-9** é celular antigo gravado sem o 9 →
+  insere. Fixo (5º dígito 2-5) fica com 12, e está certo.
+  - ⚠️ **A função existe DUAS VEZES e elas precisam bater byte a byte:** `crm_phone_key(text)`
+    no SQL (migration) e `crmPhoneKey()` em [phone.ts](src/lib/crm/phone.ts). Se divergirem, o
+    backfill cria uma linha e o sync cria outra — **duplicata que o índice único NÃO pega**,
+    porque as duas têm chaves diferentes. Mexeu numa, mexa na outra.
+- **As chaves antigas NÃO são migradas, de propósito.** Reescrever `whatsapp_pauses` quebraria o
+  webhook (`isCustomerPaused` compara com o JID cru) e `whatsapp_contacts` quebraria o
+  `findCustomerName` — o ganho seria estético e o risco é o atendimento parar. Em vez disso a
+  tabela guarda **dois** telefones: `phone_key` (canônico, unique por loja, usado pela tela e
+  pela segmentação) e **`wa_phone`** (os dígitos exatos com que aquele cliente aparece nas
+  tabelas `whatsapp_*`). **Toda escrita do CRM naquelas tabelas usa `wa_phone`**, então o painel
+  de conversas continua achando as mesmas linhas. A leitura tolera as duas por
+  `crmPhoneVariants()` + `pickByPhoneVariants()`.
+- **O sync mora no BANCO (`crm_sync_customer`), não no TypeScript**, por um motivo prático:
+  `orders.customer_phone` guarda **o que o cliente digitou** (com máscara/parênteses), e casar
+  isso com a chave canônica pelo supabase-js exigiria adivinhar todas as variantes — em SQL o
+  próprio `crm_phone_key()` normaliza os dois lados. De quebra o upsert + o recálculo dos
+  agregados viram **uma ida só** ao banco, e os agregados (`orders_count`, `total_spent`,
+  `last_order_at`) são **sempre recalculados de `orders`**, então divergência se auto-corrige.
+  Um índice funcional `orders (store_id, crm_phone_key(customer_phone))` torna isso barato.
+- **Dois (e só dois) pontos de entrada de cliente**, ambos com o sync plugado e tolerante a
+  falha: `createStoreOrder()` em [orders.server.ts](src/lib/orders.server.ts) (que é o caminho
+  **tanto** do checkout do site **quanto** do fechamento pela IA) e o
+  [webhook](src/app/api/whatsapp/webhook/route.ts), logo após o `appendMessage` da mensagem do
+  cliente. `syncCrmCustomer` **nunca lança** (engole o próprio erro) — um problema no CRM não
+  pode derrubar um pedido nem atrasar a resposta da IA.
+- **Etiquetas são fonte única com o painel de conversas.** `TAG_PALETTE`, `TAG_PRESETS`,
+  `splitTag`/`joinTag` (formato `"Nome¦corId"`), `normalizeSearch` e `avatarText` saíram de
+  dentro do [ConversationsPanel.tsx](src/components/dashboard/ConversationsPanel.tsx) para
+  [src/lib/crm/tags.ts](src/lib/crm/tags.ts) — **move puro**, mesmas strings de classe, então
+  etiquetas já gravadas renderizam idênticas. A tabela continua sendo a **mesma**
+  (`whatsapp_conversation_tags`, teto de 8 tags): as duas telas rotulam o mesmo cliente. O
+  `TAG_FILTER_INLINE_MAX` ficou **no painel** (é regra de layout dele, não do modelo).
+- **Segmentos são um catálogo FECHADO** ([segments.ts](src/lib/crm/segments.ts)): todos, novos,
+  compraram, recorrentes, melhores, nunca compraram, sumiram 30/60/90 dias, carrinho
+  abandonado. Um construtor de filtros (AND/OR, operadores) seria poderoso e inútil para quem
+  vende pelo WhatsApp. Cada segmento vira filtro sobre coluna **indexada**; por cima vêm 3
+  filtros simples (etiquetas, busca, ordenação). "Sumiram" exige silêncio **nos dois** campos
+  (não comprou **nem** falou), com data nula contando como silêncio.
+- **A busca roda em JS, não em `ilike`:** o Postgres não ignora acento sem extensão, e a base de
+  um lojista cabe folgadamente num lote (`SEARCH_SCAN_LIMIT`). Casa nome (sem acento) e telefone
+  (só dígitos).
+- **RLS:** `crm_customers` tem policy de **SELECT do dono** (como `store_visits`), mas a tela
+  **não** lê pelo browser — vai por `/api/crm/*` porque as etiquetas/nomes moram em tabelas
+  service-role. Toda query do admin leva `.eq("store_id", storeId)`.
+- **Tudo tolera migration ausente:** leituras devolvem vazio, escritas viram no-op. O botão
+  **"Atualizar base"** (`POST /api/crm/sync` → `crm_resync_store`) recadastra a loja inteira a
+  partir de `orders` + `whatsapp_messages`/`contacts` — é como o lojista traz os pedidos antigos
+  e conserta divergência.
+- **Deep link nos dois sentidos:** a ficha 360° leva a `/dashboard/whatsapp?phone=` (o mesmo
+  link que Pedidos já usava) e `/dashboard/clientes?phone=` abre a ficha daquele contato
+  (resolvido por chave canônica, com fallback pelos 8 últimos) — o botão de voltar é o ícone de
+  pessoa no cabeçalho da conversa em [ConversationsPanel.tsx](src/components/dashboard/ConversationsPanel.tsx).
+  O `useSearchParams` obriga a página a ficar dentro de um `<Suspense>`.
+
+### Funil de vendas (fase 2)
+
+Aba **Funil** ([/dashboard/clientes/funil](src/app/dashboard/clientes/funil/page.tsx)), pelo
+[CrmTabs.tsx](src/components/dashboard/CrmTabs.tsx). **Migration:** rode
+[supabase-migration-crm-funnel.sql](supabase-migration-crm-funnel.sql) (colunas `stage` +
+`stage_changed_at`, backfill de quem já comprou, e as três funções dos números/gráficos).
+
+- **A etapa é uma COLUNA em `crm_customers`, não uma tabela `crm_deals`.** O público é o
+  micro-lojista: um cliente tem uma negociação por vez, e o card precisa mostrar LTV/etiquetas
+  que já estão na linha. Uma tabela de negociações exigiria join em toda leitura e UI de
+  abrir/fechar deal. Se um dia precisar, ela entra **sem tocar** aqui — a coluna vira o cache da
+  etapa aberta.
+- **Seis etapas FIXAS** em [stages.ts](src/lib/crm/stages.ts) (`novo` · `atendimento` ·
+  `orcamento` · `pagamento` · `ganho` · `perdido`), no formato do `TAG_PALETTE`. Deixar o lojista
+  criar as próprias etapas soa generoso e trava quem nunca usou CRM (tela vazia, nada a escrever).
+- **A transição automática mora no TypeScript, não em trigger** (`syncCrmCustomerFromOrder` →
+  `setCrmStage(..., { onlyIfStage: "novo" })`): pedido novo joga o cliente em "Comprou" **só se
+  ele ainda estava no começo**. Curadoria manual sempre vence a automação. Em trigger isso seria
+  invisível para quem lê o painel. Ficar fora da função `crm_sync_customer` também evita ter a
+  mesma função SQL definida em duas migrations (rodar a antiga depois reverteria a nova).
+- **Arrastar reusa o padrão do [StoreVisualEditor.tsx](src/components/dashboard/StoreVisualEditor.tsx):620-749**
+  — pointer events + `setPointerCapture`, `elementFromPoint` → `[data-crm-slot]`, limiar de 6px
+  no mouse, **long-press de 300ms no toque** (senão a grade não rolaria mais), `touchmove` **não
+  passivo** guardado por `dragActiveRef`, e `justDraggedRef` (+400ms) para soltar o card não
+  abrir a ficha. Diferença: o alvo é a **coluna**, então é *mover para*, não trocar de lugar.
+  **Sem lib de drag-and-drop.** Caminho acessível: card em foco responde ←/→.
+- **A coluna `stage` tolera a migration ausente:** `stageAvailable` em
+  [customers.ts](src/lib/crm/customers.ts) desliga na primeira falha por coluna inexistente
+  (`isMissingColumnError`) e a listagem **repete sem** as colunas de etapa — sem isso, a fase 1
+  inteira apareceria vazia para quem não rodou a fase 2.
+- ⚠️ O `select()` do CRM é **montado em runtime** (`selectCols()`), o que derruba a inferência do
+  supabase-js — daí o `as unknown as Row[]`, mesmo motivo do `catalogRows`.
+
+### Campanhas / lista de disparo (fase 3)
+
+Aba **Campanhas** ([/dashboard/clientes/campanhas](src/app/dashboard/clientes/campanhas/page.tsx)).
+**Migration:** [supabase-migration-crm-campaigns.sql](supabase-migration-crm-campaigns.sql)
+(`opted_out_at`/`last_campaign_at` em `crm_customers` + `crm_campaigns` + `crm_campaign_targets`,
+as duas **sem policy** — só service role).
+
+> ⚠️ **O risco é o produto inteiro.** O WhatsApp da loja é Evolution API (não oficial): disparo em
+> massa é a forma mais rápida de o número ser banido, e o número banido **derruba junto o
+> atendimento da IA**. Por isso as travas em [campaigns.ts](src/lib/crm/campaigns.ts) são
+> **constantes de código, não campos editáveis** — o lojista escolhe o público e o texto, e nada
+> mais. Afrouxar qualquer número ali é decisão de risco do dono, não ajuste de performance.
+
+- **Travas:** intervalo sorteado de 12-25s entre envios · **3 por loja por passada** do cron
+  (~36/h) · respiro de 45-120s entre lotes (`next_send_at`) · **teto de 60/dia** por loja
+  (**20/dia** enquanto o número tem menos de 7 dias de conexão) · janela **8h-20h** · só quem
+  **já falou ou já comprou** (lista fria nunca) · o mesmo cliente não recebe duas campanhas em 7
+  dias · uma campanha `enviando` por loja · `{nome}` **obrigatório** na mensagem (texto idêntico
+  em massa é o padrão que o WhatsApp detecta) · rodapé "Responda SAIR…" anexado pelo servidor.
+- **Fuso:** a Vercel roda em UTC. O teto diário e a janela são calculados em
+  **America/Sao_Paulo** via `Intl.DateTimeFormat` (sem lib) — sem isso o "dia" viraria 21h BRT e
+  a janela abriria de madrugada.
+- **O público é CONGELADO** em `crm_campaign_targets` na criação. Um envio de 300 contatos leva
+  dias; recalcular a lista a cada passada faria ela mudar no meio do caminho. O filtro usado fica
+  em `audience` (jsonb) só para auditoria. **Exceção deliberada:** o `opted_out_at` é reconferido
+  **no momento do envio** — o público é congelado, a vontade do cliente não.
+- **Roda no cron que já existe** ([followups](src/app/api/whatsapp/followups/route.ts)), por
+  último e **com prazo** (`CAMPAIGNS_DEADLINE_MS` = 45s de um `maxDuration` de 60): os `sleep` do
+  ritmo não podem comer o tempo do follow-up/pós-venda/purga, que são o que o lojista já paga. O
+  que sobra fica para a passada seguinte. **Nada novo a agendar no n8n.**
+- **Fila com claim otimista** (`claimTarget`), mesmo padrão do `claimPendingReply` do debounce:
+  dois crons simultâneos nunca mandam a mesma mensagem duas vezes; alvo preso em `enviando` com
+  `claimed_until` vencido volta à fila. Os contadores da campanha são **recontados do banco** ao
+  fim de cada lote (e não somados em memória), então o painel mostra a verdade mesmo se uma
+  execução morrer no meio.
+- **Opt-out:** o [webhook](src/app/api/whatsapp/webhook/route.ts) detecta `sair|parar|cancelar|
+  descadastrar|stop` por **comparação EXATA** (`isOptOutMessage` normaliza e tira tudo que não é
+  letra) — um `includes` tiraria da lista quem escreveu "vou sair agora" ou "quero cancelar meu
+  pedido", que é justamente quem está comprando. Marca `opted_out_at`, confirma ao cliente e
+  encerra **antes** de agendar a resposta da IA. **Não pausa o atendimento** — só as campanhas
+  param. Se o telefone não estiver na base, segue o fluxo normal (e a mensagem é gravada uma vez
+  só, lá embaixo).
+- **A mensagem enviada entra na conversa** (`appendMessage` com `sender: "owner"`), então aparece
+  no Atendimento como qualquer mensagem da loja. **Não consome crédito de IA** (é texto fixo).
+- **A tela mostra a conta honesta** antes de criar: quantos vão receber, **quantos dias vai
+  levar** e quantos ficaram de fora e por quê (sem histórico / receberam há pouco / pediram para
+  sair). Tem prévia do balão como o cliente vê e um "Enviar teste pra mim" (vai para o
+  `connectedNumber`, sem tocar na fila). Enquanto há campanha `enviando`, a lista se atualiza
+  sozinha a cada 20s — o envio é lento e acontece no cron.
+
+### Anotações, tarefas e automações (fase 4)
+
+Aba **Tarefas** ([/dashboard/clientes/tarefas](src/app/dashboard/clientes/tarefas/page.tsx)) +
+seções de **Anotações** e **Lembrete** dentro da ficha 360°. **Migration:**
+[supabase-migration-crm-notes-tasks.sql](supabase-migration-crm-notes-tasks.sql) (`crm_notes` e
+`crm_tasks` com policy de SELECT do dono; `crm_automations` **sem policy** — quem lê é o cron).
+
+- **`crm_tasks.customer_id` é NULLABLE** de propósito: nem toda tarefa é sobre alguém ("conferir
+  estoque na terça"). `source` separa o que o lojista escreveu (`manual`) do que a automação criou
+  (`auto:<regra>`), e é o que permite mostrar "automático" na lista.
+- **Catálogo de automações FIXO** ([automations.ts](src/lib/crm/automations.ts)): marcar quem
+  sumiu (etiqueta "Inativo", N dias configurável) · cobrar orçamento parado (vira **tarefa**) ·
+  etiquetar cliente novo (1º pedido) · etiquetar recorrente (2º pedido). O lojista só liga/desliga
+  e ajusta o número de dias — um construtor de regras seria poderoso e ninguém do público usaria,
+  e regra malfeita em cima de WhatsApp vira mensagem errada para cliente real.
+- ⚠️ **REGRA NUNCA ENVIA MENSAGEM.** Só etiqueta ou cria tarefa. Disparo automático já existe em
+  três lugares (follow-up, pós-venda, carrinho) e não pode ganhar um quarto caminho — seria
+  impossível saber por que um cliente recebeu o quê.
+- **Roda no mesmo cron** (`runCrmAutomations` em [followups](src/app/api/whatsapp/followups/route.ts),
+  depois das campanhas: só etiqueta, então é barato). Lê as etiquetas **uma vez por loja** e
+  mantém o cache coerente dentro do lote; a etiqueta é comparada **pelo nome** (não pela string
+  inteira), senão "Inativo" salvo noutra cor viraria uma segunda etiqueta. Respeita o teto de 8.
+- **`orcamento_parado` não duplica tarefa:** consulta as tarefas em aberto com aquele `source`
+  antes de inserir.
+- **O parâmetro de dias é preso ao intervalo do catálogo** na API (`min`/`max`) — "0 dias"
+  etiquetaria a base inteira.
+- **Tudo tolera a migration ausente:** as rotas devolvem lista vazia e o cron pula as automações.
+- As datas usam **meio-dia** (`${data}T12:00:00`) ao criar tarefa: com meia-noite o lembrete
+  "pula" de dia dependendo do fuso.
+
+### Números e gráficos (topo de Clientes)
+
+Faixa de 4 KPIs + 3 gráficos, alimentados por [/api/crm/stats](src/app/api/crm/stats/route.ts),
+que dispara em paralelo as funções `crm_store_stats`, `crm_store_timeline` e `crm_store_funnel`
+(todas na migration da fase 2). Sem a migration a rota devolve `stats: null` e **a faixa e os
+gráficos simplesmente não aparecem** — a lista continua funcionando.
+
+- **A conta roda no banco:** somar `total_spent` pelo supabase-js exigiria baixar a base inteira.
+- **`novos` sai de `crm_customers` e `receita` sai de `orders`** — são perguntas diferentes
+  ("quando a pessoa apareceu" × "quando o dinheiro entrou") e não podem sair da mesma tabela. O
+  `generate_series` garante que **mês sem venda apareça zerado** em vez de sumir do gráfico.
+- **`sem_telefone`** conta os pedidos com telefone inválido e é exibido como nota de rodapé da
+  lista: é o que explica ao lojista por que a contagem não bate com a tela de Pedidos.
+- **Gráficos em SVG/CSS puro** ([CrmCharts.tsx](src/components/dashboard/CrmCharts.tsx)), **sem
+  biblioteca**: barras verticais (receita, divs com altura em %), linha com área (novos clientes,
+  SVG `viewBox` + `vectorEffect="non-scaling-stroke"` para o traço não engordar ao esticar) e
+  barras horizontais (funil, na cor de cada etapa). Cada um tem `role="img"` + `aria-label` com a
+  série por extenso — gráfico sem leitura acessível é decoração.
+
 ## Supabase
 
 - **Project URL:** `https://dbtoinsifpevufbtwyzu.supabase.co`

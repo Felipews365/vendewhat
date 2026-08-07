@@ -12,6 +12,8 @@ import {
   updateConnection,
 } from "@/lib/whatsappConfig";
 import { getMediaBase64, sendText } from "@/lib/evolution";
+import { syncCrmCustomerFromMessage } from "@/lib/crm/customers";
+import { isOptOutMessage, markOptOut } from "@/lib/crm/campaigns";
 import {
   storeConversationMedia,
   mediaKindLabel,
@@ -267,6 +269,27 @@ export async function POST(req: Request) {
   // Nada que a gente saiba tratar e sem texto → ignora.
   if (!text && mediaKind === "none") return ok();
 
+  // "SAIR" tira o cliente das CAMPANHAS — e só delas: o atendimento normal
+  // continua (quem escreve SAIR não quer perder o suporte, quer parar a
+  // promoção). Vem antes de agendar a resposta para a IA não emendar em cima.
+  // Só encerra aqui quando o cliente REALMENTE saiu da base de campanhas; se
+  // não for encontrado, segue o fluxo normal (pode ser alguém dizendo
+  // "cancelar" no meio de um pedido) e a gravação acontece lá embaixo, uma vez.
+  if (text && isOptOutMessage(text) && (await markOptOut(admin, cfg.storeId, customerPhone))) {
+    await appendMessage(admin, cfg.storeId, customerPhone, "user", text, {
+      waMessageId,
+      sender: "customer",
+    });
+    const aviso =
+      "Prontinho! Você não vai mais receber nossas promoções. 😊 Se precisar de alguma coisa, é só chamar aqui.";
+    const sentId = await sendText(cfg.evolutionInstance, customerPhone, aviso, 1200);
+    await appendMessage(admin, cfg.storeId, customerPhone, "assistant", aviso, {
+      waMessageId: sentId,
+      sender: "ai",
+    });
+    return ok();
+  }
+
   console.log("[whatsapp/webhook] msg recebida", {
     store: cfg.storeId,
     from: customerPhone,
@@ -370,6 +393,10 @@ export async function POST(req: Request) {
       mediaUrl,
       mediaName: mediaKind === "document" ? documentName(message) : null,
     });
+    // CRM: quem conversa também é cliente. Guarda aqui porque `whatsapp_messages`
+    // é apagada em 30 dias — sem isto, quem nunca comprou sumiria do sistema.
+    // Nunca lança (o helper engole o próprio erro), então não atrasa a resposta.
+    await syncCrmCustomerFromMessage(admin, cfg.storeId, customerPhone);
     if (aiWillReply) {
       await schedulePendingReply(
         admin,

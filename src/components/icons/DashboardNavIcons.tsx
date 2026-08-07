@@ -152,11 +152,24 @@ export function NavIconVerificacao(props: NavGlyphProps) {
   );
 }
 
+/** Clientes / CRM — duas pessoas (a base de contatos da loja) */
+export function NavIconClientes(props: NavGlyphProps) {
+  return (
+    <Shell {...props}>
+      <circle cx="9.5" cy="8" r="3.4" {...s} />
+      <path d="M3.4 20c0-3.2 2.7-5.5 6.1-5.5s6.1 2.3 6.1 5.5" {...s} />
+      <path d="M16.4 5.2a3.2 3.2 0 010 6" {...s} />
+      <path d="M18.2 14.9c1.5.8 2.4 2.2 2.4 4.1" {...s} />
+    </Shell>
+  );
+}
+
 export const DASH_NAV_ICONS = {
   painel: NavIconPainel,
   loja: NavIconLoja,
   compartilhar: NavIconCompartilhar,
   pedidos: NavIconPedidos,
+  clientes: NavIconClientes,
   conta: NavIconConta,
   whatsapp: NavIconWhatsapp,
   ia: NavIconIa,
