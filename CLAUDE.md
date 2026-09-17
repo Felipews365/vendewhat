@@ -2251,12 +2251,19 @@ uma instância Evolution e uma config de IA por loja.
   só reserva se ainda vencido — evita resposta dupla de crons concorrentes e não interrompe quem
   ainda digita) e chama `respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)).
   Migration: [supabase-migration-whatsapp-debounce.sql](supabase-migration-whatsapp-debounce.sql)
-  (tabela sem policies — só service role). **Gatilho:** um workflow do **n8n** (self-hosted no mesmo
-  VPS da Evolution) — nó *Schedule Trigger* (1 min) → *HTTP Request* `GET` no endpoint com
-  `?key=CRON_SECRET`. Escolhido em vez de crontab porque o painel do VPS (iContainer) só dá shell
-  dentro de containers, sem cron no host; o n8n já roda ali, sobrevive a restart e mostra logs. O
-  delay efetivo ao cliente é ~15-75s (os 15s de silêncio + o intervalo do cron). O webhook precisa de
-  `maxDuration = 30` (transcrição/descrição de mídia), o cron de `= 60`.
+  (tabela sem policies — só service role). **Gatilho:** um workflow do **n8n** — nó *Schedule
+  Trigger* (1 min) → *HTTP Request* no endpoint, com o segredo no header `x-cron-key`. Escolhido em
+  vez de crontab porque o painel do VPS (iContainer) só dá shell dentro de containers, sem cron no
+  host; o n8n sobrevive a restart e mostra logs. O delay efetivo ao cliente é ~15-75s (os 15s de
+  silêncio + o intervalo do cron). O webhook precisa de `maxDuration = 30` (transcrição/descrição de
+  mídia), o cron de `= 60`.
+  - ⚠️ **O n8n NÃO deve ficar no mesmo servidor da Evolution.** Já ficou, e quando o provedor caiu
+    levou os dois: as lojas reconectaram o WhatsApp e **a IA continuou muda**, porque quem responde é
+    este cron, não o webhook. São serviços independentes — o n8n só precisa alcançar a URL pública da
+    Vercel.
+  - **Os workflows estão versionados em [n8n/](n8n/)** (`whatsapp-debounce.json` +
+    `whatsapp-followups.json`, prontos para *Import from File*). Eles viviam só dentro do VPS e se
+    perderam na queda; restaurar agora é importar dois arquivos e trocar dois espaços reservados.
 - **`respondToCustomer` ([whatsappRespond.ts](src/lib/whatsappRespond.ts)):** monta o lote (mensagens
   do cliente após a última fala da IA = `full.slice(splitIdx)`), o contexto anterior, detecta
   primeiro contato (`!full.some(t => t.role === "assistant")`), gera com `generateReply` e envia. É a
@@ -2722,9 +2729,9 @@ tempo é por loja. **Migration:** rode
     passivo e ainda deixava o modelo enfeitar a frase. **Sem link, sem saudação, um parágrafo só:**
     a instrução mais antiga pedia "mande o link se ajudar" e rendia um `"Estou aqui! 😊 …"` seguido
     do balão do catálogo, repetindo o que o cliente já tinha recebido.
-- **Cron:** um workflow do **n8n** (self-hosted no mesmo VPS da Evolution/debounce) faz um
-  `GET /api/whatsapp/followups?key=<CRON_SECRET>` a cada **~5 min** (nó *Schedule Trigger* →
-  *HTTP Request*). O endpoint
+- **Cron:** um workflow do **n8n** (self-hosted — ver [n8n/](n8n/)) chama
+  `/api/whatsapp/followups` a cada **~5 min** (nó *Schedule Trigger* → *HTTP Request*, segredo no
+  header `x-cron-key`). O endpoint
   ([followups/route.ts](src/app/api/whatsapp/followups/route.ts)) aceita `GET` e `POST`, varre as
   lojas com follow-up ligado (`listFollowupConfigs`), e para cada cliente cutuca se: tem mensagem
   do cliente, `idle ∈ [minutos, minutos×3]` (não ressuscita conversas muito antigas), **não** está
