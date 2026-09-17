@@ -254,7 +254,12 @@ export type ConsumeResult = {
 };
 
 /** Origem do gasto de tokens (para a telemetria do painel admin). */
-export type AiUsageKind = "reply" | "followup" | "postsale" | "cart";
+/**
+ * `vision` = descrever a foto que o cliente mandou. Fica separado dos demais
+ * porque não é uma resposta: é um custo de CONTEXTO, que acontece antes de a IA
+ * falar (e até quando ela não vai falar).
+ */
+export type AiUsageKind = "reply" | "followup" | "postsale" | "cart" | "vision";
 
 /**
  * Contexto do gasto, gravado só como telemetria. `model`/`inputTokens`/

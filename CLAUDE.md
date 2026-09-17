@@ -3053,9 +3053,28 @@ mantidos (`essencial`/`profissional`/`empresarial`) em [plans.ts](src/lib/plans.
     cards **"Custo por conversa"** e **"Custo no período"** no bloco "Consumo real da IA", e o mesmo
     por loja na página do cliente — todos com a **quebra por modelo**, que mostra o peso do
     atendimento contra o dos crons. **O lojista não vê nada disso** (é `requireAdmin`).
-  - ⚠️ **Buraco conhecido:** o `describeImage` (visão) gasta tokens mas **não** passa por
-    `consumeTokens`, então não entra nem no saldo nem neste custo — o número real é um pouco maior
-    em lojas onde os clientes mandam muita foto.
+  - **Visão (`kind: "vision"`) entra na conta.** O `describeImage` devolve `ReplyResult` (não só o
+    texto) e o [webhook](src/app/api/whatsapp/webhook/route.ts) desconta os tokens com
+    `consumeTokens`. Antes ele devolvia `string` e o gasto ficava **invisível** — nem no saldo da
+    loja nem neste custo.
+  - ⚠️ **Áudio (Whisper) ainda NÃO é medido:** ele é cobrado **por minuto**, não por token, e
+    `MODEL_PRICES` é uma tabela de preço por token — inventar uma equivalência colocaria um número
+    falso justamente no relatório que você usa para precificar plano e pacote. O gasto de áudio
+    está **barrado** por plano/saldo (ver abaixo), que era o problema de verdade; o que falta é só
+    a contabilidade. Para fechar: preço por minuto + duração do áudio, fora do caminho de tokens.
+
+- **Transcrição e visão passam pelo PLANO e pelo SALDO antes de gastar
+  (`aiMediaAllowed` no [webhook](src/app/api/whatsapp/webhook/route.ts)):** diferente da resposta,
+  que é só *agendada*, o custo da mídia acontece **na hora** — e o `aiWillReply` nunca olhou
+  crédito. Resultado antigo: loja no plano **"Sem IA"** (ou com saldo zerado) gerava custo de
+  OpenAI toda vez que um cliente mandava foto ou áudio, contornando inteiro o motor de créditos.
+  Numa plataforma de loja de roupa, onde o cliente manda foto o tempo todo, não era caso raro.
+  - **Fica FORA do `aiWillReply` de propósito:** a resposta continua sendo agendada mesmo sem
+    saldo, para o cron chegar em `hasAiBalance` e **avisar o dono** (`notifyOwnerCredits`).
+    Juntar os dois mataria o aviso — a loja ficaria muda sem ninguém saber por quê.
+  - Sem saldo, o áudio **não** recebe o "não consegui ouvir, escreve por favor": a gente nem
+    tentou ouvir, então o aviso seria mentira (e ainda gastaria um envio). Vira
+    `[Áudio enviado pelo cliente]` no histórico, como já acontece com vídeo e documento.
 
 ## Notas do ambiente (Windows / OneDrive)
 

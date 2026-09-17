@@ -14,6 +14,7 @@ import {
 import { getMediaBase64, sendText } from "@/lib/evolution";
 import { syncCrmCustomerFromMessage } from "@/lib/crm/customers";
 import { isOptOutMessage, markOptOut } from "@/lib/crm/campaigns";
+import { consumeTokens, hasAiBalance } from "@/lib/aiCredits";
 import {
   storeConversationMedia,
   mediaKindLabel,
@@ -321,6 +322,30 @@ export async function POST(req: Request) {
   // no painel como no WhatsApp.
   if (mediaKind === "sticker") aiWillReply = false;
 
+  /**
+   * Transcrever áudio (Whisper) e descrever foto (visão) custam dinheiro na
+   * OpenAI e servem SÓ para dar contexto à IA. Diferente do agendamento da
+   * resposta, o gasto acontece AQUI e AGORA — então precisa passar pelo plano e
+   * pelo saldo, senão a loja do plano "Sem IA" (ou sem crédito) gera custo que
+   * ninguém paga. Era o furo que deixava o motor de créditos ser contornado.
+   *
+   * NÃO entra no `aiWillReply` de propósito: a resposta continua sendo agendada
+   * mesmo sem saldo, para o cron avisar o dono de que o crédito acabou
+   * (`notifyOwnerCredits` em whatsappRespond.ts). Juntar os dois mataria o aviso.
+   */
+  let aiMediaAllowed = aiWillReply;
+  if (aiMediaAllowed && (mediaKind === "audio" || mediaKind === "image")) {
+    const balance = await hasAiBalance(admin, cfg.storeId);
+    if (!balance.ok) {
+      console.log(
+        "[whatsapp/webhook] sem transcrição/descrição:",
+        balance.reason,
+        cfg.storeId
+      );
+      aiMediaAllowed = false;
+    }
+  }
+
   try {
     // --- Arquivo da mídia -----------------------------------------------------
     // Uma única ida à Evolution serve para as duas coisas: guardar o arquivo (o
@@ -333,10 +358,13 @@ export async function POST(req: Request) {
 
     if (mediaKind === "audio") {
       const transcript =
-        aiWillReply && saved.base64
+        aiMediaAllowed && saved.base64
           ? await transcribeAudio(saved.base64, saved.mimetype ?? "")
           : null;
-      if (aiWillReply && !transcript) {
+      // Só pede para escrever quando a gente REALMENTE tentou ouvir e não deu.
+      // Sem saldo nem tentamos, então mandar esse aviso seria mentira (e ainda
+      // gastaria um envio).
+      if (aiMediaAllowed && !transcript) {
         // Não deu para entender o áudio — pede para escrever, sem agendar resposta.
         const aviso =
           "Recebi seu áudio, mas não consegui ouvir direito 😅 Pode me mandar por escrito, por favor?";
@@ -356,10 +384,26 @@ export async function POST(req: Request) {
       storedText = transcript ?? "[Áudio enviado pelo cliente]";
     } else if (mediaKind === "image") {
       const dataUrl =
-        aiWillReply && saved.base64
+        aiMediaAllowed && saved.base64
           ? `data:${saved.mimetype || "image/jpeg"};base64,${saved.base64}`
           : null;
-      const desc = dataUrl ? await describeImage(dataUrl, text) : null;
+      const vision = dataUrl ? await describeImage(dataUrl, text) : null;
+      // Desconta o que a visão custou. Sem isto o gasto existia e ninguém
+      // pagava: não saía do saldo da loja nem aparecia no custo do /admin.
+      if (vision && vision.tokens > 0) {
+        try {
+          await consumeTokens(admin, cfg.storeId, vision.tokens, {
+            customerPhone,
+            kind: "vision",
+            model: vision.model,
+            inputTokens: vision.inputTokens,
+            outputTokens: vision.outputTokens,
+          });
+        } catch (err) {
+          console.error("[whatsapp/webhook] consumeTokens visao", err);
+        }
+      }
+      const desc = vision?.text ?? null;
       // Guarda a legenda + a descrição da foto para o atendente ter contexto.
       storedText = [
         text,

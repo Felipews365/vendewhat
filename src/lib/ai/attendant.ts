@@ -628,11 +628,16 @@ export async function generateReply(
  * `basicModel()`). Recebe a imagem como data URI base64. A descrição é gravada como
  * texto no histórico para o atendente (que responde só com texto) ter o contexto.
  * Nunca lança: null se falhar.
+ *
+ * Devolve `ReplyResult` (e não só o texto) porque **esta chamada custa dinheiro**:
+ * quem chama precisa dos tokens para descontar do saldo da loja. Antes devolvia
+ * `string` e o gasto ficava invisível — nem o saldo nem o custo do painel admin
+ * enxergavam as fotos que os clientes mandam.
  */
 export async function describeImage(
   imageDataUrl: string,
   caption: string
-): Promise<string | null> {
+): Promise<ReplyResult | null> {
   try {
     const model = basicModel();
     const completion = await getClient().chat.completions.create({
@@ -653,8 +658,8 @@ export async function describeImage(
         },
       ],
     });
-    const text = completion.choices[0]?.message?.content;
-    return text ? text.trim() : null;
+    const r = toReplyResult(completion, model);
+    return r ? { ...r, text: r.text.trim() } : null;
   } catch (e) {
     console.error("[ai] describeImage", e);
     return null;
