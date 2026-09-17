@@ -115,11 +115,27 @@ descobre que precisa reescanear.
 
 ## 6. Reconectar cada loja (só o lojista faz)
 
+> 🚨 **Abra o painel por `https://SEU-APP.vercel.app` — NUNCA por um link de deploy**
+> (`vendewhat-<hash>-<time>.vercel.app`). O webhook é gravado com o **host desta requisição**, e
+> deploys que não são produção têm Deployment Protection: a Evolution levaria **401** em toda
+> entrega e a IA ficaria muda **sem nenhum erro aparecer**. Foi o último bug da queda de set/2026
+> e o mais difícil de achar — detalhes e conserto no fim deste arquivo.
+
 **Configuração da IA → Conexão → Conectar** → escanear o QR com o celular daquele número.
 
 Aqui a instância nasce na Evolution nova — com o **mesmo nome de antes**, porque ele é derivado do
 id da loja (`instanceForStore`) — e o webhook se registra sozinho, com a URL tirada do host da
 requisição.
+
+**Confira logo depois de conectar** (deve responder `200`; se vier `401`, é o caso acima):
+
+```bash
+EU=$(grep -E '^EVOLUTION_API_URL=' .env|cut -d= -f2-); EK=$(grep -E '^EVOLUTION_API_KEY=' .env|cut -d= -f2-)
+for N in $(curl -s -H "apikey: $EK" "$EU/instance/fetchInstances" | node -pe "JSON.parse(require('fs').readFileSync(0)).map(i=>i.name).join('\n')"); do
+  W=$(curl -s -H "apikey: $EK" "$EU/webhook/find/$N" | node -pe "try{JSON.parse(require('fs').readFileSync(0)).url||''}catch{''}")
+  echo "$N"; curl -s -o /dev/null -w "  entrega: %{http_code}  ($W)\n" -X POST -H "Content-Type: application/json" -d '{"event":"ping"}' "$W"
+done
+```
 
 ---
 
