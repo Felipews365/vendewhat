@@ -2261,6 +2261,10 @@ uma instância Evolution e uma config de IA por loja.
     levou os dois: as lojas reconectaram o WhatsApp e **a IA continuou muda**, porque quem responde é
     este cron, não o webhook. São serviços independentes — o n8n só precisa alcançar a URL pública da
     Vercel.
+  - **Perdeu o servidor da Evolution e/ou do n8n? O procedimento inteiro está em
+    [RESTORE.md](RESTORE.md)** — inclusive as três pegadinhas que custaram horas na queda de
+    set/2026 (o `CRON_SECRET` é *Sensitive* na Vercel e não pode ser lido, a apikey da Evolution
+    muda com o servidor, e o `connection_status` do banco **não** se auto-corrige).
   - **Os workflows estão versionados em [n8n/](n8n/)** (`whatsapp-debounce.json` +
     `whatsapp-followups.json`, prontos para *Import from File*). Eles viviam só dentro do VPS e se
     perderam na queda; restaurar agora é importar dois arquivos e trocar dois espaços reservados.
