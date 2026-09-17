@@ -151,3 +151,52 @@ a IA responde.
 
 Conectou e a IA ficou muda? O problema é o **passo 4** — o webhook grava a mensagem, mas quem
 responde é o cron do debounce.
+
+---
+
+## 🚨 "Conectou mas a IA não responde" — a armadilha do webhook 401
+
+O erro mais caro da restauração de set/2026, e o mais difícil de ver: **nenhum erro aparece em
+lugar nenhum**. WhatsApp conectado, cliente manda mensagem, a IA fica muda, e `whatsapp_messages`
+não recebe nada.
+
+**Causa:** o `/api/whatsapp/connect` grava no webhook a URL do **host da requisição**. Se o lojista
+clicou em "Conectar" estando numa URL de deployment (`vendewhat-<hash>-<time>.vercel.app`) em vez
+de `vendewhat.vercel.app`, é essa que fica registrada — e a Vercel protege deployments que não são
+produção com **Deployment Protection**. Toda entrega da Evolution volta **401** e morre ali.
+
+**Diagnóstico (1 comando):**
+
+```bash
+EU=$(grep -E '^EVOLUTION_API_URL=' .env|cut -d= -f2-); EK=$(grep -E '^EVOLUTION_API_KEY=' .env|cut -d= -f2-)
+W=$(curl -s -H "apikey: $EK" "$EU/webhook/find/NOME_DA_INSTANCIA" | node -pe "JSON.parse(require('fs').readFileSync(0)).url")
+echo "$W"
+curl -s -o /dev/null -w "webhook responde: %{http_code}\n" -X POST -H "Content-Type: application/json" -d '{"event":"ping"}' "$W"
+```
+
+- `200` → webhook OK, o problema é outro (veja os crons).
+- `401` com `vercel_auth_enabled` → **é isto**.
+
+**Conserto, sem o lojista reescanear nada** — preserve o mesmo `?token=`:
+
+```bash
+T=$(echo "$W" | sed -E 's/.*token=//')
+curl -X POST -H "apikey: $EK" -H "Content-Type: application/json" \
+  -d "{\"webhook\":{\"enabled\":true,\"url\":\"https://SEU-APP.vercel.app/api/whatsapp/webhook?token=$T\",\"byEvents\":false,\"webhookByEvents\":false,\"base64\":false,\"webhookBase64\":false,\"events\":[\"MESSAGES_UPSERT\",\"CONNECTION_UPDATE\",\"QRCODE_UPDATED\"]}}" \
+  "$EU/webhook/set/NOME_DA_INSTANCIA"
+```
+
+**Prevenção:** mande o lojista conectar **sempre** por `https://SEU-APP.vercel.app`, nunca por um
+link de deploy.
+
+## Manager da Evolution vazio / "Unauthorized"
+
+Se o painel `/manager` mostra "No instances found" e "taking longer than expected" enquanto a API
+responde normal no `curl`, o culpado costuma ser **`SERVER_URL=http://`** na config da Evolution: a
+página abre em https e o navegador **bloqueia** a chamada http (mixed content) antes de sair.
+
+Confira com `curl -s https://SUA-EVOLUTION/ | grep manager` — se vier `http://`, troque
+`SERVER_URL` para `https://...` e reinicie o container.
+
+**Não afeta o app** (ele chama a API direto pelo `EVOLUTION_API_URL`), só o painel. Mas conserte se
+você usa o manager para tocar outros projetos na mesma Evolution.

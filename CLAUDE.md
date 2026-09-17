@@ -2031,7 +2031,23 @@ uma instância Evolution e uma config de IA por loja.
   [connect](src/app/api/whatsapp/connect/route.ts) monta o `webhookUrl` a partir do **host real da
   requisição** (`x-forwarded-host`/`host`), caindo no `APP_BASE_URL` só se não der para ler o host.
   Isso auto-corrige o caso clássico de o webhook ficar registrado num endereço antigo/errado (era o
-  motivo de a Evolution receber as mensagens mas **não repassar** pro app). O `setWebhook`
+  motivo de a Evolution receber as mensagens mas **não repassar** pro app).
+  - 🚨 **O outro lado dessa moeda: conectar por um link de DEPLOY quebra tudo, em silêncio.** Se o
+    lojista clicar em "Conectar" estando numa URL de deployment
+    (`vendewhat-<hash>-<time>.vercel.app`) em vez de `vendewhat.vercel.app`, é ESSA URL que fica
+    gravada no webhook — e a Vercel protege deployments que não são produção com **Deployment
+    Protection**, então **toda** entrega da Evolution volta **401** e a mensagem nunca chega.
+    Sintoma: WhatsApp conectado, cliente manda mensagem, **IA muda**, nada em
+    `whatsapp_messages`, nenhum erro em lugar nenhum. Aconteceu de verdade na restauração de
+    set/2026 e foi a última coisa a ser descoberta. **Diagnóstico em 1 comando** (o webhook
+    registrado tem que responder 200):
+    ```bash
+    curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "Content-Type: application/json" \
+      -d '{"event":"ping"}' "<url gravada em /webhook/find/{instance}>"
+    ```
+    **Conserto sem reconectar o WhatsApp:** `POST /webhook/set/{instance}` com a URL de produção,
+    preservando o mesmo `?token=`. Ver [RESTORE.md](RESTORE.md).
+  - O `setWebhook`
   ([evolution.ts](src/lib/evolution.ts)) manda os **dois padrões de nome** de campo
   (`byEvents`/`webhookByEvents`, `base64`/`webhookBase64`) por compatibilidade entre versões da
   Evolution. **Diagnóstico:** ao conectar, o app consulta `getWebhookInfo` (`GET
